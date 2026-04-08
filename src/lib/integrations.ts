@@ -34,12 +34,17 @@ export async function upsertIntegrationSetting(
     throw new Error("Supabase admin não configurado.");
   }
 
-  const { error } = await adminClient.from("integration_settings").upsert({
-    provider,
-    enabled,
-    config,
-    updated_at: new Date().toISOString(),
-  });
+  const { error } = await adminClient.from("integration_settings").upsert(
+    {
+      provider,
+      enabled,
+      config,
+      updated_at: new Date().toISOString(),
+    },
+    {
+      onConflict: "provider",
+    },
+  );
 
   if (error) {
     throw new Error(error.message);
