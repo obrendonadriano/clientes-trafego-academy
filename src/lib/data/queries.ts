@@ -1,0 +1,432 @@
+import { cache } from "react";
+import { format, parseISO } from "date-fns";
+import { getMockSnapshot } from "@/lib/mock-data";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  AppDataSnapshot,
+  CampaignWithMetrics,
+  Client,
+  IntegrationSetting,
+  RawCampaignMetric,
+  User,
+} from "@/lib/types";
+import { getReportHistory } from "@/lib/mock-data";
+import { getSupabasePublishableKey, getSupabaseUrl } from "@/lib/supabase/env";
+
+type DbUserRow = {
+  id: string;
+  auth_user_id: string | null;
+  nome: string;
+  username: string;
+  email: string;
+  role: "admin" | "client";
+  whatsapp: string | null;
+  ativo: boolean;
+  client_id: string | null;
+  clients?: Array<{
+    nome_empresa: string;
+  }> | null;
+};
+
+type DbClientRow = {
+  id: string;
+  nome_empresa: string;
+  responsavel: string;
+  whatsapp: string | null;
+  observacoes: string | null;
+  ativo: boolean;
+};
+
+type DbCampaignRow = {
+  id: string;
+  nome: string;
+  status: string;
+  plataforma: string;
+  client_id: string | null;
+  clients?: Array<{
+    nome_empresa: string;
+  }> | null;
+};
+
+type DbPermissionRow = {
+  user_id: string;
+  campaign_id: string;
+};
+
+type DbMetricRow = {
+  campaign_id: string;
+  date: string;
+  amount_spent: number;
+  reach: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  cpc: number;
+  cpm: number;
+  leads: number;
+  cost_per_lead: number;
+  roi: number;
+  roas: number;
+  frequency: number;
+};
+
+type DbIntegrationRow = {
+  provider: string;
+  enabled: boolean;
+  config: Record<string, string> | null;
+};
+
+type DbReportRow = {
+  id: string;
+  client_id: string;
+  period_start: string;
+  period_end: string;
+  generated_text: string;
+  created_at: string;
+  clients?: Array<{
+    nome_empresa: string;
+    whatsapp: string | null;
+  }> | null;
+};
+
+function toNumber(value: number | string | null | undefined) {
+  return Number(value ?? 0);
+}
+
+function average(values: number[]) {
+  if (values.length === 0) {
+    return 0;
+  }
+
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function mapUser(row: DbUserRow): User {
+  return {
+    id: row.id,
+    authUserId: row.auth_user_id,
+    name: row.nome,
+    username: row.username,
+    email: row.email,
+    role: row.role,
+    whatsapp: row.whatsapp ?? "",
+    active: row.ativo,
+    clientId: row.client_id,
+    clientName: row.clients?.[0]?.nome_empresa,
+  };
+}
+
+function mapClient(row: DbClientRow): Client {
+  return {
+    id: row.id,
+    companyName: row.nome_empresa,
+    contactName: row.responsavel,
+    whatsapp: row.whatsapp ?? "",
+    notes: row.observacoes ?? "",
+    active: row.ativo,
+  };
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value);
+}
+
+function mapMetricRow(row: DbMetricRow): RawCampaignMetric {
+  return {
+    campaignId: row.campaign_id,
+    date: row.date,
+    amountSpent: toNumber(row.amount_spent),
+    reach: toNumber(row.reach),
+    impressions: toNumber(row.impressions),
+    clicks: toNumber(row.clicks),
+    ctr: toNumber(row.ctr),
+    cpc: toNumber(row.cpc),
+    cpm: toNumber(row.cpm),
+    leads: toNumber(row.leads),
+    costPerLead: toNumber(row.cost_per_lead),
+    roi: toNumber(row.roi),
+    roas: toNumber(row.roas),
+    frequency: toNumber(row.frequency),
+  };
+}
+
+function aggregateMetrics(rows: RawCampaignMetric[]): DbMetricRow | undefined {
+  if (rows.length === 0) {
+    return undefined;
+  }
+
+  const totals = rows.reduce(
+    (acc, row) => {
+      acc.amount_spent += row.amountSpent;
+      acc.reach += row.reach;
+      acc.impressions += row.impressions;
+      acc.clicks += row.clicks;
+      acc.leads += row.leads;
+      acc.roi.push(row.roi);
+      acc.roas.push(row.roas);
+      acc.frequency.push(row.frequency);
+      return acc;
+    },
+    {
+      amount_spent: 0,
+      reach: 0,
+      impressions: 0,
+      clicks: 0,
+      leads: 0,
+      roi: [] as number[],
+      roas: [] as number[],
+      frequency: [] as number[],
+    },
+  );
+
+  return {
+    campaign_id: rows[0].campaignId,
+    date: rows[rows.length - 1]?.date ?? rows[0].date,
+    amount_spent: totals.amount_spent,
+    reach: totals.reach,
+    impressions: totals.impressions,
+    clicks: totals.clicks,
+    ctr:
+      totals.impressions > 0
+        ? (totals.clicks / totals.impressions) * 100
+        : 0,
+    cpc: totals.clicks > 0 ? totals.amount_spent / totals.clicks : 0,
+    cpm:
+      totals.impressions > 0
+        ? (totals.amount_spent / totals.impressions) * 1000
+        : 0,
+    leads: totals.leads,
+    cost_per_lead:
+      totals.leads > 0 ? totals.amount_spent / totals.leads : 0,
+    roi: average(totals.roi),
+    roas: average(totals.roas),
+    frequency: average(totals.frequency),
+  };
+}
+
+function mapCampaign(
+  row: DbCampaignRow,
+  metric?: DbMetricRow,
+): CampaignWithMetrics {
+  return {
+    id: row.id,
+    name: row.nome,
+    status: row.status === "Ativa" ? "Ativa" : "Pausada",
+    platform: row.plataforma,
+    clientId: row.client_id,
+    clientName: row.clients?.[0]?.nome_empresa,
+    metrics: {
+      amountSpent: formatCurrency(metric?.amount_spent ?? 0),
+      reach: String(metric?.reach ?? 0),
+      impressions: String(metric?.impressions ?? 0),
+      clicks: String(metric?.clicks ?? 0),
+      ctr: `${(metric?.ctr ?? 0).toFixed(2)}%`,
+      cpc: formatCurrency(metric?.cpc ?? 0),
+      cpm: formatCurrency(metric?.cpm ?? 0),
+      leads: String(metric?.leads ?? 0),
+      costPerLead: formatCurrency(metric?.cost_per_lead ?? 0),
+      roi: `${(metric?.roi ?? 0).toFixed(2)}%`,
+      roas: `${(metric?.roas ?? 0).toFixed(2)}x`,
+      frequency: (metric?.frequency ?? 0).toFixed(2),
+      periodLabel: metric ? "Última sincronização" : "Aguardando importação",
+    },
+  };
+}
+
+export const getAppSnapshot = cache(async (): Promise<AppDataSnapshot> => {
+  const adminClient = createSupabaseAdminClient();
+
+  if (!adminClient) {
+    return getMockSnapshot();
+  }
+
+  const [usersResult, clientsResult, campaignsResult, permissionsResult, metricsResult, reportsResult] =
+    await Promise.all([
+      adminClient
+        .from("users")
+        .select("id, auth_user_id, nome, username, email, role, whatsapp, ativo, client_id, clients(nome_empresa)")
+        .order("created_at", { ascending: true }),
+      adminClient
+        .from("clients")
+        .select("id, nome_empresa, responsavel, whatsapp, observacoes, ativo")
+        .order("created_at", { ascending: true }),
+      adminClient
+        .from("campaigns")
+        .select("id, nome, status, plataforma, client_id, clients(nome_empresa)")
+        .order("created_at", { ascending: true }),
+      adminClient
+        .from("user_campaign_permissions")
+        .select("user_id, campaign_id"),
+      adminClient
+        .from("campaign_metrics")
+        .select("campaign_id, date, amount_spent, reach, impressions, clicks, ctr, cpc, cpm, leads, cost_per_lead, roi, roas, frequency")
+        .order("date", { ascending: true }),
+      adminClient
+        .from("ai_reports")
+        .select("id, client_id, period_start, period_end, generated_text, created_at, clients(nome_empresa, whatsapp)")
+        .order("created_at", { ascending: false }),
+    ]);
+
+  if (usersResult.error || clientsResult.error || campaignsResult.error || permissionsResult.error || metricsResult.error || reportsResult.error) {
+    throw new Error(
+      usersResult.error?.message ||
+        clientsResult.error?.message ||
+        campaignsResult.error?.message ||
+        permissionsResult.error?.message ||
+        metricsResult.error?.message ||
+        reportsResult.error?.message ||
+        "Falha ao carregar os dados do Supabase.",
+    );
+  }
+
+  const metricRows = (metricsResult.data as DbMetricRow[]).map(mapMetricRow);
+  const metricRowsByCampaign = new Map<string, RawCampaignMetric[]>();
+
+  for (const row of metricRows) {
+    const items = metricRowsByCampaign.get(row.campaignId) ?? [];
+    items.push(row);
+    metricRowsByCampaign.set(row.campaignId, items);
+  }
+
+  return {
+    users: (usersResult.data as DbUserRow[]).map(mapUser),
+    clients: (clientsResult.data as DbClientRow[]).map(mapClient),
+    campaigns: (campaignsResult.data as DbCampaignRow[]).map((row) =>
+      mapCampaign(row, aggregateMetrics(metricRowsByCampaign.get(row.id) ?? [])),
+    ),
+    permissions: (permissionsResult.data as DbPermissionRow[]).map((item) => ({
+      userId: item.user_id,
+      campaignId: item.campaign_id,
+    })),
+    reports:
+      (reportsResult.data as DbReportRow[]).length > 0
+        ? (reportsResult.data as DbReportRow[]).map((report) => ({
+            id: report.id,
+            clientId: report.client_id,
+            clientName: report.clients?.[0]?.nome_empresa ?? "Cliente",
+            whatsapp: report.clients?.[0]?.whatsapp ?? "",
+            periodLabel: `${format(parseISO(report.period_start), "dd/MM/yyyy")} a ${format(parseISO(report.period_end), "dd/MM/yyyy")}`,
+            preview: report.generated_text.slice(0, 160),
+            generatedText: report.generated_text,
+            createdAt: report.created_at,
+          }))
+        : getMockSnapshot().reports,
+    metricRows,
+  };
+});
+
+export async function getClientUsers() {
+  const snapshot = await getAppSnapshot();
+  return snapshot.users.filter((user) => user.role === "client");
+}
+
+export async function getAdminViewData() {
+  const snapshot = await getAppSnapshot();
+  return {
+    clients: snapshot.clients,
+    campaigns: snapshot.campaigns,
+    permissions: snapshot.permissions,
+    reports: snapshot.reports,
+    metricRows: snapshot.metricRows,
+    clientUsers: snapshot.users.filter((user) => user.role === "client"),
+  };
+}
+
+export async function getCampaignsVisibleToUser(userId: string) {
+  const snapshot = await getAppSnapshot();
+  const allowedIds = new Set(
+    snapshot.permissions
+      .filter((permission) => permission.userId === userId)
+      .map((permission) => permission.campaignId),
+  );
+
+  return snapshot.campaigns.filter((campaign) => allowedIds.has(campaign.id));
+}
+
+export async function getClientDashboardData(user: User) {
+  const snapshot = await getAppSnapshot();
+  const campaigns = await getCampaignsVisibleToUser(user.id);
+  const allowedIds = new Set(campaigns.map((campaign) => campaign.id));
+
+  return {
+    campaigns,
+    metricRows: snapshot.metricRows.filter((row) => allowedIds.has(row.campaignId)),
+    reports: getReportHistory(),
+  };
+}
+
+function getDefaultIntegrations(): IntegrationSetting[] {
+  return [
+    {
+      provider: "supabase",
+      enabled: Boolean(getSupabaseUrl() && getSupabasePublishableKey()),
+      status:
+        getSupabaseUrl() && getSupabasePublishableKey()
+          ? "connected"
+          : "not_configured",
+      title: "Supabase",
+      description: "Base do sistema, autenticação e persistência principal.",
+      config: {
+        projectUrl: getSupabaseUrl() ?? "",
+      },
+    },
+    {
+      provider: "meta_ads",
+      enabled: false,
+      status: "pending",
+      title: "Meta Ads",
+      description: "Conexão com campanhas e métricas via app do Meta for Developers.",
+      config: {},
+    },
+    {
+      provider: "gemini",
+      enabled: Boolean(process.env.GEMINI_API_KEY),
+      status: process.env.GEMINI_API_KEY ? "connected" : "pending",
+      title: "Gemini",
+      description: "Geração de análises consultivas e relatórios para clientes.",
+      config: {},
+    },
+  ];
+}
+
+export async function getIntegrationSettings() {
+  const defaults = getDefaultIntegrations();
+  const adminClient = createSupabaseAdminClient();
+
+  if (!adminClient) {
+    return defaults;
+  }
+
+  const { data, error } = await adminClient
+    .from("integration_settings")
+    .select("provider, enabled, config");
+
+  if (error || !data) {
+    return defaults;
+  }
+
+  const map = new Map(
+    (data as DbIntegrationRow[]).map((item) => [item.provider, item]),
+  );
+
+  return defaults.map((item) => {
+    const saved = map.get(item.provider);
+
+    if (!saved) {
+      return item;
+    }
+
+    return {
+      ...item,
+      enabled: saved.enabled,
+      status: saved.enabled ? "connected" : "pending",
+      config: {
+        ...item.config,
+        ...(saved.config ?? {}),
+      },
+    } satisfies IntegrationSetting;
+  });
+}
