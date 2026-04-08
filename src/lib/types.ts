@@ -64,6 +64,9 @@ export type PerformancePoint = {
 export type RawCampaignMetric = {
   campaignId: string;
   date: string;
+  granularity: "day" | "hour";
+  hourBucket: number;
+  hourLabel: string;
   amountSpent: number;
   reach: number;
   impressions: number;

@@ -372,7 +372,12 @@ const metricRows: RawCampaignMetric[] = [
     roas: 4.6,
     frequency: 1.66,
   },
-];
+].map((row) => ({
+  granularity: "day" as const,
+  hourBucket: -1,
+  hourLabel: "",
+  ...row,
+}));
 
 const syncStatuses: SyncStatus[] = [
   {

@@ -2,6 +2,34 @@ import { getIntegrationSettingByProvider } from "@/lib/integrations";
 
 const META_GRAPH_VERSION = "v22.0";
 
+async function fetchMetaPaginated<T>(url: string) {
+  const allData: T[] = [];
+  let nextUrl: string | null = url;
+
+  while (nextUrl) {
+    const response = await fetch(nextUrl, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error("Falha ao buscar dados paginados da Meta Ads.");
+    }
+
+    const payload = (await response.json()) as {
+      data: T[];
+      paging?: {
+        next?: string;
+      };
+    };
+
+    allData.push(...(payload.data ?? []));
+    nextUrl = payload.paging?.next ?? null;
+  }
+
+  return allData;
+}
+
 export async function getMetaAdsConfig() {
   const integration = await getIntegrationSettingByProvider("meta_ads");
   const config = integration?.config ?? {};
@@ -76,31 +104,22 @@ export async function fetchMetaCampaigns(input: {
     access_token: input.accessToken,
   });
 
-  const response = await fetch(
+  const data = await fetchMetaPaginated<{
+    id: string;
+    name: string;
+    status: string;
+  }>(
     `https://graph.facebook.com/${META_GRAPH_VERSION}/${accountId}/campaigns?${params.toString()}`,
-    {
-      method: "GET",
-      cache: "no-store",
-    },
   );
 
-  if (!response.ok) {
-    throw new Error("Falha ao buscar campanhas da Meta Ads.");
-  }
-
-  return (await response.json()) as {
-    data: Array<{
-      id: string;
-      name: string;
-      status: string;
-    }>;
-  };
+  return { data };
 }
 
 export async function fetchMetaInsights(input: {
   adAccountId: string;
   accessToken: string;
   datePreset?: string;
+  breakdown?: "hourly_stats_aggregated_by_advertiser_time_zone";
 }) {
   const accountId = input.adAccountId.startsWith("act_")
     ? input.adAccountId
@@ -110,45 +129,41 @@ export async function fetchMetaInsights(input: {
     level: "campaign",
     fields:
       "campaign_id,campaign_name,date_start,spend,reach,impressions,clicks,ctr,cpc,cpm,frequency,actions,purchase_roas",
-    time_increment: "1",
     date_preset: input.datePreset ?? "last_30d",
     access_token: input.accessToken,
     limit: "500",
   });
 
-  const response = await fetch(
-    `https://graph.facebook.com/${META_GRAPH_VERSION}/${accountId}/insights?${params.toString()}`,
-    {
-      method: "GET",
-      cache: "no-store",
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error("Falha ao buscar métricas da Meta Ads.");
+  if (!input.breakdown) {
+    params.set("time_increment", "1");
+  } else {
+    params.set("breakdowns", input.breakdown);
   }
 
-  return (await response.json()) as {
-    data: Array<{
-      campaign_id: string;
-      campaign_name: string;
-      date_start: string;
-      spend?: string;
-      reach?: string;
-      impressions?: string;
-      clicks?: string;
-      ctr?: string;
-      cpc?: string;
-      cpm?: string;
-      frequency?: string;
-      actions?: Array<{
-        action_type: string;
-        value: string;
-      }>;
-      purchase_roas?: Array<{
-        action_type: string;
-        value: string;
-      }>;
+  const data = await fetchMetaPaginated<{
+    campaign_id: string;
+    campaign_name: string;
+    date_start: string;
+    spend?: string;
+    reach?: string;
+    impressions?: string;
+    clicks?: string;
+    ctr?: string;
+    cpc?: string;
+    cpm?: string;
+    frequency?: string;
+    actions?: Array<{
+      action_type: string;
+      value: string;
     }>;
-  };
+    purchase_roas?: Array<{
+      action_type: string;
+      value: string;
+    }>;
+    hourly_stats_aggregated_by_advertiser_time_zone?: string;
+  }>(
+    `https://graph.facebook.com/${META_GRAPH_VERSION}/${accountId}/insights?${params.toString()}`,
+  );
+
+  return { data };
 }

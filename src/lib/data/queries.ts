@@ -58,6 +58,9 @@ type DbPermissionRow = {
 type DbMetricRow = {
   campaign_id: string;
   date: string;
+  granularity: "day" | "hour" | null;
+  hour_bucket: number | null;
+  hour_label: string | null;
   amount_spent: number;
   reach: number;
   impressions: number;
@@ -164,6 +167,9 @@ function mapMetricRow(row: DbMetricRow): RawCampaignMetric {
   return {
     campaignId: row.campaign_id,
     date: row.date,
+    granularity: row.granularity === "hour" ? "hour" : "day",
+    hourBucket: row.hour_bucket ?? -1,
+    hourLabel: row.hour_label ?? "",
     amountSpent: toNumber(row.amount_spent),
     reach: toNumber(row.reach),
     impressions: toNumber(row.impressions),
@@ -186,7 +192,20 @@ function aggregateMetrics(rows: RawCampaignMetric[]): DbMetricRow | undefined {
     return undefined;
   }
 
-  const totals = rows.reduce(
+  const rowsByDate = new Map<string, RawCampaignMetric[]>();
+
+  for (const row of rows) {
+    const items = rowsByDate.get(row.date) ?? [];
+    items.push(row);
+    rowsByDate.set(row.date, items);
+  }
+
+  const normalizedRows = Array.from(rowsByDate.values()).flatMap((items) => {
+    const dailyRows = items.filter((item) => item.granularity === "day");
+    return dailyRows.length > 0 ? dailyRows : items;
+  });
+
+  const totals = normalizedRows.reduce(
     (acc, row) => {
       acc.amount_spent += row.amountSpent;
       acc.reach += row.reach;
@@ -215,8 +234,13 @@ function aggregateMetrics(rows: RawCampaignMetric[]): DbMetricRow | undefined {
   );
 
   return {
-    campaign_id: rows[0].campaignId,
-    date: rows[rows.length - 1]?.date ?? rows[0].date,
+    campaign_id: normalizedRows[0].campaignId,
+    date:
+      normalizedRows[normalizedRows.length - 1]?.date ??
+      normalizedRows[0].date,
+    granularity: "day",
+    hour_bucket: -1,
+    hour_label: "",
     amount_spent: totals.amount_spent,
     reach: totals.reach,
     impressions: totals.impressions,
@@ -298,7 +322,7 @@ export const getAppSnapshot = cache(async (): Promise<AppDataSnapshot> => {
         .select("user_id, campaign_id"),
       adminClient
         .from("campaign_metrics")
-        .select("campaign_id, date, amount_spent, reach, impressions, clicks, ctr, result_count, result_label, cpc, cpm, leads, cost_per_lead, roi, roas, frequency")
+        .select("campaign_id, date, granularity, hour_bucket, hour_label, amount_spent, reach, impressions, clicks, ctr, result_count, result_label, cpc, cpm, leads, cost_per_lead, roi, roas, frequency")
         .order("date", { ascending: true }),
       adminClient
         .from("ai_reports")

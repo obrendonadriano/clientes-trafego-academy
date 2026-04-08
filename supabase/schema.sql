@@ -58,6 +58,9 @@ create table if not exists public.campaign_metrics (
   id uuid primary key default gen_random_uuid(),
   campaign_id uuid not null references public.campaigns(id) on delete cascade,
   date date not null,
+  granularity text not null default 'day',
+  hour_bucket integer not null default -1,
+  hour_label text not null default '',
   amount_spent numeric(12,2) not null default 0,
   reach integer not null default 0,
   impressions integer not null default 0,
@@ -143,6 +146,9 @@ alter table public.user_campaign_permissions
 alter table public.campaign_metrics
   add column if not exists campaign_id uuid,
   add column if not exists date date,
+  add column if not exists granularity text not null default 'day',
+  add column if not exists hour_bucket integer not null default -1,
+  add column if not exists hour_label text not null default '',
   add column if not exists amount_spent numeric(12,2) not null default 0,
   add column if not exists reach integer not null default 0,
   add column if not exists impressions integer not null default 0,
@@ -198,8 +204,10 @@ begin
 end
 $$;
 
-create unique index if not exists campaign_metrics_campaign_id_date_key
-on public.campaign_metrics(campaign_id, date);
+drop index if exists public.campaign_metrics_campaign_id_date_key;
+
+create unique index if not exists campaign_metrics_campaign_id_date_granularity_hour_bucket_key
+on public.campaign_metrics(campaign_id, date, granularity, hour_bucket);
 
 alter table public.users enable row level security;
 alter table public.clients enable row level security;

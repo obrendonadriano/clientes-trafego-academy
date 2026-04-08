@@ -3,6 +3,7 @@ import {
   endOfMonth,
   format,
   isWithinInterval,
+  isSameDay,
   parseISO,
   startOfDay,
   startOfMonth,
@@ -43,6 +44,29 @@ export type MetricTotals = {
   roas: number;
   frequency: number;
 };
+
+function isSingleDayRange(range: DateRange) {
+  return isSameDay(range.start, range.end);
+}
+
+function selectGranularityForRange(rows: RawCampaignMetric[], range: DateRange) {
+  const rowsInRange = rows.filter((row) =>
+    isWithinInterval(parseISO(row.date), { start: range.start, end: range.end }),
+  );
+
+  if (rowsInRange.length === 0) {
+    return [];
+  }
+
+  if (isSingleDayRange(range)) {
+    const hourlyRows = rowsInRange.filter((row) => row.granularity === "hour");
+    if (hourlyRows.length > 0) {
+      return hourlyRows;
+    }
+  }
+
+  return rowsInRange.filter((row) => row.granularity !== "hour");
+}
 
 function average(values: number[]) {
   if (values.length === 0) {
@@ -110,9 +134,7 @@ export function filterMetricsByRange(
   rows: RawCampaignMetric[],
   range: DateRange,
 ) {
-  return rows.filter((row) =>
-    isWithinInterval(parseISO(row.date), { start: range.start, end: range.end }),
-  );
+  return selectGranularityForRange(rows, range);
 }
 
 export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
@@ -171,28 +193,36 @@ export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
 
 function groupMetricsByKey(
   rows: RawCampaignMetric[],
-  getKey: (date: Date) => string,
-  getLabel: (date: Date) => string,
+  getKey: (row: RawCampaignMetric, date: Date) => string,
+  getLabel: (row: RawCampaignMetric, date: Date) => string,
 ) {
   const groups = new Map<
     string,
     {
       date: Date;
+      sortValue: number;
       amountSpent: number;
       leads: number;
+      label: string;
     }
   >();
 
   for (const row of rows) {
     const date = parseISO(row.date);
-    const key = getKey(date);
+    const key = getKey(row, date);
     const current = groups.get(key);
+    const sortValue =
+      row.granularity === "hour" && row.hourBucket >= 0
+        ? row.hourBucket
+        : date.getTime();
 
     if (!current) {
       groups.set(key, {
         date,
+        sortValue,
         amountSpent: row.amountSpent,
         leads: row.leads,
+        label: getLabel(row, date),
       });
       continue;
     }
@@ -202,9 +232,9 @@ function groupMetricsByKey(
   }
 
   return Array.from(groups.values())
-    .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .sort((a, b) => a.sortValue - b.sortValue)
     .map<PerformancePoint>((item) => ({
-      label: getLabel(item.date),
+      label: item.label,
       amountSpent: Number(item.amountSpent.toFixed(2)),
       leads: Number(item.leads.toFixed(2)),
     }));
@@ -226,16 +256,22 @@ export function buildPerformanceSeries(
   if (period === "Hoje" || period === "Ontem") {
     return groupMetricsByKey(
       filteredRows,
-      (date) => format(date, "yyyy-MM-dd"),
-      (date) => getDayLabel(date),
+      (row, date) =>
+        row.granularity === "hour" && row.hourBucket >= 0
+          ? `hour-${row.hourBucket}`
+          : format(date, "yyyy-MM-dd"),
+      (row, date) =>
+        row.granularity === "hour" && row.hourLabel
+          ? row.hourLabel
+          : getDayLabel(date),
     );
   }
 
   if (period === "Últimos 7 dias") {
     return groupMetricsByKey(
       filteredRows,
-      (date) => format(date, "yyyy-MM-dd"),
-      (date) => getDayLabel(date),
+      (_row, date) => format(date, "yyyy-MM-dd"),
+      (_row, date) => getDayLabel(date),
     );
   }
 
@@ -246,16 +282,16 @@ export function buildPerformanceSeries(
     if (days <= 14) {
       return groupMetricsByKey(
         filteredRows,
-        (date) => format(date, "yyyy-MM-dd"),
-        (date) => getDayLabel(date),
+        (_row, date) => format(date, "yyyy-MM-dd"),
+        (_row, date) => getDayLabel(date),
       );
     }
 
     if (days <= 62) {
       return groupMetricsByKey(
         filteredRows,
-        (date) => format(startOfWeek(date, { weekStartsOn: 1 }), "yyyy-MM-dd"),
-        (date) =>
+        (_row, date) => format(startOfWeek(date, { weekStartsOn: 1 }), "yyyy-MM-dd"),
+        (_row, date) =>
           `Sem ${format(startOfWeek(date, { weekStartsOn: 1 }), "dd/MM", { locale: ptBR })}`,
       );
     }
@@ -268,16 +304,16 @@ export function buildPerformanceSeries(
   ) {
     return groupMetricsByKey(
       filteredRows,
-      (date) => format(startOfWeek(date, { weekStartsOn: 1 }), "yyyy-MM-dd"),
-      (date) =>
+      (_row, date) => format(startOfWeek(date, { weekStartsOn: 1 }), "yyyy-MM-dd"),
+      (_row, date) =>
         `Sem ${format(startOfWeek(date, { weekStartsOn: 1 }), "dd/MM", { locale: ptBR })}`,
     );
   }
 
   return groupMetricsByKey(
     filteredRows,
-    (date) => format(startOfMonth(date), "yyyy-MM"),
-    (date) => format(date, "MMM/yy", { locale: ptBR }),
+    (_row, date) => format(startOfMonth(date), "yyyy-MM"),
+    (_row, date) => format(date, "MMM/yy", { locale: ptBR }),
   );
 }
 

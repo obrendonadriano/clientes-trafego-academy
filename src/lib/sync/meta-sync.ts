@@ -18,6 +18,9 @@ type CampaignImportRow = {
 type MetricImportRow = {
   campaign_id: string;
   date: string;
+  granularity: "day" | "hour";
+  hour_bucket: number;
+  hour_label: string;
   amount_spent: number;
   reach: number;
   impressions: number;
@@ -79,6 +82,23 @@ function getPrioritizedActionValue(
   }
 
   return 0;
+}
+
+function parseMetaHourBreakdown(value?: string) {
+  if (!value) {
+    return {
+      hourBucket: -1,
+      hourLabel: "",
+    };
+  }
+
+  const match = value.match(/^(\d{1,2})/);
+  const hourBucket = match ? Number(match[1]) : -1;
+
+  return {
+    hourBucket,
+    hourLabel: hourBucket >= 0 ? `${String(hourBucket).padStart(2, "0")}h` : value,
+  };
 }
 
 function getPrimaryResult(
@@ -235,6 +255,8 @@ async function upsertMetricRows(rows: MetricImportRow[]) {
       .select("id")
       .eq("campaign_id", row.campaign_id)
       .eq("date", row.date)
+      .eq("granularity", row.granularity)
+      .eq("hour_bucket", row.hour_bucket)
       .maybeSingle<{ id: string }>();
 
     if (existing.error) {
@@ -300,7 +322,7 @@ export async function importMetaInsights() {
     );
   }
 
-  const [last30DaysInsights, todayInsights] = await Promise.all([
+  const [last30DaysInsights, todayHourlyInsights, yesterdayHourlyInsights] = await Promise.all([
     fetchMetaInsights({
       adAccountId: config.adAccountId,
       accessToken: config.accessToken,
@@ -310,6 +332,13 @@ export async function importMetaInsights() {
       adAccountId: config.adAccountId,
       accessToken: config.accessToken,
       datePreset: "today",
+      breakdown: "hourly_stats_aggregated_by_advertiser_time_zone",
+    }),
+    fetchMetaInsights({
+      adAccountId: config.adAccountId,
+      accessToken: config.accessToken,
+      datePreset: "yesterday",
+      breakdown: "hourly_stats_aggregated_by_advertiser_time_zone",
     }),
   ]);
 
@@ -329,7 +358,38 @@ export async function importMetaInsights() {
       .map((campaign) => [campaign.external_id as string, campaign.id]),
   );
 
-  const rows = [...last30DaysInsights.data, ...todayInsights.data]
+  const rows = [
+    ...last30DaysInsights.data.map((item) => ({
+      ...item,
+      granularity: "day" as const,
+      hour_bucket: -1,
+      hour_label: "",
+    })),
+    ...todayHourlyInsights.data.map((item) => {
+      const hour = parseMetaHourBreakdown(
+        item.hourly_stats_aggregated_by_advertiser_time_zone,
+      );
+
+      return {
+        ...item,
+        granularity: "hour" as const,
+        hour_bucket: hour.hourBucket,
+        hour_label: hour.hourLabel,
+      };
+    }),
+    ...yesterdayHourlyInsights.data.map((item) => {
+      const hour = parseMetaHourBreakdown(
+        item.hourly_stats_aggregated_by_advertiser_time_zone,
+      );
+
+      return {
+        ...item,
+        granularity: "hour" as const,
+        hour_bucket: hour.hourBucket,
+        hour_label: hour.hourLabel,
+      };
+    }),
+  ]
     .map((item) => {
       const campaignId = campaignIdByExternalId.get(item.campaign_id);
 
@@ -355,6 +415,9 @@ export async function importMetaInsights() {
       return {
         campaign_id: campaignId,
         date: item.date_start,
+        granularity: item.granularity,
+        hour_bucket: item.hour_bucket,
+        hour_label: item.hour_label,
         amount_spent: spend,
         reach: Number(item.reach || 0),
         impressions: Number(item.impressions || 0),
@@ -374,7 +437,12 @@ export async function importMetaInsights() {
     .filter((row): row is MetricImportRow => Boolean(row));
 
   const uniqueRows = Array.from(
-    new Map(rows.map((row) => [`${row.campaign_id}:${row.date}`, row] as const)).values(),
+    new Map(
+      rows.map((row) => [
+        `${row.campaign_id}:${row.date}:${row.granularity}:${row.hour_bucket}`,
+        row,
+      ] as const),
+    ).values(),
   );
 
   if (uniqueRows.length === 0) {
