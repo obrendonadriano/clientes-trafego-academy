@@ -85,6 +85,8 @@ Estrutura obrigatória da resposta:
 - não usar listas;
 - não usar markdown com dois asteriscos;
 - manter o texto suficientemente curto para leitura rápida no WhatsApp.
+- citar dentro do texto, de forma natural e objetiva, os números principais do período;
+- mencionar obrigatoriamente pelo menos estes 4 dados: investimento, leads/resultados, CTR e ROAS.
 
 Regras obrigatórias:
 - sempre tratar a campanha de forma positiva e profissional;
