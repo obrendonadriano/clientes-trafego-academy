@@ -199,9 +199,9 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
 
   return (
     <div className="overflow-hidden rounded-3xl border border-border/60 bg-background/60">
-      <div className="overflow-x-auto">
+      <div className="max-h-[560px] overflow-auto">
         <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
-          <thead className="bg-muted/60 text-muted-foreground">
+          <thead className="sticky top-0 z-10 bg-muted/95 text-muted-foreground backdrop-blur">
             <tr>
               {columns.map((column) => {
                 const active = sortKey === column.key;
@@ -230,73 +230,68 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
               })}
             </tr>
           </thead>
-        </table>
-
-        <div className="max-h-[560px] overflow-y-auto">
-          <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
-            <tbody>
-              {sortedCampaigns.map((campaign) => (
-                <tr key={campaign.id} className="border-b border-border/40 last:border-b-0">
-                  <td className="min-w-[260px] border-b border-border/40 px-4 py-3 align-middle">
-                    <div>
-                      <p className="font-medium leading-snug">{campaign.name}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{campaign.platform}</p>
-                    </div>
-                  </td>
-                  <td className="min-w-[120px] border-b border-border/40 px-4 py-3 align-middle">
-                    <Badge variant={campaign.status === "Ativa" ? "success" : "secondary"}>
-                      {campaign.status}
-                    </Badge>
-                  </td>
-                  <td className="min-w-[116px] border-b border-border/40 px-4 py-3 align-middle">
-                    {campaign.metrics.amountSpent}
-                  </td>
-                  <td className="min-w-[90px] border-b border-border/40 px-4 py-3 align-middle">
-                    {campaign.metrics.clicks}
-                  </td>
-                  <td className="min-w-[88px] border-b border-border/40 px-4 py-3 align-middle">
-                    {campaign.metrics.ctr}
-                  </td>
-                  <td className="min-w-[88px] border-b border-border/40 px-4 py-3 align-middle">
-                    {campaign.metrics.leads}
-                  </td>
-                  <td className="min-w-[108px] border-b border-border/40 px-4 py-3 align-middle">
-                    {campaign.metrics.costPerLead}
-                  </td>
-                  <td className="min-w-[88px] border-b border-border/40 px-4 py-3 align-middle">
-                    {campaign.metrics.roas}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="sticky bottom-0 bg-card/95 backdrop-blur">
-              <tr className="text-foreground">
-                <td className="border-t border-border/60 px-4 py-3 font-semibold">Totais</td>
-                <td className="border-t border-border/60 px-4 py-3 text-sm text-muted-foreground">
-                  {sortedCampaigns.length} campanhas
+          <tbody>
+            {sortedCampaigns.map((campaign) => (
+              <tr key={campaign.id} className="border-b border-border/40 last:border-b-0">
+                <td className="min-w-[260px] border-b border-border/40 px-4 py-3 align-middle">
+                  <div>
+                    <p className="font-medium leading-snug">{campaign.name}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{campaign.platform}</p>
+                  </div>
                 </td>
-                <td className="border-t border-border/60 px-4 py-3 font-semibold">
-                  {formatCurrency(totals.amountSpent)}
+                <td className="min-w-[120px] border-b border-border/40 px-4 py-3 align-middle">
+                  <Badge variant={campaign.status === "Ativa" ? "success" : "secondary"}>
+                    {campaign.status}
+                  </Badge>
                 </td>
-                <td className="border-t border-border/60 px-4 py-3 font-semibold">
-                  {totals.clicks.toLocaleString("pt-BR")}
+                <td className="min-w-[116px] border-b border-border/40 px-4 py-3 align-middle">
+                  {campaign.metrics.amountSpent}
                 </td>
-                <td className="border-t border-border/60 px-4 py-3 font-semibold">
-                  {formatPercent(averageCtr)}
+                <td className="min-w-[90px] border-b border-border/40 px-4 py-3 align-middle">
+                  {campaign.metrics.clicks}
                 </td>
-                <td className="border-t border-border/60 px-4 py-3 font-semibold">
-                  {totals.leads.toLocaleString("pt-BR")}
+                <td className="min-w-[88px] border-b border-border/40 px-4 py-3 align-middle">
+                  {campaign.metrics.ctr}
                 </td>
-                <td className="border-t border-border/60 px-4 py-3 font-semibold">
-                  {formatCurrency(averageCostPerLead)}
+                <td className="min-w-[88px] border-b border-border/40 px-4 py-3 align-middle">
+                  {campaign.metrics.leads}
                 </td>
-                <td className="border-t border-border/60 px-4 py-3 font-semibold">
-                  {formatMultiplier(averageRoas)}
+                <td className="min-w-[108px] border-b border-border/40 px-4 py-3 align-middle">
+                  {campaign.metrics.costPerLead}
+                </td>
+                <td className="min-w-[88px] border-b border-border/40 px-4 py-3 align-middle">
+                  {campaign.metrics.roas}
                 </td>
               </tr>
-            </tfoot>
-          </table>
-        </div>
+            ))}
+          </tbody>
+          <tfoot className="sticky bottom-0 z-10 bg-card/95 backdrop-blur">
+            <tr className="text-foreground">
+              <td className="border-t border-border/60 px-4 py-3 font-semibold">Totais</td>
+              <td className="border-t border-border/60 px-4 py-3 text-sm text-muted-foreground">
+                {sortedCampaigns.length} campanhas
+              </td>
+              <td className="border-t border-border/60 px-4 py-3 font-semibold">
+                {formatCurrency(totals.amountSpent)}
+              </td>
+              <td className="border-t border-border/60 px-4 py-3 font-semibold">
+                {totals.clicks.toLocaleString("pt-BR")}
+              </td>
+              <td className="border-t border-border/60 px-4 py-3 font-semibold">
+                {formatPercent(averageCtr)}
+              </td>
+              <td className="border-t border-border/60 px-4 py-3 font-semibold">
+                {totals.leads.toLocaleString("pt-BR")}
+              </td>
+              <td className="border-t border-border/60 px-4 py-3 font-semibold">
+                {formatCurrency(averageCostPerLead)}
+              </td>
+              <td className="border-t border-border/60 px-4 py-3 font-semibold">
+                {formatMultiplier(averageRoas)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
     </div>
   );

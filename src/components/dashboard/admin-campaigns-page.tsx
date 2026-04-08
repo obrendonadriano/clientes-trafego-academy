@@ -204,7 +204,9 @@ export function AdminCampaignsPage({
         ) : null}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+      <div className="space-y-6">
+        <CampaignsTable campaigns={selected.campaigns} />
+
         <AdminFormCard
           title="Nova campanha"
           description="Vincule uma campanha a um cliente já cadastrado."
@@ -246,8 +248,6 @@ export function AdminCampaignsPage({
             </Select>
           </div>
         </AdminFormCard>
-
-        <CampaignsTable campaigns={selected.campaigns} />
       </div>
     </div>
   );
