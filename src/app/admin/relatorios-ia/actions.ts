@@ -44,12 +44,32 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
+function getCampaignObjective(resultLabel: string) {
+  const normalized = resultLabel.toLowerCase();
+
+  if (
+    normalized.includes("compra") ||
+    normalized.includes("purchase") ||
+    normalized.includes("venda")
+  ) {
+    return "sales";
+  }
+
+  return "leads";
+}
+
 function buildPrompt(input: {
   clientName: string;
   campaignNames: string[];
   periodLabel: string;
   totals: ReturnType<typeof summarizeMetrics>;
 }) {
+  const objective = getCampaignObjective(input.totals.resultLabel);
+  const metricFocus =
+    objective === "sales"
+      ? "Como o resultado principal e de vendas/compra, destaque naturalmente investimento, resultados, CTR e ROAS. Se fizer sentido, mencione ROI tambem."
+      : "Como o resultado principal e de captacao de leads, destaque naturalmente investimento, resultados/leads, CTR e custo por lead. Nao trate ROAS como metrica principal para este texto.";
+
   return `Você é um gestor de tráfego pago sênior da Tráfego Academy.
 
 Gere uma análise em português do Brasil, profissional, humanizada, clara e fácil para cliente leigo entender.
@@ -86,7 +106,7 @@ Estrutura obrigatória da resposta:
 - não usar markdown com dois asteriscos;
 - manter o texto suficientemente curto para leitura rápida no WhatsApp.
 - citar dentro do texto, de forma natural e objetiva, os números principais do período;
-- mencionar obrigatoriamente pelo menos estes 4 dados: investimento, leads/resultados, CTR e ROAS.
+- mencionar obrigatoriamente investimento, ${objective === "sales" ? "resultados" : "leads/resultados"}, CTR e ${objective === "sales" ? "ROAS" : "custo por lead"}.
 
 Regras obrigatórias:
 - sempre tratar a campanha de forma positiva e profissional;
@@ -94,6 +114,7 @@ Regras obrigatórias:
 - não sugerir melhorias, testes, ajustes ou otimizações;
 - não escrever alertas ou pontos negativos;
 - não falar com tom técnico interno de gestor para cliente final.
+- ${metricFocus}
 
 Evite linguagem robótica.`;
 }
