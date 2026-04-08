@@ -31,6 +31,18 @@ export function PerformanceChart({
   periodLabel = "Performance por período",
   emptyMessage = "Ainda não há métricas suficientes para montar este gráfico.",
 }: PerformanceChartProps) {
+  const chartData =
+    data.length === 1
+      ? [
+          {
+            label: "",
+            amountSpent: data[0].amountSpent,
+            leads: data[0].leads,
+          },
+          data[0],
+        ]
+      : data;
+
   return (
     <div className="rounded-3xl border border-border/60 bg-background/60 p-4">
       <div className="mb-4">
@@ -42,7 +54,7 @@ export function PerformanceChart({
       <div className="h-[280px]">
         {data.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 16, right: 8, left: 0, bottom: 8 }}>
+            <AreaChart data={chartData} margin={{ top: 16, right: 8, left: 0, bottom: 8 }}>
               <defs>
                 <linearGradient id="spent" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#0f9a7a" stopOpacity={0.45} />
@@ -58,6 +70,7 @@ export function PerformanceChart({
                 dataKey="label"
                 axisLine={false}
                 tickLine={false}
+                minTickGap={16}
                 tick={{ fill: "currentColor", fontSize: 12 }}
               />
               <YAxis

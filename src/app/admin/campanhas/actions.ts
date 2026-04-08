@@ -129,11 +129,23 @@ export async function importMetaInsightsAction(
   }
 
   try {
-    const insights = await fetchMetaInsights({
-      adAccountId: config.adAccountId,
-      accessToken: config.accessToken,
-      datePreset: "last_30d",
-    });
+    const [last30DaysInsights, todayInsights] = await Promise.all([
+      fetchMetaInsights({
+        adAccountId: config.adAccountId,
+        accessToken: config.accessToken,
+        datePreset: "last_30d",
+      }),
+      fetchMetaInsights({
+        adAccountId: config.adAccountId,
+        accessToken: config.accessToken,
+        datePreset: "today",
+      }),
+    ]);
+
+    const insights = [
+      ...last30DaysInsights.data,
+      ...todayInsights.data,
+    ];
 
     const { data: campaigns, error: campaignsError } = await adminClient
       .from("campaigns")
@@ -151,7 +163,7 @@ export async function importMetaInsightsAction(
         .map((campaign) => [campaign.external_id as string, campaign.id as string]),
     );
 
-    const rows = insights.data
+    const rows = insights
       .map((item) => {
         const campaignId = campaignIdByExternalId.get(item.campaign_id);
 
@@ -192,14 +204,20 @@ export async function importMetaInsightsAction(
       })
       .filter((row): row is NonNullable<typeof row> => Boolean(row));
 
-    if (rows.length === 0) {
+    const uniqueRows = Array.from(
+      new Map(
+        rows.map((row) => [`${row.campaign_id}:${row.date}`, row] as const),
+      ).values(),
+    );
+
+    if (uniqueRows.length === 0) {
       return {
         error:
           "Nenhuma métrica foi importada. Verifique se as campanhas já foram importadas primeiro.",
       };
     }
 
-    for (const row of rows) {
+    for (const row of uniqueRows) {
       const existing = await adminClient
         .from("campaign_metrics")
         .select("id")
@@ -226,7 +244,7 @@ export async function importMetaInsightsAction(
     revalidatePath("/admin");
     revalidatePath("/admin/campanhas");
     revalidatePath("/dashboard");
-    return { success: `${rows.length} registro(s) de métricas importado(s).` };
+    return { success: `${uniqueRows.length} registro(s) de métricas importado(s).` };
   } catch (error) {
     return {
       error:

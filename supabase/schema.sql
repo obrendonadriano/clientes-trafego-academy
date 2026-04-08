@@ -119,6 +119,9 @@ alter table public.campaigns
   add column if not exists source text not null default 'manual',
   add column if not exists created_at timestamptz not null default now();
 
+alter table public.campaigns
+  alter column client_id drop not null;
+
 alter table public.user_campaign_permissions
   add column if not exists user_id uuid,
   add column if not exists campaign_id uuid;
