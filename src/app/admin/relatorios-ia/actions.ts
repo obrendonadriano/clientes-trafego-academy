@@ -12,7 +12,7 @@ import {
 } from "@/lib/dashboard-metrics";
 import { getAppSnapshot } from "@/lib/data/queries";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { generateGeminiAnalysis, generateMockGeminiAnalysis } from "@/lib/services/gemini";
+import { generateGeminiAnalysis } from "@/lib/services/gemini";
 
 export type GenerateReportState = {
   success?: string;
@@ -190,7 +190,6 @@ export async function generateAiReportAction(
 
       return {
         error: message,
-        text: generateMockGeminiAnalysis(),
         whatsapp: client.whatsapp,
       };
     }
@@ -232,7 +231,6 @@ export async function generateAiReportAction(
 
     return {
       error: message,
-      text: generateMockGeminiAnalysis(),
     };
   }
 }

@@ -2,7 +2,6 @@ import { AdminReportsPage } from "@/components/dashboard/admin-reports-page";
 import { DashboardShell } from "@/components/dashboard/shell";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getAdminViewData } from "@/lib/data/queries";
-import { generateMockGeminiAnalysis } from "@/lib/services/gemini";
 
 export default async function AdminReportsRoute() {
   const user = await getCurrentUser();
@@ -16,7 +15,7 @@ export default async function AdminReportsRoute() {
     >
       <AdminReportsPage
         reports={data.reports}
-        aiText={generateMockGeminiAnalysis()}
+        aiText=""
         clients={data.clients}
         campaigns={data.campaigns}
         clientUsers={data.clientUsers}
