@@ -94,6 +94,7 @@ export type AppDataSnapshot = {
   permissions: CampaignPermission[];
   reports: ReportHistoryItem[];
   metricRows: RawCampaignMetric[];
+  syncStatuses: SyncStatus[];
 };
 
 export type IntegrationProvider =
@@ -108,4 +109,14 @@ export type IntegrationSetting = {
   title: string;
   description: string;
   config: Record<string, string>;
+};
+
+export type SyncStatus = {
+  provider: IntegrationProvider;
+  intervalMinutes: number;
+  status: "pending" | "running" | "success" | "error";
+  lastAttemptAt?: string | null;
+  lastSuccessAt?: string | null;
+  nextRunAt?: string | null;
+  message?: string | null;
 };

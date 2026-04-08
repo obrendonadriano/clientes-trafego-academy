@@ -53,7 +53,7 @@ npm run dev
 
 1. Suba este projeto para um repositório Git.
 2. Importe o repositório na Vercel.
-3. Configure as variáveis de ambiente da produção.
+3. Configure as variáveis de ambiente da produção, incluindo `CRON_SECRET`.
 4. Aponte o domínio `dashboard.trafegoacademy.online` para o projeto da Vercel.
 5. Use as URLs públicas abaixo em integrações como Meta:
 
@@ -62,3 +62,10 @@ https://dashboard.trafegoacademy.online/politica-de-privacidade
 https://dashboard.trafegoacademy.online/termos-de-servico
 https://dashboard.trafegoacademy.online/exclusao-de-dados
 ```
+
+## Sincronização automática da Meta Ads
+
+- o projeto inclui `vercel.json` com cron a cada 15 minutos em `/api/cron/meta-sync`
+- essa rota exige `CRON_SECRET` por header `Authorization: Bearer ...`
+- rode novamente `supabase/schema.sql` para criar a tabela `public.sync_statuses`
+- a área do cliente exibe a última e a próxima atualização com base nesse status

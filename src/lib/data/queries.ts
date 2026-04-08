@@ -2,12 +2,14 @@ import { cache } from "react";
 import { format, parseISO } from "date-fns";
 import { getMockSnapshot } from "@/lib/mock-data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getMetaSyncStatus } from "@/lib/sync/meta-sync";
 import {
   AppDataSnapshot,
   CampaignWithMetrics,
   Client,
   IntegrationSetting,
   RawCampaignMetric,
+  SyncStatus,
   User,
 } from "@/lib/types";
 import { getReportHistory } from "@/lib/mock-data";
@@ -87,6 +89,16 @@ type DbReportRow = {
     nome_empresa: string;
     whatsapp: string | null;
   }> | null;
+};
+
+type DbSyncStatusRow = {
+  provider: "meta_ads" | "gemini" | "supabase";
+  interval_minutes: number;
+  status: SyncStatus["status"];
+  last_attempt_at: string | null;
+  last_success_at: string | null;
+  next_run_at: string | null;
+  message: string | null;
 };
 
 function toNumber(value: number | string | null | undefined) {
@@ -243,7 +255,7 @@ export const getAppSnapshot = cache(async (): Promise<AppDataSnapshot> => {
     return getMockSnapshot();
   }
 
-  const [usersResult, clientsResult, campaignsResult, permissionsResult, metricsResult, reportsResult] =
+  const [usersResult, clientsResult, campaignsResult, permissionsResult, metricsResult, reportsResult, syncStatusResult] =
     await Promise.all([
       adminClient
         .from("users")
@@ -268,6 +280,9 @@ export const getAppSnapshot = cache(async (): Promise<AppDataSnapshot> => {
         .from("ai_reports")
         .select("id, client_id, period_start, period_end, generated_text, created_at, clients(nome_empresa, whatsapp)")
         .order("created_at", { ascending: false }),
+      adminClient
+        .from("sync_statuses")
+        .select("provider, interval_minutes, status, last_attempt_at, last_success_at, next_run_at, message"),
     ]);
 
   if (usersResult.error || clientsResult.error || campaignsResult.error || permissionsResult.error || metricsResult.error || reportsResult.error) {
@@ -290,6 +305,19 @@ export const getAppSnapshot = cache(async (): Promise<AppDataSnapshot> => {
     items.push(row);
     metricRowsByCampaign.set(row.campaignId, items);
   }
+
+  const syncStatuses =
+    syncStatusResult.error || !syncStatusResult.data
+      ? [await getMetaSyncStatus()]
+      : (syncStatusResult.data as DbSyncStatusRow[]).map((row) => ({
+          provider: row.provider,
+          intervalMinutes: row.interval_minutes,
+          status: row.status,
+          lastAttemptAt: row.last_attempt_at,
+          lastSuccessAt: row.last_success_at,
+          nextRunAt: row.next_run_at,
+          message: row.message,
+        }));
 
   return {
     users: (usersResult.data as DbUserRow[]).map(mapUser),
@@ -315,6 +343,7 @@ export const getAppSnapshot = cache(async (): Promise<AppDataSnapshot> => {
           }))
         : getMockSnapshot().reports,
     metricRows,
+    syncStatuses,
   };
 });
 
@@ -355,6 +384,9 @@ export async function getClientDashboardData(user: User) {
     campaigns,
     metricRows: snapshot.metricRows.filter((row) => allowedIds.has(row.campaignId)),
     reports: getReportHistory(),
+    syncStatus:
+      snapshot.syncStatuses.find((status) => status.provider === "meta_ads") ??
+      null,
   };
 }
 

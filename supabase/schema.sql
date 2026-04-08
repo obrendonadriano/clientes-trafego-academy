@@ -91,6 +91,18 @@ create table if not exists public.integration_settings (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.sync_statuses (
+  id uuid primary key default gen_random_uuid(),
+  provider text not null unique,
+  interval_minutes integer not null default 15,
+  status text not null default 'pending',
+  last_attempt_at timestamptz,
+  last_success_at timestamptz,
+  next_run_at timestamptz,
+  message text,
+  updated_at timestamptz not null default now()
+);
+
 alter table public.users
   add column if not exists auth_user_id uuid,
   add column if not exists nome text,
@@ -157,6 +169,16 @@ alter table public.integration_settings
   add column if not exists config jsonb not null default '{}'::jsonb,
   add column if not exists updated_at timestamptz not null default now();
 
+alter table public.sync_statuses
+  add column if not exists provider text,
+  add column if not exists interval_minutes integer not null default 15,
+  add column if not exists status text not null default 'pending',
+  add column if not exists last_attempt_at timestamptz,
+  add column if not exists last_success_at timestamptz,
+  add column if not exists next_run_at timestamptz,
+  add column if not exists message text,
+  add column if not exists updated_at timestamptz not null default now();
+
 do $$
 begin
   if not exists (
@@ -182,6 +204,7 @@ alter table public.user_campaign_permissions enable row level security;
 alter table public.campaign_metrics enable row level security;
 alter table public.ai_reports enable row level security;
 alter table public.integration_settings enable row level security;
+alter table public.sync_statuses enable row level security;
 
 drop policy if exists "admin can manage users" on public.users;
 create policy "admin can manage users"
@@ -262,6 +285,13 @@ with check (auth.jwt() ->> 'role' = 'admin');
 drop policy if exists "admin manages integration settings" on public.integration_settings;
 create policy "admin manages integration settings"
 on public.integration_settings
+for all
+using (auth.jwt() ->> 'role' = 'admin')
+with check (auth.jwt() ->> 'role' = 'admin');
+
+drop policy if exists "admin manages sync statuses" on public.sync_statuses;
+create policy "admin manages sync statuses"
+on public.sync_statuses
 for all
 using (auth.jwt() ->> 'role' = 'admin')
 with check (auth.jwt() ->> 'role' = 'admin');

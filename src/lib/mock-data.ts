@@ -5,6 +5,7 @@ import {
   PerformancePoint,
   RawCampaignMetric,
   ReportHistoryItem,
+  SyncStatus,
   User,
 } from "@/lib/types";
 
@@ -349,6 +350,18 @@ const metricRows: RawCampaignMetric[] = [
   },
 ];
 
+const syncStatuses: SyncStatus[] = [
+  {
+    provider: "meta_ads",
+    intervalMinutes: 15,
+    status: "success",
+    lastAttemptAt: "2026-04-08T15:45:00-03:00",
+    lastSuccessAt: "2026-04-08T15:45:00-03:00",
+    nextRunAt: "2026-04-08T16:00:00-03:00",
+    message: "Sincronização automática preparada para importar campanhas e métricas da Meta Ads.",
+  },
+];
+
 export function getMockSnapshot(): AppDataSnapshot {
   return {
     users: users.map((user) => ({
@@ -368,6 +381,7 @@ export function getMockSnapshot(): AppDataSnapshot {
     permissions,
     reports: reportHistory,
     metricRows,
+    syncStatuses,
   };
 }
 

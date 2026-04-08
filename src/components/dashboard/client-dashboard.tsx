@@ -23,6 +23,7 @@ import {
   CampaignWithMetrics,
   RawCampaignMetric,
   ReportHistoryItem,
+  SyncStatus,
   User,
 } from "@/lib/types";
 
@@ -31,6 +32,7 @@ type ClientDashboardProps = {
   campaigns: CampaignWithMetrics[];
   metricRows: RawCampaignMetric[];
   reports: ReportHistoryItem[];
+  syncStatus: SyncStatus | null;
 };
 
 function formatCurrency(value: number) {
@@ -50,11 +52,24 @@ function formatChange(value: number, suffix = "%") {
   return `${signal}${value.toFixed(1).replace(".", ",")}${suffix}`;
 }
 
+function formatDateTime(value?: string | null) {
+  if (!value) {
+    return "Aguardando primeira sincronização";
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "America/Sao_Paulo",
+  }).format(new Date(value));
+}
+
 export function ClientDashboard({
   user,
   campaigns,
   metricRows,
   reports,
+  syncStatus,
 }: ClientDashboardProps) {
   const [period, setPeriod] = useState<PeriodFilterValue>("Últimos 30 dias");
   const [comparePrevious, setComparePrevious] = useState(true);
@@ -156,6 +171,18 @@ export function ClientDashboard({
                 Histórico recente: <strong className="text-foreground">{reports.length} análises</strong>
               </div>
               <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+                Última atualização:{" "}
+                <strong className="text-foreground">
+                  {formatDateTime(syncStatus?.lastSuccessAt)}
+                </strong>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+                Próxima atualização:{" "}
+                <strong className="text-foreground">
+                  {formatDateTime(syncStatus?.nextRunAt)}
+                </strong>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
                 Frequência média:{" "}
                 <strong className="text-foreground">
                   {selected.totals.frequency.toFixed(2).replace(".", ",")}
@@ -170,6 +197,16 @@ export function ClientDashboard({
               <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
                 Filtro atual:{" "}
                 <strong className="text-foreground">{selected.periodLabel}</strong>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+                Sincronização automática:{" "}
+                <strong className="text-foreground">
+                  a cada {syncStatus?.intervalMinutes ?? 15} minutos
+                </strong>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {syncStatus?.message ??
+                    "Os dados desta conta são atualizados automaticamente pela integração com a Meta Ads."}
+                </p>
               </div>
             </CardContent>
           </Card>
