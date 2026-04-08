@@ -36,10 +36,15 @@ export function PerformanceChart({
       ? [
           {
             label: "",
-            amountSpent: data[0].amountSpent,
-            leads: data[0].leads,
+            amountSpent: null,
+            leads: null,
           },
           data[0],
+          {
+            label: "",
+            amountSpent: null,
+            leads: null,
+          },
         ]
       : data;
 
@@ -110,6 +115,7 @@ export function PerformanceChart({
                 stroke="#0f9a7a"
                 strokeWidth={2}
                 fill="url(#spent)"
+                connectNulls={false}
               />
               <Line
                 type="monotone"
@@ -118,6 +124,7 @@ export function PerformanceChart({
                 yAxisId="leads"
                 stroke="#55a6ff"
                 strokeWidth={3}
+                connectNulls={false}
                 dot={{ r: 4, fill: "#55a6ff", strokeWidth: 0 }}
                 activeDot={{ r: 6 }}
               />
