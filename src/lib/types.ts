@@ -28,6 +28,8 @@ export type CampaignMetric = {
   impressions: string;
   clicks: string;
   ctr: string;
+  results: string;
+  resultLabel: string;
   cpc: string;
   cpm: string;
   leads: string;
@@ -67,6 +69,8 @@ export type RawCampaignMetric = {
   impressions: number;
   clicks: number;
   ctr: number;
+  results: number;
+  resultLabel: string;
   cpc: number;
   cpm: number;
   leads: number;

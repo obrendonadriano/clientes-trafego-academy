@@ -63,6 +63,8 @@ type DbMetricRow = {
   impressions: number;
   clicks: number;
   ctr: number;
+  result_count: number | null;
+  result_label: string | null;
   cpc: number;
   cpm: number;
   leads: number;
@@ -155,6 +157,8 @@ function mapMetricRow(row: DbMetricRow): RawCampaignMetric {
     impressions: toNumber(row.impressions),
     clicks: toNumber(row.clicks),
     ctr: toNumber(row.ctr),
+    results: toNumber(row.result_count ?? row.leads),
+    resultLabel: row.result_label ?? "Leads no site",
     cpc: toNumber(row.cpc),
     cpm: toNumber(row.cpm),
     leads: toNumber(row.leads),
@@ -176,7 +180,9 @@ function aggregateMetrics(rows: RawCampaignMetric[]): DbMetricRow | undefined {
       acc.reach += row.reach;
       acc.impressions += row.impressions;
       acc.clicks += row.clicks;
+      acc.results += row.results;
       acc.leads += row.leads;
+      acc.resultLabels.push(row.resultLabel);
       acc.roi.push(row.roi);
       acc.roas.push(row.roas);
       acc.frequency.push(row.frequency);
@@ -187,7 +193,9 @@ function aggregateMetrics(rows: RawCampaignMetric[]): DbMetricRow | undefined {
       reach: 0,
       impressions: 0,
       clicks: 0,
+      results: 0,
       leads: 0,
+      resultLabels: [] as string[],
       roi: [] as number[],
       roas: [] as number[],
       frequency: [] as number[],
@@ -205,6 +213,8 @@ function aggregateMetrics(rows: RawCampaignMetric[]): DbMetricRow | undefined {
       totals.impressions > 0
         ? (totals.clicks / totals.impressions) * 100
         : 0,
+    result_count: totals.results,
+    result_label: totals.resultLabels[0] ?? "Leads no site",
     cpc: totals.clicks > 0 ? totals.amount_spent / totals.clicks : 0,
     cpm:
       totals.impressions > 0
@@ -236,6 +246,8 @@ function mapCampaign(
       impressions: String(metric?.impressions ?? 0),
       clicks: String(metric?.clicks ?? 0),
       ctr: `${(metric?.ctr ?? 0).toFixed(2)}%`,
+      results: String(metric?.result_count ?? metric?.leads ?? 0),
+      resultLabel: metric?.result_label ?? "Leads no site",
       cpc: formatCurrency(metric?.cpc ?? 0),
       cpm: formatCurrency(metric?.cpm ?? 0),
       leads: String(metric?.leads ?? 0),
@@ -274,7 +286,7 @@ export const getAppSnapshot = cache(async (): Promise<AppDataSnapshot> => {
         .select("user_id, campaign_id"),
       adminClient
         .from("campaign_metrics")
-        .select("campaign_id, date, amount_spent, reach, impressions, clicks, ctr, cpc, cpm, leads, cost_per_lead, roi, roas, frequency")
+        .select("campaign_id, date, amount_spent, reach, impressions, clicks, ctr, result_count, result_label, cpc, cpm, leads, cost_per_lead, roi, roas, frequency")
         .order("date", { ascending: true }),
       adminClient
         .from("ai_reports")

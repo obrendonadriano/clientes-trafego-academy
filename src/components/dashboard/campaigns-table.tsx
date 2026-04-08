@@ -16,6 +16,7 @@ type SortKey =
   | "amountSpent"
   | "clicks"
   | "ctr"
+  | "results"
   | "leads"
   | "costPerLead"
   | "roas";
@@ -32,6 +33,7 @@ const columns: Array<{
   { key: "amountSpent", label: "Investido", className: "min-w-[116px]" },
   { key: "clicks", label: "Cliques", className: "min-w-[90px]" },
   { key: "ctr", label: "CTR", className: "min-w-[88px]" },
+  { key: "results", label: "Resultados", className: "min-w-[128px]" },
   { key: "leads", label: "Leads", className: "min-w-[88px]" },
   { key: "costPerLead", label: "CPL", className: "min-w-[108px]" },
   { key: "roas", label: "ROAS", className: "min-w-[88px]" },
@@ -86,6 +88,8 @@ function getSortableValue(campaign: CampaignWithMetrics, key: SortKey) {
       return parseNumber(campaign.metrics.clicks);
     case "ctr":
       return parsePercent(campaign.metrics.ctr);
+    case "results":
+      return parseNumber(campaign.metrics.results);
     case "leads":
       return parseNumber(campaign.metrics.leads);
     case "costPerLead":
@@ -152,6 +156,7 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
         acc.amountSpent += parseCurrency(campaign.metrics.amountSpent);
         acc.clicks += parseNumber(campaign.metrics.clicks);
         acc.ctr.push(parsePercent(campaign.metrics.ctr));
+        acc.results += parseNumber(campaign.metrics.results);
         acc.leads += parseNumber(campaign.metrics.leads);
         acc.costPerLead.push(parseCurrency(campaign.metrics.costPerLead));
         acc.roas.push(parseMultiplier(campaign.metrics.roas));
@@ -161,6 +166,7 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
         amountSpent: 0,
         clicks: 0,
         ctr: [] as number[],
+        results: 0,
         leads: 0,
         costPerLead: [] as number[],
         roas: [] as number[],
@@ -253,6 +259,14 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
                 <td className="min-w-[88px] border-b border-border/40 px-4 py-3 align-middle">
                   {campaign.metrics.ctr}
                 </td>
+                <td className="min-w-[128px] border-b border-border/40 px-4 py-3 align-middle">
+                  <div>
+                    <p className="font-medium leading-none">{campaign.metrics.results}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {campaign.metrics.resultLabel}
+                    </p>
+                  </div>
+                </td>
                 <td className="min-w-[88px] border-b border-border/40 px-4 py-3 align-middle">
                   {campaign.metrics.leads}
                 </td>
@@ -279,6 +293,9 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
               </td>
               <td className="border-t border-border/60 px-4 py-3 font-semibold">
                 {formatPercent(averageCtr)}
+              </td>
+              <td className="border-t border-border/60 px-4 py-3 font-semibold">
+                {totals.results.toLocaleString("pt-BR")}
               </td>
               <td className="border-t border-border/60 px-4 py-3 font-semibold">
                 {totals.leads.toLocaleString("pt-BR")}

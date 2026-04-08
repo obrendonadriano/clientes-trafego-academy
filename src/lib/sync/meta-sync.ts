@@ -23,6 +23,8 @@ type MetricImportRow = {
   impressions: number;
   clicks: number;
   ctr: number;
+  result_count: number;
+  result_label: string;
   cpc: number;
   cpm: number;
   leads: number;
@@ -69,6 +71,68 @@ function getActionsValue(
   return actions
     .filter((item) => types.includes(item.action_type))
     .reduce((sum, item) => sum + Number(item.value || 0), 0);
+}
+
+function getPrimaryResult(
+  actions: Array<{ action_type: string; value: string }> | undefined,
+) {
+  if (!actions || actions.length === 0) {
+    return {
+      count: 0,
+      label: "Sem resultado",
+    };
+  }
+
+  const priorities: Array<{
+    types: string[];
+    label: string;
+  }> = [
+    {
+      types: ["purchase", "omni_purchase", "offsite_conversion.fb_pixel_purchase"],
+      label: "Compras no site",
+    },
+    {
+      types: ["lead", "onsite_conversion.lead_grouped", "offsite_conversion.fb_pixel_lead"],
+      label: "Leads no site",
+    },
+    {
+      types: ["onsite_web_lead", "onsite_conversion.messaging_conversation_started_7d"],
+      label: "Leads",
+    },
+    {
+      types: ["complete_registration", "onsite_conversion.complete_registration"],
+      label: "Cadastros",
+    },
+    {
+      types: ["landing_page_view"],
+      label: "Visualizações da página",
+    },
+  ];
+
+  for (const priority of priorities) {
+    const count = getActionsValue(actions, priority.types);
+
+    if (count > 0) {
+      return {
+        count,
+        label: priority.label,
+      };
+    }
+  }
+
+  const firstAction = actions.find((item) => Number(item.value || 0) > 0);
+
+  if (!firstAction) {
+    return {
+      count: 0,
+      label: "Sem resultado",
+    };
+  }
+
+  return {
+    count: Number(firstAction.value || 0),
+    label: firstAction.action_type.replaceAll("_", " "),
+  };
 }
 
 function getNextRunAt(baseDate = new Date()) {
@@ -270,6 +334,7 @@ export async function importMetaInsights() {
         "onsite_conversion.lead_grouped",
         "offsite_conversion.fb_pixel_lead",
       ]);
+      const primaryResult = getPrimaryResult(item.actions);
 
       const roas =
         item.purchase_roas?.reduce(
@@ -287,6 +352,8 @@ export async function importMetaInsights() {
         impressions: Number(item.impressions || 0),
         clicks: Number(item.clicks || 0),
         ctr: Number(item.ctr || 0),
+        result_count: primaryResult.count,
+        result_label: primaryResult.label,
         cpc: Number(item.cpc || 0),
         cpm: Number(item.cpm || 0),
         leads,

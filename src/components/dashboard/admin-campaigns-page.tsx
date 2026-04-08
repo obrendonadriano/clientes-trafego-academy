@@ -87,6 +87,8 @@ export function AdminCampaignsPage({
             amountSpent: formatCurrency(summary.amountSpent),
             clicks: String(Math.round(summary.clicks)),
             ctr: formatPercent(summary.ctr),
+            results: String(Math.round(summary.results)),
+            resultLabel: summary.resultLabel,
             leads: String(Math.round(summary.leads)),
             costPerLead: formatCurrency(summary.costPerLead),
             roas: formatMultiplier(summary.roas),

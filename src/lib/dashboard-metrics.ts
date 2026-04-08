@@ -32,6 +32,8 @@ export type MetricTotals = {
   reach: number;
   impressions: number;
   clicks: number;
+  results: number;
+  resultLabel: string;
   leads: number;
   ctr: number;
   cpc: number;
@@ -120,7 +122,9 @@ export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
       acc.reach += row.reach;
       acc.impressions += row.impressions;
       acc.clicks += row.clicks;
+      acc.results += row.results;
       acc.leads += row.leads;
+      acc.resultLabels.push(row.resultLabel);
       acc.roi.push(row.roi);
       acc.roas.push(row.roas);
       acc.frequency.push(row.frequency);
@@ -131,7 +135,9 @@ export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
       reach: 0,
       impressions: 0,
       clicks: 0,
+      results: 0,
       leads: 0,
+      resultLabels: [] as string[],
       roi: [] as number[],
       roas: [] as number[],
       frequency: [] as number[],
@@ -143,6 +149,8 @@ export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
     reach: totals.reach,
     impressions: totals.impressions,
     clicks: totals.clicks,
+    results: totals.results,
+    resultLabel: totals.resultLabels[0] ?? "Sem resultado",
     leads: totals.leads,
     ctr:
       totals.impressions > 0
