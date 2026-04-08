@@ -48,22 +48,36 @@ export async function importMetaCampaignsAction(
       };
     }
 
-    const { error } = await adminClient.from("campaigns").upsert(
-      result.data.map((campaign) => ({
+    for (const campaign of result.data) {
+      const payload = {
         nome: campaign.name,
         status: campaign.status === "ACTIVE" ? "Ativa" : "Pausada",
         plataforma: "Meta Ads",
         external_id: campaign.id,
         source: "meta_ads",
         client_id: null,
-      })),
-      {
-        onConflict: "external_id",
-      },
-    );
+      };
 
-    if (error) {
-      return { error: error.message };
+      const existing = await adminClient
+        .from("campaigns")
+        .select("id")
+        .eq("external_id", campaign.id)
+        .maybeSingle();
+
+      if (existing.error) {
+        return { error: existing.error.message };
+      }
+
+      const { error } = existing.data
+        ? await adminClient
+            .from("campaigns")
+            .update(payload)
+            .eq("id", existing.data.id)
+        : await adminClient.from("campaigns").insert(payload);
+
+      if (error) {
+        return { error: error.message };
+      }
     }
 
     revalidatePath("/admin/campanhas");
@@ -176,7 +190,7 @@ export async function importMetaInsightsAction(
           frequency: Number(item.frequency || 0),
         };
       })
-      .filter(Boolean);
+      .filter((row): row is NonNullable<typeof row> => Boolean(row));
 
     if (rows.length === 0) {
       return {
@@ -185,12 +199,28 @@ export async function importMetaInsightsAction(
       };
     }
 
-    const { error } = await adminClient.from("campaign_metrics").upsert(rows, {
-      onConflict: "campaign_id,date",
-    });
+    for (const row of rows) {
+      const existing = await adminClient
+        .from("campaign_metrics")
+        .select("id")
+        .eq("campaign_id", row.campaign_id)
+        .eq("date", row.date)
+        .maybeSingle();
 
-    if (error) {
-      return { error: error.message };
+      if (existing.error) {
+        return { error: existing.error.message };
+      }
+
+      const { error } = existing.data
+        ? await adminClient
+            .from("campaign_metrics")
+            .update(row)
+            .eq("id", existing.data.id)
+        : await adminClient.from("campaign_metrics").insert(row);
+
+      if (error) {
+        return { error: error.message };
+      }
     }
 
     revalidatePath("/admin");
