@@ -6,20 +6,9 @@ type GeminiRuntimeConfig = {
 };
 
 export function generateMockGeminiAnalysis() {
-  return `Resumo executivo:
+  return `No período analisado, a campanha apresentou *boa consistência de entrega*, com volume de resultados alinhado ao investimento e uma leitura bastante positiva da performance. Os números mostram _presença forte da operação_ e uma condução segura ao longo da janela analisada.
 
-No período analisado, as campanhas apresentaram uma entrega consistente, com boa geração de resultados e uma leitura positiva da operação. O desempenho observado reforça a solidez do trabalho conduzido ao longo da janela avaliada.
-
-Destaques da performance:
-- volume de resultados alinhado ao investimento aplicado;
-- consistência nos indicadores principais de tráfego e conversão;
-- presença estável das campanhas ao longo do período analisado.
-
-Leitura consultiva para o cliente:
-O cenário geral é favorável e mostra uma condução estratégica bem estruturada. A campanha seguiu com presença relevante, geração de leads e indicadores que sustentam uma percepção positiva da performance apresentada.
-
-Encerramento positivo:
-Seguimos com uma leitura muito boa deste período, reforçando a evolução da operação e a consistência do trabalho realizado para a conta.`;
+De forma geral, foi um período *bom para a conta*, com geração de leads e indicadores que reforçam a qualidade do trabalho realizado. Seguimos com uma visão positiva da campanha e com uma base sólida de resultados para apresentar ao cliente.`;
 }
 
 export async function getGeminiRuntimeConfig(): Promise<GeminiRuntimeConfig | null> {

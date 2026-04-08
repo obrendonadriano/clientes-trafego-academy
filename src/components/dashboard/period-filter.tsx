@@ -87,7 +87,7 @@ export function PeriodFilter({
               type="button"
               onClick={() => handleChange(period)}
               className={cn(
-                "rounded-full border px-4 py-2 text-sm font-medium transition",
+                "rounded-full border px-4 py-2 text-sm font-medium transition active:scale-[0.985]",
                 active === period
                   ? "border-primary bg-primary text-primary-foreground shadow-[0_12px_24px_-16px_rgba(15,154,122,0.8)]"
                   : "border-border/70 bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground",
@@ -102,7 +102,7 @@ export function PeriodFilter({
           type="button"
           onClick={() => onComparePreviousChange?.(!comparePrevious)}
           className={cn(
-            "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition",
+            "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition active:scale-[0.985]",
             comparePrevious
               ? "border-primary/20 bg-primary/10 text-primary"
               : "border-border/70 bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground",
@@ -143,7 +143,7 @@ export function PeriodFilter({
             <button
               type="button"
               onClick={onApplyCustomRange}
-              className="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-medium text-primary transition hover:bg-primary hover:text-primary-foreground"
+              className="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-medium text-primary transition active:scale-[0.985] hover:bg-primary hover:text-primary-foreground"
             >
               Aplicar período
             </button>

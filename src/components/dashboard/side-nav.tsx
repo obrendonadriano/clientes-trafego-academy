@@ -29,7 +29,7 @@ export function SideNav({ items }: SideNavProps) {
             key={item.href}
             href={item.href}
             className={cn(
-              "flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition",
+              "flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition active:scale-[0.985]",
               isActive
                 ? "border-primary/20 bg-primary/10 font-medium text-foreground"
                 : "border-border/50 bg-background/50 text-muted-foreground hover:border-primary/20 hover:text-foreground",

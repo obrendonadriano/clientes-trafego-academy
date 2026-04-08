@@ -56,6 +56,7 @@ Gere uma análise em português do Brasil, profissional, humanizada, clara e fá
 Escreva em tom consultivo, seguro e positivo, como se estivesse apresentando um relatório de performance ao cliente.
 Use estritamente os dados fornecidos abaixo. Não invente números, não extrapole resultados e não mencione melhorias, otimizações, alertas, problemas ou sugestões de ação para o cliente.
 O texto deve valorizar o trabalho realizado, transmitir confiança e destacar os resultados de forma positiva e elegante.
+O texto final será enviado por WhatsApp.
 
 Cliente: ${input.clientName}
 Campanhas analisadas: ${input.campaignNames.join(", ")}
@@ -76,10 +77,14 @@ Métricas consolidadas:
 - Frequência média: ${input.totals.frequency.toFixed(2)}
 
 Estrutura obrigatória da resposta:
-1. Resumo executivo
-2. Destaques da performance
-3. Leitura consultiva para o cliente
-4. Encerramento positivo
+- escrever no máximo 2 parágrafos curtos;
+- usar frases curtas, diretas e muito claras;
+- usar *negrito* com um asterisco de cada lado, no padrão do WhatsApp;
+- usar _itálico_ com underscore, no padrão do WhatsApp;
+- não usar títulos numerados;
+- não usar listas;
+- não usar markdown com dois asteriscos;
+- manter o texto suficientemente curto para leitura rápida no WhatsApp.
 
 Regras obrigatórias:
 - sempre tratar a campanha de forma positiva e profissional;

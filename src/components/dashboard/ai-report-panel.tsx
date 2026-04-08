@@ -12,6 +12,7 @@ import {
   type PeriodFilterValue,
 } from "@/components/dashboard/period-filter";
 import { Button } from "@/components/ui/button";
+import { FormPendingButton } from "@/components/ui/form-pending-button";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { generateWhatsappLink } from "@/lib/whatsapp";
@@ -173,15 +174,17 @@ export function AiReportPanel({
         />
 
         <div className="flex flex-wrap gap-3">
-          <Button
+          <FormPendingButton
             type="submit"
             form="generate-ai-report-form"
             variant="outline"
             className="gap-2 rounded-full"
+            idleLabel="Gerar novamente"
+            pendingLabel="Gerando análise..."
           >
             <Sparkles className="size-4" />
             Gerar novamente
-          </Button>
+          </FormPendingButton>
           <Button
             type="button"
             variant="outline"

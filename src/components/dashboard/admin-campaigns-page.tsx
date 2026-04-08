@@ -13,7 +13,7 @@ import {
   PeriodFilter,
   type PeriodFilterValue,
 } from "@/components/dashboard/period-filter";
-import { Button } from "@/components/ui/button";
+import { FormPendingButton } from "@/components/ui/form-pending-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -171,12 +171,19 @@ export function AdminCampaignsPage({
           </div>
           <div className="flex flex-wrap gap-3">
             <form action={importAction}>
-              <Button size="lg">Importar campanhas</Button>
+              <FormPendingButton size="lg" idleLabel="Importar campanhas" pendingLabel="Importando campanhas...">
+                Importar campanhas
+              </FormPendingButton>
             </form>
             <form action={importInsightsAction}>
-              <Button size="lg" variant="outline">
+              <FormPendingButton
+                size="lg"
+                variant="outline"
+                idleLabel="Importar métricas"
+                pendingLabel="Importando métricas..."
+              >
                 Importar métricas
-              </Button>
+              </FormPendingButton>
             </form>
           </div>
         </div>

@@ -11,11 +11,11 @@ import {
 import { CampaignMultiSelect } from "@/components/admin/campaign-multi-select";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { FormPendingButton } from "@/components/ui/form-pending-button";
 import { summarizeMetrics } from "@/lib/dashboard-metrics";
 import type { CampaignWithMetrics, Client, RawCampaignMetric, User } from "@/lib/types";
 
@@ -251,7 +251,9 @@ export function AdminClientProfilePage({
               ) : null}
 
               <div className="flex flex-wrap gap-3">
-                <Button size="lg">Salvar alterações</Button>
+                <FormPendingButton size="lg" idleLabel="Salvar alterações" pendingLabel="Salvando alterações...">
+                  Salvar alterações
+                </FormPendingButton>
               </div>
             </form>
           </CardContent>
@@ -310,12 +312,14 @@ export function AdminClientProfilePage({
                 <input type="hidden" name="clientId" value={client.id} />
                 <input type="hidden" name="userId" value={linkedUser?.id ?? ""} />
                 <input type="hidden" name="authUserId" value={linkedUser?.authUserId ?? ""} />
-                <Button
+                <FormPendingButton
                   variant="outline"
                   className="w-full rounded-2xl border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  idleLabel="Excluir cliente"
+                  pendingLabel="Excluindo cliente..."
                 >
                   Excluir cliente
-                </Button>
+                </FormPendingButton>
               </form>
             </CardContent>
           </Card>
