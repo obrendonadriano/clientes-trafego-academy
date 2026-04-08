@@ -49,13 +49,17 @@ npm install
 npm run dev
 ```
 
-## Publicação
+## Produção na VPS
 
-1. Suba este projeto para um repositório Git.
-2. Importe o repositório na Vercel.
-3. Configure as variáveis de ambiente da produção, incluindo `CRON_SECRET`.
-4. Aponte o domínio `dashboard.trafegoacademy.online` para o projeto da Vercel.
-5. Use as URLs públicas abaixo em integrações como Meta:
+1. Clone o projeto na VPS em `/var/www/trafegoacademy-dashboard`.
+2. Instale Node.js 20+, PM2 e Nginx.
+3. Crie o arquivo `.env.production` com as variáveis do projeto, incluindo `CRON_SECRET`.
+4. Rode `npm install` e `npm run build`.
+5. Suba o app com `pm2 start ecosystem.config.js`.
+6. Configure o Nginx com [deploy/nginx-dashboard.conf](D:/Downloads%20C/TrafegoAcademy-projetos/trafegoacademy-dashboard/deploy/nginx-dashboard.conf).
+7. Aponte o DNS do subdomínio `dashboard.trafegoacademy.online` para a VPS.
+8. Gere o SSL com Certbot.
+9. Use as URLs públicas abaixo em integrações como Meta:
 
 ```text
 https://dashboard.trafegoacademy.online/politica-de-privacidade
@@ -66,8 +70,14 @@ https://dashboard.trafegoacademy.online/exclusao-de-dados
 ## Sincronização automática da Meta Ads
 
 - a rota `/api/cron/meta-sync` continua protegida por `CRON_SECRET`
-- como a conta Hobby da Vercel limita cron a execuções diárias, o agendamento de 15 minutos deve ser feito pelo Supabase
-- use o script [supabase/meta-sync-cron.sql](D:/Downloads%20C/TrafegoAcademy-projetos/trafegoacademy-dashboard/supabase/meta-sync-cron.sql) após publicar o domínio
-- troque `COLE_SEU_CRON_SECRET_AQUI` pelo mesmo valor configurado na Vercel
+- o agendamento de 15 minutos pode ser feito direto na VPS com cron chamando [deploy/meta-sync.sh](D:/Downloads%20C/TrafegoAcademy-projetos/trafegoacademy-dashboard/deploy/meta-sync.sh)
+- você também pode usar o [supabase/meta-sync-cron.sql](D:/Downloads%20C/TrafegoAcademy-projetos/trafegoacademy-dashboard/supabase/meta-sync-cron.sql) se preferir manter o agendamento no Supabase
+- troque `COLE_SEU_CRON_SECRET_AQUI` pelo mesmo valor definido no `.env.production`
 - rode novamente `supabase/schema.sql` para criar a tabela `public.sync_statuses`
 - a área do cliente exibe a última e a próxima atualização com base nesse status
+
+### Exemplo de cron na VPS
+
+```bash
+*/15 * * * * APP_URL=https://dashboard.trafegoacademy.online CRON_SECRET=seu_segredo /var/www/trafegoacademy-dashboard/deploy/meta-sync.sh >> /var/log/trafegoacademy-meta-sync.log 2>&1
+```
