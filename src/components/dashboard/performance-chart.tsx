@@ -39,7 +39,14 @@ export function PerformanceChart({
             amountSpent: null,
             leads: null,
           },
-          data[0],
+          {
+            ...data[0],
+          },
+          {
+            label: "",
+            amountSpent: data[0].amountSpent,
+            leads: data[0].leads,
+          },
           {
             label: "",
             amountSpent: null,
