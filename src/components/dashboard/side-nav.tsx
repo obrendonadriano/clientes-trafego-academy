@@ -20,7 +20,9 @@ export function SideNav({ items }: SideNavProps) {
   return (
     <div className="mt-8 space-y-3">
       {items.map((item) => {
-        const isActive = pathname === item.href;
+        const isActive =
+          pathname === item.href ||
+          (item.href !== "/admin" && pathname.startsWith(`${item.href}/`));
 
         return (
           <Link

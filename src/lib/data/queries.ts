@@ -364,6 +364,41 @@ export async function getAdminViewData() {
   };
 }
 
+export async function getAdminClientProfileData(clientId: string) {
+  const snapshot = await getAppSnapshot();
+  const client = snapshot.clients.find((item) => item.id === clientId);
+
+  if (!client) {
+    return null;
+  }
+
+  const linkedUser =
+    snapshot.users.find(
+      (user) => user.role === "client" && user.clientId === client.id,
+    ) ?? null;
+
+  const selectedCampaignIds = linkedUser
+    ? snapshot.permissions
+        .filter((permission) => permission.userId === linkedUser.id)
+        .map((permission) => permission.campaignId)
+    : [];
+
+  const allowedCampaigns = snapshot.campaigns.filter((campaign) =>
+    selectedCampaignIds.includes(campaign.id),
+  );
+
+  return {
+    client,
+    linkedUser,
+    selectedCampaignIds,
+    allowedCampaigns,
+    allCampaigns: snapshot.campaigns,
+    metricRows: snapshot.metricRows.filter((row) =>
+      selectedCampaignIds.includes(row.campaignId),
+    ),
+  };
+}
+
 export async function getCampaignsVisibleToUser(userId: string) {
   const snapshot = await getAppSnapshot();
   const allowedIds = new Set(

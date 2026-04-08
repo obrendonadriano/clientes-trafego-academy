@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { createClientWorkspaceAction } from "@/app/admin/actions";
 import { AdminFormCard } from "@/components/admin/admin-form-card";
+import { CampaignMultiSelect } from "@/components/admin/campaign-multi-select";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import {
   PeriodFilter,
@@ -214,33 +216,13 @@ export function AdminClientsPage({
               <p className="text-sm font-medium text-foreground">
                 Campanhas liberadas para esse cliente
               </p>
-              <div className="grid gap-3">
-                {campaigns.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border/60 px-4 py-3 text-sm text-muted-foreground">
-                    Ainda não há campanhas cadastradas. Vá em Campanhas primeiro.
-                  </div>
-                ) : (
-                  campaigns.map((campaign) => (
-                    <label
-                      key={campaign.id}
-                      className="flex items-start gap-3 rounded-2xl border border-border/60 bg-card px-4 py-3"
-                    >
-                      <input
-                        type="checkbox"
-                        name="campaignIds"
-                        value={campaign.id}
-                        className="mt-1 size-4 rounded border-border"
-                      />
-                      <div>
-                        <p className="font-medium">{campaign.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {campaign.clientName || "Sem cliente"} • {campaign.platform}
-                        </p>
-                      </div>
-                    </label>
-                  ))
-                )}
-              </div>
+              {campaigns.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border/60 px-4 py-3 text-sm text-muted-foreground">
+                  Ainda não há campanhas cadastradas. Vá em Campanhas primeiro.
+                </div>
+              ) : (
+                <CampaignMultiSelect campaigns={campaigns} />
+              )}
             </div>
           </div>
         </AdminFormCard>
@@ -268,9 +250,17 @@ export function AdminClientsPage({
                       </strong>
                     </p>
                   </div>
-                  <Badge variant={client.active ? "success" : "secondary"}>
-                    {client.active ? "Ativo" : "Inativo"}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={client.active ? "success" : "secondary"}>
+                      {client.active ? "Ativo" : "Inativo"}
+                    </Badge>
+                    <Link
+                      href={`/admin/clientes/${client.id}`}
+                      className="inline-flex h-9 items-center justify-center rounded-full border border-border px-4 text-sm font-medium text-foreground transition hover:bg-accent"
+                    >
+                      Editar
+                    </Link>
+                  </div>
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <div className="rounded-2xl bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
