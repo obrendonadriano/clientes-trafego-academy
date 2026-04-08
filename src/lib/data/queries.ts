@@ -82,9 +82,9 @@ type DbIntegrationRow = {
 
 type DbReportRow = {
   id: string;
-  client_id: string;
-  period_start: string;
-  period_end: string;
+  client_id: string | null;
+  period_start: string | null;
+  period_end: string | null;
   generated_text: string;
   created_at: string;
   clients?: Array<{
@@ -92,6 +92,18 @@ type DbReportRow = {
     whatsapp: string | null;
   }> | null;
 };
+
+function formatReportPeriodLabel(periodStart: string | null, periodEnd: string | null) {
+  if (!periodStart || !periodEnd) {
+    return "Período não informado";
+  }
+
+  try {
+    return `${format(parseISO(periodStart), "dd/MM/yyyy")} a ${format(parseISO(periodEnd), "dd/MM/yyyy")}`;
+  } catch {
+    return "Período não informado";
+  }
+}
 
 type DbSyncStatusRow = {
   provider: "meta_ads" | "gemini" | "supabase";
@@ -345,10 +357,10 @@ export const getAppSnapshot = cache(async (): Promise<AppDataSnapshot> => {
       (reportsResult.data as DbReportRow[]).length > 0
         ? (reportsResult.data as DbReportRow[]).map((report) => ({
             id: report.id,
-            clientId: report.client_id,
+            clientId: report.client_id ?? undefined,
             clientName: report.clients?.[0]?.nome_empresa ?? "Cliente",
             whatsapp: report.clients?.[0]?.whatsapp ?? "",
-            periodLabel: `${format(parseISO(report.period_start), "dd/MM/yyyy")} a ${format(parseISO(report.period_end), "dd/MM/yyyy")}`,
+            periodLabel: formatReportPeriodLabel(report.period_start, report.period_end),
             preview: report.generated_text.slice(0, 160),
             generatedText: report.generated_text,
             createdAt: report.created_at,

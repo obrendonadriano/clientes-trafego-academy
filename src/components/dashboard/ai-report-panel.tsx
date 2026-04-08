@@ -6,6 +6,7 @@ import {
   generateAiReportAction,
   type GenerateReportState,
 } from "@/app/admin/relatorios-ia/actions";
+import { CampaignMultiSelect } from "@/components/admin/campaign-multi-select";
 import {
   PeriodFilter,
   type PeriodFilterValue,
@@ -52,7 +53,6 @@ export function AiReportPanel({
     start: "2026-04-01",
     end: "2026-04-08",
   });
-  const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>([]);
 
   const availableCampaigns = useMemo(() => {
     if (!selectedClientId) {
@@ -78,10 +78,6 @@ export function AiReportPanel({
     );
   }, [campaigns, clientUsers, permissions, selectedClientId]);
   const selectedClient = clients.find((client) => client.id === selectedClientId);
-  const effectiveSelectedCampaignIds =
-    selectedCampaignIds.length > 0
-      ? selectedCampaignIds
-      : availableCampaigns.map((campaign) => campaign.id);
   const text = draftText ?? state.text ?? initialText;
   const whatsapp = state.whatsapp ?? selectedClient?.whatsapp ?? initialWhatsapp;
 
@@ -102,15 +98,6 @@ export function AiReportPanel({
               Texto editável antes de enviar ao cliente
             </h3>
           </div>
-          <Button
-            type="submit"
-            form="generate-ai-report-form"
-            variant="outline"
-            className="gap-2 rounded-full"
-          >
-            <Sparkles className="size-4" />
-            Gerar novamente
-          </Button>
         </div>
 
         <form id="generate-ai-report-form" action={formAction} className="space-y-4">
@@ -122,7 +109,6 @@ export function AiReportPanel({
                 value={selectedClientId}
                 onChange={(event) => {
                   setSelectedClientId(event.target.value);
-                  setSelectedCampaignIds([]);
                   setDraftText(null);
                 }}
               >
@@ -141,46 +127,17 @@ export function AiReportPanel({
 
           <div className="space-y-3">
             <p className="text-sm font-medium text-foreground">Campanhas</p>
-            <div className="grid gap-3">
-              {availableCampaigns.length > 0 ? (
-                availableCampaigns.map((campaign) => (
-                  <label
-                    key={campaign.id}
-                    className="flex items-start gap-3 rounded-2xl border border-border/60 bg-card px-4 py-3"
-                  >
-                    <input
-                      type="checkbox"
-                      name="campaignIds"
-                      value={campaign.id}
-                      checked={effectiveSelectedCampaignIds.includes(campaign.id)}
-                      onChange={(event) => {
-                        const checked = event.target.checked;
-                        setSelectedCampaignIds(() =>
-                          checked
-                            ? Array.from(
-                                new Set([...effectiveSelectedCampaignIds, campaign.id]),
-                              )
-                            : effectiveSelectedCampaignIds.filter(
-                                (item) => item !== campaign.id,
-                              ),
-                        );
-                      }}
-                      className="mt-1 size-4 rounded border-border"
-                    />
-                    <div>
-                      <p className="font-medium">{campaign.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {campaign.platform} • {campaign.status}
-                      </p>
-                    </div>
-                  </label>
-                ))
-              ) : (
-                <div className="rounded-2xl border border-dashed border-border/60 px-4 py-3 text-sm text-muted-foreground">
-                  Nenhuma campanha encontrada para esse cliente.
-                </div>
-              )}
-            </div>
+            {availableCampaigns.length > 0 ? (
+              <CampaignMultiSelect
+                key={selectedClientId || "all-campaigns"}
+                campaigns={availableCampaigns}
+                selectedIds={availableCampaigns.map((campaign) => campaign.id)}
+              />
+            ) : (
+              <div className="rounded-2xl border border-dashed border-border/60 px-4 py-3 text-sm text-muted-foreground">
+                Nenhuma campanha encontrada para esse cliente.
+              </div>
+            )}
           </div>
 
           <PeriodFilter
@@ -216,6 +173,15 @@ export function AiReportPanel({
         />
 
         <div className="flex flex-wrap gap-3">
+          <Button
+            type="submit"
+            form="generate-ai-report-form"
+            variant="outline"
+            className="gap-2 rounded-full"
+          >
+            <Sparkles className="size-4" />
+            Gerar novamente
+          </Button>
           <Button
             type="button"
             variant="outline"
