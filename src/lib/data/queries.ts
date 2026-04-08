@@ -355,10 +355,10 @@ export const getAppSnapshot = cache(async (): Promise<AppDataSnapshot> => {
     })),
     reports:
       (reportsResult.data as DbReportRow[]).length > 0
-        ? (reportsResult.data as DbReportRow[]).map((report) => ({
+        ? (reportsResult.data as DbReportRow[]).slice(0, 10).map((report) => ({
             id: report.id,
             clientId: report.client_id ?? undefined,
-            clientName: report.clients?.[0]?.nome_empresa ?? "Cliente",
+            clientName: report.clients?.[0]?.nome_empresa ?? "Cliente removido",
             whatsapp: report.clients?.[0]?.whatsapp ?? "",
             periodLabel: formatReportPeriodLabel(report.period_start, report.period_end),
             preview: report.generated_text.slice(0, 160),

@@ -179,11 +179,11 @@ export function AiReportPanel({
             form="generate-ai-report-form"
             variant="outline"
             className="gap-2 rounded-full"
-            idleLabel="Gerar novamente"
-            pendingLabel="Gerando análise..."
+            idleLabel="Gerar mensagem"
+            pendingLabel="Gerando mensagem..."
           >
             <Sparkles className="size-4" />
-            Gerar novamente
+            Gerar mensagem
           </FormPendingButton>
           <Button
             type="button"

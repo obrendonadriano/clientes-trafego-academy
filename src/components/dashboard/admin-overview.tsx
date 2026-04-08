@@ -150,7 +150,7 @@ export function AdminOverview({
         <PerformanceChart
           data={selected.chart}
           periodLabel={selected.periodLabel}
-          emptyMessage="Importe métricas da Meta Ads para visualizar a curva real de investimento e leads."
+          emptyMessage="Importe métricas da Meta Ads para visualizar a curva real de investimento e resultados."
         />
         <Card className="border-border/60 bg-background/60">
           <CardHeader>

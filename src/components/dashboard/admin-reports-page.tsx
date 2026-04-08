@@ -47,7 +47,7 @@ export function AdminReportsPage({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {reports.map((report) => (
+            {reports.slice(0, 10).map((report) => (
               <div
                 key={report.id}
                 className="rounded-2xl border border-border/60 bg-card px-4 py-3"

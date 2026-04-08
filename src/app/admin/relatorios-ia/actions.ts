@@ -198,7 +198,9 @@ export async function generateAiReportAction(
     const currentUser = await getOptionalCurrentUser();
 
     if (adminClient) {
-      const reportInsert = await adminClient.from("ai_reports").insert({
+      const reportInsert = await adminClient
+        .from("ai_reports")
+        .insert({
         client_id: client.id,
         user_id: currentUser?.id ?? null,
         period_start: range.start.toISOString().slice(0, 10),
@@ -213,6 +215,22 @@ export async function generateAiReportAction(
           text,
           whatsapp: client.whatsapp,
         };
+      }
+
+      const excessReports = await adminClient
+        .from("ai_reports")
+        .select("id")
+        .order("created_at", { ascending: false })
+        .range(10, 200);
+
+      if (excessReports.data && excessReports.data.length > 0) {
+        await adminClient
+          .from("ai_reports")
+          .delete()
+          .in(
+            "id",
+            excessReports.data.map((report) => report.id),
+          );
       }
     }
 

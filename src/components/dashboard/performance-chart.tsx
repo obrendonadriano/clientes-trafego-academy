@@ -48,7 +48,7 @@ export function PerformanceChart({
       <div className="mb-4">
         <p className="text-sm text-muted-foreground">{periodLabel}</p>
         <h3 className="mt-1 font-display text-2xl font-semibold">
-          Investimento vs. leads
+          Investimento vs. resultados
         </h3>
       </div>
       <div className="h-[280px]">
@@ -114,7 +114,7 @@ export function PerformanceChart({
               <Line
                 type="monotone"
                 dataKey="leads"
-                name="Leads"
+                name="Resultados"
                 yAxisId="leads"
                 stroke="#55a6ff"
                 strokeWidth={3}
