@@ -52,7 +52,9 @@ function buildPrompt(input: {
   return `Você é um gestor de tráfego pago sênior da Tráfego Academy.
 
 Gere uma análise em português do Brasil, profissional, humanizada, clara e fácil para cliente leigo entender.
-Escreva em tom consultivo, como se estivesse apresentando um relatório de performance ao cliente.
+Escreva em tom consultivo, seguro e positivo, como se estivesse apresentando um relatório de performance ao cliente.
+Use estritamente os dados fornecidos abaixo. Não invente números, não extrapole resultados e não mencione melhorias, otimizações, alertas, problemas ou sugestões de ação para o cliente.
+O texto deve valorizar o trabalho realizado, transmitir confiança e destacar os resultados de forma positiva e elegante.
 
 Cliente: ${input.clientName}
 Campanhas analisadas: ${input.campaignNames.join(", ")}
@@ -74,12 +76,18 @@ Métricas consolidadas:
 
 Estrutura obrigatória da resposta:
 1. Resumo executivo
-2. Pontos positivos
-3. Alertas
-4. Oportunidades de melhoria
-5. Próximos passos recomendados
+2. Destaques da performance
+3. Leitura consultiva para o cliente
+4. Encerramento positivo
 
-Evite linguagem robótica. Não invente números além dos dados informados.`;
+Regras obrigatórias:
+- sempre tratar a campanha de forma positiva e profissional;
+- usar apenas os números informados;
+- não sugerir melhorias, testes, ajustes ou otimizações;
+- não escrever alertas ou pontos negativos;
+- não falar com tom técnico interno de gestor para cliente final.
+
+Evite linguagem robótica.`;
 }
 
 export async function generateAiReportAction(

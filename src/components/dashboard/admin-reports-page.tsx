@@ -1,12 +1,20 @@
 import { AiReportPanel } from "@/components/dashboard/ai-report-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { CampaignWithMetrics, Client, ReportHistoryItem } from "@/lib/types";
+import type {
+  CampaignWithMetrics,
+  CampaignPermission,
+  Client,
+  ReportHistoryItem,
+  User,
+} from "@/lib/types";
 
 type AdminReportsPageProps = {
   reports: ReportHistoryItem[];
   aiText: string;
   clients: Client[];
   campaigns: CampaignWithMetrics[];
+  clientUsers: User[];
+  permissions: CampaignPermission[];
 };
 
 export function AdminReportsPage({
@@ -14,6 +22,8 @@ export function AdminReportsPage({
   aiText,
   clients,
   campaigns,
+  clientUsers,
+  permissions,
 }: AdminReportsPageProps) {
   return (
     <div className="space-y-6">
@@ -59,6 +69,8 @@ export function AdminReportsPage({
           initialWhatsapp={reports[0]?.whatsapp ?? clients[0]?.whatsapp ?? ""}
           clients={clients}
           campaigns={campaigns}
+          clientUsers={clientUsers}
+          permissions={permissions}
           reports={reports}
         />
       </div>

@@ -19,6 +19,8 @@ export default async function AdminReportsRoute() {
         aiText={generateMockGeminiAnalysis()}
         clients={data.clients}
         campaigns={data.campaigns}
+        clientUsers={data.clientUsers}
+        permissions={data.permissions}
       />
     </DashboardShell>
   );

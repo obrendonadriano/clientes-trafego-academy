@@ -14,13 +14,21 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { generateWhatsappLink } from "@/lib/whatsapp";
-import type { CampaignWithMetrics, Client, ReportHistoryItem } from "@/lib/types";
+import type {
+  CampaignWithMetrics,
+  CampaignPermission,
+  Client,
+  ReportHistoryItem,
+  User,
+} from "@/lib/types";
 
 type AiReportPanelProps = {
   initialText: string;
   initialWhatsapp: string;
   clients: Client[];
   campaigns: CampaignWithMetrics[];
+  clientUsers: User[];
+  permissions: CampaignPermission[];
   reports: ReportHistoryItem[];
 };
 
@@ -31,6 +39,8 @@ export function AiReportPanel({
   initialWhatsapp,
   clients,
   campaigns,
+  clientUsers,
+  permissions,
   reports,
 }: AiReportPanelProps) {
   const [state, formAction] = useActionState(generateAiReportAction, initialState);
@@ -49,8 +59,24 @@ export function AiReportPanel({
       return campaigns;
     }
 
-    return campaigns.filter((campaign) => campaign.clientId === selectedClientId);
-  }, [campaigns, selectedClientId]);
+    const linkedUser = clientUsers.find(
+      (user) => user.role === "client" && user.clientId === selectedClientId,
+    );
+
+    const permissionCampaignIds = linkedUser
+      ? new Set(
+          permissions
+            .filter((permission) => permission.userId === linkedUser.id)
+            .map((permission) => permission.campaignId),
+        )
+      : new Set<string>();
+
+    return campaigns.filter(
+      (campaign) =>
+        campaign.clientId === selectedClientId ||
+        permissionCampaignIds.has(campaign.id),
+    );
+  }, [campaigns, clientUsers, permissions, selectedClientId]);
   const selectedClient = clients.find((client) => client.id === selectedClientId);
   const effectiveSelectedCampaignIds =
     selectedCampaignIds.length > 0

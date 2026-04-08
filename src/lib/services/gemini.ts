@@ -8,24 +8,18 @@ type GeminiRuntimeConfig = {
 export function generateMockGeminiAnalysis() {
   return `Resumo executivo:
 
-No período analisado, as campanhas mantiveram crescimento saudável de volume com boa eficiência geral. A campanha principal concentrou o melhor retorno, com ROAS mais forte e custo por lead controlado, indicando aderência entre segmentação, criativos e oferta.
+No período analisado, as campanhas apresentaram uma entrega consistente, com boa geração de resultados e uma leitura positiva da operação. O desempenho observado reforça a solidez do trabalho conduzido ao longo da janela avaliada.
 
-Pontos positivos:
-- evolução de leads sem aumento desproporcional do investimento;
-- CTR consistente, sinalizando boa atratividade dos anúncios;
-- maior previsibilidade nas campanhas de intenção alta.
+Destaques da performance:
+- volume de resultados alinhado ao investimento aplicado;
+- consistência nos indicadores principais de tráfego e conversão;
+- presença estável das campanhas ao longo do período analisado.
 
-Alertas:
-- o remarketing ainda apresenta custo por lead acima da média da conta;
-- alguns conjuntos podem entrar em fadiga se a frequência continuar subindo.
+Leitura consultiva para o cliente:
+O cenário geral é favorável e mostra uma condução estratégica bem estruturada. A campanha seguiu com presença relevante, geração de leads e indicadores que sustentam uma percepção positiva da performance apresentada.
 
-Oportunidades:
-- redistribuir parte do orçamento para os anúncios com melhor ROAS;
-- testar novos criativos no remarketing;
-- revisar públicos mornos para ampliar conversão sem elevar CPC.
-
-Leitura consultiva:
-O cenário é positivo e mostra maturidade operacional. A recomendação é manter o que já está performando bem, enquanto refinamos os pontos de ineficiência para ganhar margem e previsibilidade nas próximas semanas.`;
+Encerramento positivo:
+Seguimos com uma leitura muito boa deste período, reforçando a evolução da operação e a consistência do trabalho realizado para a conta.`;
 }
 
 export async function getGeminiRuntimeConfig(): Promise<GeminiRuntimeConfig | null> {

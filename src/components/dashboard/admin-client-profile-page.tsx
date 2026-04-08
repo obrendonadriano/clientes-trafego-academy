@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useMemo } from "react";
+import { useActionState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   deleteClientWorkspaceAction,
   type AdminActionState,
@@ -47,6 +48,7 @@ export function AdminClientProfilePage({
   allCampaigns,
   metricRows,
 }: AdminClientProfilePageProps) {
+  const router = useRouter();
   const [updateState, updateAction] = useActionState(updateClientWorkspaceAction, initialState);
   const [deleteState, deleteAction] = useActionState(deleteClientWorkspaceAction, initialState);
 
@@ -55,6 +57,13 @@ export function AdminClientProfilePage({
     () => allCampaigns.filter((campaign) => selectedCampaignIds.includes(campaign.id)),
     [allCampaigns, selectedCampaignIds],
   );
+
+  useEffect(() => {
+    if (deleteState.success) {
+      router.replace("/admin/clientes");
+      router.refresh();
+    }
+  }, [deleteState.success, router]);
 
   return (
     <div className="space-y-6">
