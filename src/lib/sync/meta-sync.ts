@@ -62,15 +62,23 @@ export type MetaSyncResult = {
   nextRunAt: string;
 };
 
-function getActionsValue(
+function getPrioritizedActionValue(
   actions: Array<{ action_type: string; value: string }> | undefined,
   types: string[],
 ) {
   if (!actions) return 0;
 
-  return actions
-    .filter((item) => types.includes(item.action_type))
-    .reduce((sum, item) => sum + Number(item.value || 0), 0);
+  for (const type of types) {
+    const match = actions.find(
+      (item) => item.action_type === type && Number(item.value || 0) > 0,
+    );
+
+    if (match) {
+      return Number(match.value || 0);
+    }
+  }
+
+  return 0;
 }
 
 function getPrimaryResult(
@@ -110,7 +118,7 @@ function getPrimaryResult(
   ];
 
   for (const priority of priorities) {
-    const count = getActionsValue(actions, priority.types);
+    const count = getPrioritizedActionValue(actions, priority.types);
 
     if (count > 0) {
       return {
@@ -329,7 +337,7 @@ export async function importMetaInsights() {
         return null;
       }
 
-      const leads = getActionsValue(item.actions, [
+      const leads = getPrioritizedActionValue(item.actions, [
         "lead",
         "onsite_conversion.lead_grouped",
         "offsite_conversion.fb_pixel_lead",
