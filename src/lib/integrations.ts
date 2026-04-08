@@ -34,17 +34,29 @@ export async function upsertIntegrationSetting(
     throw new Error("Supabase admin não configurado.");
   }
 
-  const { error } = await adminClient.from("integration_settings").upsert(
-    {
-      provider,
-      enabled,
-      config,
-      updated_at: new Date().toISOString(),
-    },
-    {
-      onConflict: "provider",
-    },
-  );
+  const payload = {
+    provider,
+    enabled,
+    config,
+    updated_at: new Date().toISOString(),
+  };
+
+  const existing = await adminClient
+    .from("integration_settings")
+    .select("id")
+    .eq("provider", provider)
+    .maybeSingle();
+
+  if (existing.error) {
+    throw new Error(existing.error.message);
+  }
+
+  const { error } = existing.data
+    ? await adminClient
+        .from("integration_settings")
+        .update(payload)
+        .eq("id", existing.data.id)
+    : await adminClient.from("integration_settings").insert(payload);
 
   if (error) {
     throw new Error(error.message);

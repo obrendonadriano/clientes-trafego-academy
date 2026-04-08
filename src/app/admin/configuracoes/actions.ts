@@ -47,17 +47,29 @@ export async function saveIntegrationSettingsAction(
     return { error: "Não foi possível validar a configuração enviada." };
   }
 
-  const { error } = await adminClient.from("integration_settings").upsert(
-    {
-      provider: parsed.data.provider,
-      enabled,
-      config: parsed.data.fields,
-      updated_at: new Date().toISOString(),
-    },
-    {
-      onConflict: "provider",
-    },
-  );
+  const payload = {
+    provider: parsed.data.provider,
+    enabled,
+    config: parsed.data.fields,
+    updated_at: new Date().toISOString(),
+  };
+
+  const existing = await adminClient
+    .from("integration_settings")
+    .select("id")
+    .eq("provider", parsed.data.provider)
+    .maybeSingle();
+
+  if (existing.error) {
+    return { error: existing.error.message };
+  }
+
+  const { error } = existing.data
+    ? await adminClient
+        .from("integration_settings")
+        .update(payload)
+        .eq("id", existing.data.id)
+    : await adminClient.from("integration_settings").insert(payload);
 
   if (error) {
     return { error: error.message };
