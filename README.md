@@ -65,7 +65,9 @@ https://dashboard.trafegoacademy.online/exclusao-de-dados
 
 ## Sincronização automática da Meta Ads
 
-- o projeto inclui `vercel.json` com cron a cada 15 minutos em `/api/cron/meta-sync`
-- essa rota exige `CRON_SECRET` por header `Authorization: Bearer ...`
+- a rota `/api/cron/meta-sync` continua protegida por `CRON_SECRET`
+- como a conta Hobby da Vercel limita cron a execuções diárias, o agendamento de 15 minutos deve ser feito pelo Supabase
+- use o script [supabase/meta-sync-cron.sql](D:/Downloads%20C/TrafegoAcademy-projetos/trafegoacademy-dashboard/supabase/meta-sync-cron.sql) após publicar o domínio
+- troque `COLE_SEU_CRON_SECRET_AQUI` pelo mesmo valor configurado na Vercel
 - rode novamente `supabase/schema.sql` para criar a tabela `public.sync_statuses`
 - a área do cliente exibe a última e a próxima atualização com base nesse status
