@@ -87,12 +87,44 @@ export function ClientDashboard({
       : [];
     const totals = summarizeMetrics(currentRows);
     const previousTotals = summarizeMetrics(previousRows);
+    const metricsByCampaign = new Map<string, RawCampaignMetric[]>();
+
+    for (const row of currentRows) {
+      const items = metricsByCampaign.get(row.campaignId) ?? [];
+      items.push(row);
+      metricsByCampaign.set(row.campaignId, items);
+    }
+
+    const filteredCampaigns = campaigns
+      .map((campaign) => {
+        const rows = metricsByCampaign.get(campaign.id) ?? [];
+        const summary = summarizeMetrics(rows);
+
+        return {
+          ...campaign,
+          metrics: {
+            ...campaign.metrics,
+            amountSpent: formatCurrency(summary.amountSpent),
+            clicks: String(Math.round(summary.clicks)),
+            ctr: formatPercent(summary.ctr),
+            results: String(Math.round(summary.results)),
+            resultLabel: summary.resultLabel,
+            leads: String(Math.round(summary.leads)),
+            costPerLead: formatCurrency(summary.costPerLead),
+            roas: `${summary.roas.toFixed(2).replace(".", ",")}x`,
+            periodLabel: formatPeriodLabel(period, customRange),
+          },
+          metricCount: rows.length,
+        };
+      })
+      .filter((campaign) => campaign.metricCount > 0 || currentRows.length === 0);
 
     return {
       totals,
       hasData: currentRows.length > 0,
       periodLabel: formatPeriodLabel(period, customRange),
       chartData: buildPerformanceSeries(metricRows, period, customRange),
+      campaigns: filteredCampaigns,
       leadsChange: calculateChange(totals.leads, previousTotals.leads),
       ctrChange: calculateChange(totals.ctr, previousTotals.ctr),
       cplChange: calculateChange(
@@ -100,7 +132,7 @@ export function ClientDashboard({
         previousTotals.costPerLead,
       ),
     };
-  }, [comparePrevious, customRange, metricRows, period]);
+  }, [campaigns, comparePrevious, customRange, metricRows, period]);
 
   return (
     <DashboardShell
@@ -118,13 +150,15 @@ export function ClientDashboard({
             customRange={customRange}
             onCustomRangeChange={setCustomRange}
             onApplyCustomRange={() => setPeriod("Personalizado")}
+            maxCustomRangeDays={92}
+            customLimitLabel="3 meses"
           />
         </div>
 
         <div id="metricas" className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 scroll-mt-8">
           <MetricCard
             label="Campanhas liberadas"
-            value={String(campaigns.length)}
+            value={String(selected.campaigns.length)}
             change={selected.hasData ? "dados reais do período" : "aguardando métricas"}
           />
           <MetricCard
@@ -162,6 +196,9 @@ export function ClientDashboard({
             <CardContent className="space-y-4 text-sm text-muted-foreground">
               <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
                 Campanhas visíveis: <strong className="text-foreground">{campaigns.length}</strong>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+                Campanhas no período: <strong className="text-foreground">{selected.campaigns.length}</strong>
               </div>
               <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
                 Investimento total:{" "}
@@ -213,7 +250,7 @@ export function ClientDashboard({
         </div>
 
         <div id="campanhas" className="scroll-mt-8">
-          <CampaignsTable campaigns={campaigns} />
+          <CampaignsTable campaigns={selected.campaigns} />
         </div>
       </div>
     </DashboardShell>

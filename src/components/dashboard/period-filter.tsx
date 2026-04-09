@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { differenceInCalendarDays, parseISO, subDays } from "date-fns";
 import { CalendarRange, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,8 @@ type PeriodFilterProps = {
   };
   onCustomRangeChange?: (range: { start: string; end: string }) => void;
   onApplyCustomRange?: () => void;
+  maxCustomRangeDays?: number;
+  customLimitLabel?: string;
 };
 
 export function PeriodFilter({
@@ -37,6 +40,8 @@ export function PeriodFilter({
   customRange,
   onCustomRangeChange,
   onApplyCustomRange,
+  maxCustomRangeDays,
+  customLimitLabel,
 }: PeriodFilterProps) {
   const [internalActive, setInternalActive] =
     useState<PeriodFilterValue>("Últimos 30 dias");
@@ -45,6 +50,13 @@ export function PeriodFilter({
   const active = controlledActive ?? internalActive;
   const start = customRange?.start ?? customStart;
   const end = customRange?.end ?? customEnd;
+  const customRangeExceedsLimit = useMemo(() => {
+    if (!maxCustomRangeDays || !start || !end) {
+      return false;
+    }
+
+    return differenceInCalendarDays(parseISO(end), parseISO(start)) + 1 > maxCustomRangeDays;
+  }, [end, maxCustomRangeDays, start]);
 
   function handleChange(value: PeriodFilterValue) {
     if (onChange) {
@@ -63,6 +75,26 @@ export function PeriodFilter({
 
     setCustomStart(next.start);
     setCustomEnd(next.end);
+  }
+
+  function handleApplyCustomRange() {
+    if (!onApplyCustomRange) {
+      return;
+    }
+
+    if (!maxCustomRangeDays || !customRangeExceedsLimit) {
+      onApplyCustomRange();
+      return;
+    }
+
+    const adjustedStart = subDays(parseISO(end), maxCustomRangeDays - 1);
+    const adjustedRange = {
+      start: adjustedStart.toISOString().slice(0, 10),
+      end,
+    };
+
+    handleRangeChange(adjustedRange);
+    onApplyCustomRange();
   }
 
   return (
@@ -142,12 +174,21 @@ export function PeriodFilter({
           <div className="flex items-end">
             <button
               type="button"
-              onClick={onApplyCustomRange}
+              onClick={handleApplyCustomRange}
               className="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-medium text-primary transition active:scale-[0.985] hover:bg-primary hover:text-primary-foreground"
             >
               Aplicar período
             </button>
           </div>
+          {maxCustomRangeDays ? (
+            <div className="md:col-span-3">
+              <p className="text-xs text-muted-foreground">
+                {customRangeExceedsLimit
+                  ? `No painel do cliente, o intervalo máximo é de ${customLimitLabel ?? `${maxCustomRangeDays} dias`}. Ao aplicar, o sistema ajusta automaticamente para esse limite.`
+                  : `Intervalo personalizado disponível até ${customLimitLabel ?? `${maxCustomRangeDays} dias`}.`}
+              </p>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
