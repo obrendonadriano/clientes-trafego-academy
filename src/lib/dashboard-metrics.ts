@@ -49,7 +49,32 @@ function isSingleDayRange(range: DateRange) {
   return isSameDay(range.start, range.end);
 }
 
-function selectGranularityForRange(rows: RawCampaignMetric[], range: DateRange) {
+function getRowsInRange(rows: RawCampaignMetric[], range: DateRange) {
+  return rows.filter((row) =>
+    isWithinInterval(parseISO(row.date), { start: range.start, end: range.end }),
+  );
+}
+
+function selectSummaryGranularityForRange(
+  rows: RawCampaignMetric[],
+  range: DateRange,
+) {
+  const rowsInRange = getRowsInRange(rows, range);
+
+  if (rowsInRange.length === 0) {
+    return [];
+  }
+
+  const dailyRows = rowsInRange.filter((row) => row.granularity === "day");
+
+  if (dailyRows.length > 0) {
+    return dailyRows;
+  }
+
+  return rowsInRange;
+}
+
+function selectChartGranularityForRange(rows: RawCampaignMetric[], range: DateRange) {
   const rowsInRange = rows.filter((row) =>
     isWithinInterval(parseISO(row.date), { start: range.start, end: range.end }),
   );
@@ -65,7 +90,7 @@ function selectGranularityForRange(rows: RawCampaignMetric[], range: DateRange) 
     }
   }
 
-  return rowsInRange.filter((row) => row.granularity !== "hour");
+  return selectSummaryGranularityForRange(rows, range);
 }
 
 function average(values: number[]) {
@@ -134,7 +159,7 @@ export function filterMetricsByRange(
   rows: RawCampaignMetric[],
   range: DateRange,
 ) {
-  return selectGranularityForRange(rows, range);
+  return selectSummaryGranularityForRange(rows, range);
 }
 
 export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
@@ -247,7 +272,7 @@ export function buildPerformanceSeries(
   now = new Date(),
 ): PerformancePoint[] {
   const range = getDateRangeForPeriod(period, customRange, now);
-  const filteredRows = filterMetricsByRange(rows, range);
+  const filteredRows = selectChartGranularityForRange(rows, range);
 
   if (filteredRows.length === 0) {
     return [];
