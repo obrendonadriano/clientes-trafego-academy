@@ -54,7 +54,7 @@ export function LoginForm() {
             placeholder="Digite seu usuário"
             autoComplete="username"
             required
-            className="h-15 rounded-[20px] border border-[#d9dde6] bg-white px-6 text-base text-[#131313] shadow-none placeholder:text-[#b0b6c4] focus-visible:border-[#8f87ff] focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15"
+            className="h-[62px] rounded-[20px] border border-[#cfd6e3] bg-[#fbfcff] px-6 text-base text-[#131313] shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_2px_rgba(16,24,40,0.04)] placeholder:text-[#b0b6c4] focus-visible:border-[#8f87ff] focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15"
           />
         </div>
         <div className="space-y-2">
@@ -68,7 +68,7 @@ export function LoginForm() {
             placeholder="Digite sua senha"
             autoComplete="current-password"
             required
-            className="h-15 rounded-[20px] border border-[#d9dde6] bg-white px-6 text-base text-[#131313] shadow-none placeholder:text-[#b0b6c4] focus-visible:border-[#8f87ff] focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15"
+            className="h-[62px] rounded-[20px] border border-[#cfd6e3] bg-[#fbfcff] px-6 text-base text-[#131313] shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_2px_rgba(16,24,40,0.04)] placeholder:text-[#b0b6c4] focus-visible:border-[#8f87ff] focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15"
           />
         </div>
 
