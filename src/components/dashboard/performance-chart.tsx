@@ -69,8 +69,8 @@ export function PerformanceChart({
             <AreaChart data={chartData} margin={{ top: 16, right: 8, left: 0, bottom: 8 }}>
               <defs>
                 <linearGradient id="spent" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#7d68f5" stopOpacity={0.45} />
-                  <stop offset="95%" stopColor="#7d68f5" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#45d9b8" stopOpacity={0.45} />
+                  <stop offset="95%" stopColor="#45d9b8" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="leads" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#6888ff" stopOpacity={0.38} />
@@ -119,7 +119,7 @@ export function PerformanceChart({
                 dataKey="amountSpent"
                 name="Investimento"
                 yAxisId="spent"
-                stroke="#7d68f5"
+                stroke="#45d9b8"
                 strokeWidth={2}
                 fill="url(#spent)"
                 connectNulls={false}
