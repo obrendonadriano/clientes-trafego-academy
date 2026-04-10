@@ -52,7 +52,7 @@ export function LoginForm() {
             id="username"
             name="username"
             placeholder="Digite seu usuário"
-            defaultValue="admin"
+            autoComplete="username"
             required
             className="h-15 rounded-[20px] border border-[#d9dde6] bg-white px-6 text-base text-[#131313] shadow-none placeholder:text-[#b0b6c4] focus-visible:border-[#8f87ff] focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15"
           />
@@ -66,7 +66,7 @@ export function LoginForm() {
             name="password"
             type="password"
             placeholder="Digite sua senha"
-            defaultValue="admin"
+            autoComplete="current-password"
             required
             className="h-15 rounded-[20px] border border-[#d9dde6] bg-white px-6 text-base text-[#131313] shadow-none placeholder:text-[#b0b6c4] focus-visible:border-[#8f87ff] focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15"
           />
