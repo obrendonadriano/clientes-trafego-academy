@@ -73,8 +73,8 @@ export function PerformanceChart({
                   <stop offset="95%" stopColor="#7d68f5" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="leads" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#67f5de" stopOpacity={0.38} />
-                  <stop offset="95%" stopColor="#67f5de" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#6888ff" stopOpacity={0.38} />
+                  <stop offset="95%" stopColor="#6888ff" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid vertical={false} stroke="rgba(148,163,184,0.15)" />
@@ -129,10 +129,10 @@ export function PerformanceChart({
                 dataKey="leads"
                 name="Resultados"
                 yAxisId="leads"
-                stroke="#67f5de"
+                stroke="#6888ff"
                 strokeWidth={3}
                 connectNulls={false}
-                dot={{ r: 4, fill: "#67f5de", strokeWidth: 0 }}
+                dot={{ r: 4, fill: "#6888ff", strokeWidth: 0 }}
                 activeDot={{ r: 6 }}
               />
             </AreaChart>

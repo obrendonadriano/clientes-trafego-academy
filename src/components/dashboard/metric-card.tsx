@@ -15,8 +15,8 @@ export function MetricCard({
   positive = true,
 }: MetricCardProps) {
   return (
-    <div className="relative overflow-hidden rounded-[1.75rem] border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.82)_0%,rgba(246,249,245,0.92)_100%)] p-5 shadow-[0_24px_48px_-30px_rgba(8,18,29,0.35)] dark:bg-[linear-gradient(180deg,rgba(12,24,36,0.9)_0%,rgba(8,17,29,0.96)_100%)]">
-      <div className="absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,rgba(15,154,122,0.15),rgba(15,154,122,0.85),rgba(15,154,122,0.15))]" />
+    <div className="relative overflow-hidden rounded-[1.75rem] border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(245,246,255,0.98)_100%)] p-5 shadow-[0_24px_48px_-30px_rgba(29,31,67,0.18)] dark:bg-[linear-gradient(180deg,rgba(12,14,28,0.96)_0%,rgba(10,12,24,0.98)_100%)]">
+      <div className="absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,rgba(104,136,255,0.12),rgba(125,104,245,0.92),rgba(183,135,255,0.18))]" />
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm text-muted-foreground">{label}</p>

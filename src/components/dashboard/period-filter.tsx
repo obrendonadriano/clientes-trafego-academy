@@ -98,7 +98,7 @@ export function PeriodFilter({
   }
 
   return (
-    <div className="rounded-[1.75rem] border border-border/60 bg-background/70 p-3 shadow-[0_18px_40px_-28px_rgba(8,18,29,0.25)]">
+    <div className="rounded-[1.75rem] border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(244,245,255,0.94)_100%)] p-3 shadow-[0_18px_40px_-28px_rgba(31,28,64,0.18)] dark:bg-[linear-gradient(180deg,rgba(12,14,28,0.95)_0%,rgba(9,11,22,0.98)_100%)]">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex items-center gap-3 px-2">
           <div className="rounded-2xl bg-primary/12 p-2 text-primary">
@@ -121,7 +121,7 @@ export function PeriodFilter({
               className={cn(
                 "rounded-full border px-4 py-2 text-sm font-medium transition active:scale-[0.985]",
                 active === period
-                  ? "border-primary bg-primary text-primary-foreground shadow-[0_12px_24px_-16px_rgba(15,154,122,0.8)]"
+                  ? "border-primary bg-primary text-primary-foreground shadow-[0_12px_24px_-16px_rgba(125,104,245,0.75)]"
                   : "border-border/70 bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground",
               )}
             >

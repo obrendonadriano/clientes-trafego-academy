@@ -76,7 +76,7 @@ export function DashboardShell({
   return (
     <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-6 px-4 py-4 lg:flex-row lg:px-6">
-        <aside className="flex w-full flex-col rounded-[2rem] border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.74)_0%,rgba(247,245,255,0.94)_100%)] p-5 shadow-[0_24px_60px_-28px_rgba(31,28,64,0.28)] backdrop-blur dark:bg-[linear-gradient(180deg,rgba(10,12,24,0.92)_0%,rgba(10,14,28,0.98)_100%)] lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:w-[280px]">
+        <aside className="flex w-full flex-col rounded-[2rem] border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(244,245,255,0.98)_100%)] p-5 shadow-[0_24px_60px_-28px_rgba(31,28,64,0.2)] backdrop-blur dark:bg-[linear-gradient(180deg,rgba(10,12,24,0.92)_0%,rgba(10,14,28,0.98)_100%)] lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:w-[280px]">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
               Tráfego Academy
@@ -89,7 +89,7 @@ export function DashboardShell({
           <SideNav items={navItems ?? defaultNavItems} />
 
           <div className="mt-auto space-y-4 pt-8">
-            <div className="rounded-3xl border border-border/60 bg-background/60 p-4 backdrop-blur">
+            <div className="rounded-3xl border border-border/60 bg-[rgba(246,247,255,0.92)] p-4 backdrop-blur dark:bg-background/60">
               <p className="text-sm text-muted-foreground">Sessão atual</p>
               <p className="mt-2 font-semibold">{user.name}</p>
               <p className="text-sm text-muted-foreground">
@@ -114,7 +114,7 @@ export function DashboardShell({
           </div>
         </aside>
 
-        <section className="flex-1 rounded-[2rem] border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.7)_0%,rgba(246,245,255,0.92)_100%)] p-5 shadow-[0_24px_60px_-28px_rgba(31,28,64,0.28)] backdrop-blur dark:bg-[linear-gradient(180deg,rgba(10,13,25,0.92)_0%,rgba(8,11,23,0.97)_100%)] lg:p-8">
+        <section className="flex-1 rounded-[2rem] border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(245,246,255,0.98)_100%)] p-5 shadow-[0_24px_60px_-28px_rgba(31,28,64,0.2)] backdrop-blur dark:bg-[linear-gradient(180deg,rgba(10,13,25,0.92)_0%,rgba(8,11,23,0.97)_100%)] lg:p-8">
           <header className="flex flex-col gap-4 border-b border-border/60 pb-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-sm uppercase tracking-[0.28em] text-muted-foreground">
