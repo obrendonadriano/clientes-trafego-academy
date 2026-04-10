@@ -90,6 +90,11 @@ body {
   color: var(--foreground);
 }
 
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--primary);
+}
+
 .dark body {
   background:
     radial-gradient(circle at top, rgba(125, 104, 245, 0.22), transparent 26%),

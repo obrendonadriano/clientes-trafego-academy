@@ -39,7 +39,7 @@ export function PublicLanding({
             fill
             priority
             unoptimized
-            className="absolute inset-0 object-cover"
+            className="absolute inset-[-10px] h-[calc(100%+20px)] w-[calc(100%+20px)] max-w-none object-cover object-center"
           />
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.86),rgba(6,5,12,0.96)),radial-gradient(circle_at_74%_10%,rgba(112,74,255,0.18),transparent_22%),radial-gradient(circle_at_0%_100%,rgba(76,126,255,0.08),transparent_34%)]" />
           <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:34px_34px]" />
