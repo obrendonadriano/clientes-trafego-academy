@@ -1,48 +1,48 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f3f6ef;
-  --foreground: #10212a;
-  --card: rgba(255, 255, 255, 0.84);
-  --card-foreground: #10212a;
+  --background: #f6f5ff;
+  --foreground: #181426;
+  --card: rgba(255, 255, 255, 0.86);
+  --card-foreground: #181426;
   --popover: #ffffff;
-  --popover-foreground: #10212a;
-  --primary: #0f9a7a;
-  --primary-foreground: #f5fffb;
-  --secondary: #dcebe5;
-  --secondary-foreground: #16343d;
-  --muted: #e6efe9;
-  --muted-foreground: #597078;
-  --accent: #cbe6dc;
-  --accent-foreground: #16343d;
+  --popover-foreground: #181426;
+  --primary: #7d68f5;
+  --primary-foreground: #ffffff;
+  --secondary: #ece8ff;
+  --secondary-foreground: #2a1f61;
+  --muted: #eef0f8;
+  --muted-foreground: #7a8196;
+  --accent: #e9ecff;
+  --accent-foreground: #2d245c;
   --destructive: #c43d4b;
   --destructive-foreground: #fff1f3;
-  --border: rgba(16, 33, 42, 0.12);
-  --input: rgba(16, 33, 42, 0.09);
-  --ring: rgba(15, 154, 122, 0.35);
+  --border: rgba(77, 90, 128, 0.16);
+  --input: rgba(118, 131, 169, 0.12);
+  --ring: rgba(125, 104, 245, 0.22);
   --radius: 1.25rem;
 }
 
 .dark {
-  --background: #09121d;
-  --foreground: #ecf6f2;
-  --card: rgba(11, 24, 36, 0.82);
-  --card-foreground: #ecf6f2;
-  --popover: #0d1724;
-  --popover-foreground: #ecf6f2;
-  --primary: #4bffd1;
-  --primary-foreground: #06261f;
-  --secondary: #132637;
-  --secondary-foreground: #d3e5de;
-  --muted: #10202e;
-  --muted-foreground: #8ba6ac;
-  --accent: #173240;
-  --accent-foreground: #e3f5ef;
-  --destructive: #ff6c7f;
+  --background: #08070d;
+  --foreground: #f3f2ff;
+  --card: rgba(11, 14, 28, 0.84);
+  --card-foreground: #f3f2ff;
+  --popover: #0b0d18;
+  --popover-foreground: #f3f2ff;
+  --primary: #67f5de;
+  --primary-foreground: #042923;
+  --secondary: #171a30;
+  --secondary-foreground: #d8dcf2;
+  --muted: #121528;
+  --muted-foreground: #95a0bb;
+  --accent: #1a1f38;
+  --accent-foreground: #ecebff;
+  --destructive: #ff7289;
   --destructive-foreground: #2d0810;
-  --border: rgba(231, 245, 239, 0.12);
-  --input: rgba(231, 245, 239, 0.08);
-  --ring: rgba(75, 255, 209, 0.25);
+  --border: rgba(214, 220, 255, 0.12);
+  --input: rgba(214, 220, 255, 0.08);
+  --ring: rgba(122, 105, 245, 0.28);
 }
 
 @theme inline {
@@ -83,9 +83,17 @@ html {
 
 body {
   background:
-    radial-gradient(circle at top, rgba(15, 154, 122, 0.08), transparent 28%),
+    radial-gradient(circle at top, rgba(125, 104, 245, 0.18), transparent 30%),
+    radial-gradient(circle at 85% 10%, rgba(86, 126, 255, 0.12), transparent 24%),
     var(--background);
   color: var(--foreground);
+}
+
+.dark body {
+  background:
+    radial-gradient(circle at top, rgba(125, 104, 245, 0.22), transparent 26%),
+    radial-gradient(circle at 85% 12%, rgba(86, 126, 255, 0.12), transparent 24%),
+    linear-gradient(180deg, #06070d 0%, #090b13 52%, #0a0d18 100%);
 }
 
 ::-webkit-scrollbar {

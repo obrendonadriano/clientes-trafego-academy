@@ -69,12 +69,12 @@ export function PerformanceChart({
             <AreaChart data={chartData} margin={{ top: 16, right: 8, left: 0, bottom: 8 }}>
               <defs>
                 <linearGradient id="spent" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#0f9a7a" stopOpacity={0.45} />
-                  <stop offset="95%" stopColor="#0f9a7a" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#7d68f5" stopOpacity={0.45} />
+                  <stop offset="95%" stopColor="#7d68f5" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="leads" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#55a6ff" stopOpacity={0.35} />
-                  <stop offset="95%" stopColor="#55a6ff" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#67f5de" stopOpacity={0.38} />
+                  <stop offset="95%" stopColor="#67f5de" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid vertical={false} stroke="rgba(148,163,184,0.15)" />
@@ -119,7 +119,7 @@ export function PerformanceChart({
                 dataKey="amountSpent"
                 name="Investimento"
                 yAxisId="spent"
-                stroke="#0f9a7a"
+                stroke="#7d68f5"
                 strokeWidth={2}
                 fill="url(#spent)"
                 connectNulls={false}
@@ -129,10 +129,10 @@ export function PerformanceChart({
                 dataKey="leads"
                 name="Resultados"
                 yAxisId="leads"
-                stroke="#55a6ff"
+                stroke="#67f5de"
                 strokeWidth={3}
                 connectNulls={false}
-                dot={{ r: 4, fill: "#55a6ff", strokeWidth: 0 }}
+                dot={{ r: 4, fill: "#67f5de", strokeWidth: 0 }}
                 activeDot={{ r: 6 }}
               />
             </AreaChart>
