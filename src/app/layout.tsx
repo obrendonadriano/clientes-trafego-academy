@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Manrope, Space_Grotesk } from "next/font/google";
+import favicon from "../../img/favicoin.png";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -18,6 +19,11 @@ export const metadata: Metadata = {
   description:
     "Portal privado para clientes da Tráfego Academy com dashboard, permissões e relatórios com IA.",
   metadataBase: new URL("https://dashboard.trafegoacademy.online"),
+  icons: {
+    icon: favicon.src,
+    shortcut: favicon.src,
+    apple: favicon.src,
+  },
 };
 
 export default function RootLayout({

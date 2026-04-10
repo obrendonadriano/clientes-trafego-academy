@@ -1,7 +1,8 @@
 import Link from "next/link";
+import Image from "next/image";
+import logo from "../../../img/logo.png";
+import videoFundo from "../../../img/videofundo.gif";
 import { LoginForm } from "@/components/auth/login-form";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { Badge } from "@/components/ui/badge";
 
 type PublicLandingProps = {
   title?: string;
@@ -9,73 +10,139 @@ type PublicLandingProps = {
 };
 
 export function PublicLanding({
-  title = "Um portal premium para apresentar campanhas, métricas e relatórios com IA.",
-  subtitle = "Projeto isolado do site principal, pronto para rodar localmente agora e preparado para deploy futuro no subdomínio oficial.",
+  title = "Acompanhe de perto a performance das suas campanhas.",
+  subtitle = "Seu portal privado para acessar métricas, evolução dos resultados e relatórios da operação com uma experiência mais refinada e direta.",
 }: PublicLandingProps) {
-  return (
-    <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(25,150,122,0.2),_transparent_35%),linear-gradient(180deg,_#f5f7f2_0%,_#edf2ea_48%,_#dde7df_100%)] text-foreground dark:bg-[radial-gradient(circle_at_top,_rgba(75,255,205,0.14),_transparent_32%),linear-gradient(180deg,_#08111a_0%,_#09131f_50%,_#0d1724_100%)]">
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(15,23,42,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.05)_1px,transparent_1px)] bg-[size:72px_72px] opacity-30 dark:opacity-10" />
-      <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">
-              Tráfego Academy
-            </p>
-            <h1 className="mt-2 font-display text-2xl font-semibold">
-              Portal privado de performance
-            </h1>
-          </div>
-          <ThemeToggle />
-        </div>
+  const logoCloud = [
+    "Meta Ads",
+    "Google Ads",
+    "Resultados reais",
+    "Relatórios IA",
+    "CPM",
+    "CPL",
+    "ROAS",
+    "Conversões",
+    "Criativos",
+    "Funil",
+    "Otimização",
+    "Escala",
+  ];
 
-        <div className="grid flex-1 items-center gap-10 py-10 lg:grid-cols-[1.15fr_0.85fr]">
-          <section className="space-y-8">
-            <Badge>dashboard.trafegoacademy.online</Badge>
-            <div className="space-y-5">
-              <h2 className="max-w-3xl font-display text-5xl leading-tight font-semibold tracking-[-0.05em] sm:text-6xl">
-                {title}
-              </h2>
-              <p className="max-w-2xl text-lg leading-8 text-muted-foreground">
-                {subtitle}
+  return (
+    <main className="min-h-screen bg-[#080507] text-black">
+      <div className="mx-auto flex min-h-screen max-w-[1920px] flex-col lg:h-screen lg:max-h-screen lg:flex-row lg:overflow-hidden">
+        <section className="relative hidden overflow-hidden bg-[#06060d] text-white lg:flex lg:h-screen lg:w-[44%] lg:flex-col lg:justify-between">
+          <Image
+            src={videoFundo}
+            alt=""
+            aria-hidden="true"
+            fill
+            priority
+            unoptimized
+            className="absolute inset-0 object-cover"
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.86),rgba(6,5,12,0.96)),radial-gradient(circle_at_74%_10%,rgba(112,74,255,0.18),transparent_22%),radial-gradient(circle_at_0%_100%,rgba(76,126,255,0.08),transparent_34%)]" />
+          <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:34px_34px]" />
+          <div className="absolute -right-24 top-[-2%] h-[24rem] w-[24rem] rounded-full bg-[radial-gradient(circle,rgba(112,74,255,0.24),transparent_62%)] blur-3xl" />
+          <div className="absolute left-[-10rem] top-[12rem] h-[28rem] w-[28rem] rounded-full bg-[radial-gradient(circle,rgba(76,126,255,0.08),transparent_68%)] blur-3xl" />
+
+          <div className="relative z-10 px-12 pb-10 pt-12">
+            <div className="mb-14 flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-white/10 p-2 backdrop-blur-sm">
+                <Image
+                  src={logo}
+                  alt="Logo Tráfego Academy"
+                  width={56}
+                  height={56}
+                  className="h-full w-full object-contain"
+                  priority
+                />
+              </div>
+              <p className="text-sm font-semibold uppercase tracking-[0.36em] text-[#d3d6df]">
+                Tráfego Academy
               </p>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-3xl border border-border/60 bg-card/80 p-5 shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] backdrop-blur">
-                <p className="text-sm text-muted-foreground">Acesso privado</p>
-                <p className="mt-3 font-display text-2xl font-semibold">
-                  Sem cadastro público
-                </p>
+            <div className="max-w-[40rem]">
+              <h1 className="max-w-[8ch] bg-[linear-gradient(135deg,#ffffff_0%,#ddd8ff_18%,#a78bfa_54%,#6888ff_100%)] bg-clip-text font-display text-[4.8rem] leading-[0.92] font-bold tracking-[-0.07em] text-transparent">
+                Cliente no controle dos resultados
+              </h1>
+              <p className="mt-9 max-w-[28rem] text-[1rem] leading-9 text-white/88">
+                {title}
+              </p>
+              <p className="mt-4 max-w-[30rem] text-[0.96rem] leading-8 text-white/64">
+                {subtitle}
+              </p>
+            </div>
+          </div>
+
+          <div className="relative z-10 grid grid-cols-4 gap-x-6 gap-y-9 px-12 pb-12 text-center text-[0.95rem] font-semibold text-white">
+            {logoCloud.map((item) => (
+              <div key={item} className="opacity-95">
+                {item}
               </div>
-              <div className="rounded-3xl border border-border/60 bg-card/80 p-5 shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] backdrop-blur">
-                <p className="text-sm text-muted-foreground">Controle total</p>
-                <p className="mt-3 font-display text-2xl font-semibold">
-                  Admin define tudo
-                </p>
+            ))}
+          </div>
+        </section>
+
+        <section className="relative flex min-h-screen flex-1 flex-col bg-white px-6 pb-6 pt-5 sm:px-8 lg:h-screen lg:rounded-l-[32px] lg:px-10 lg:pb-4">
+          <div className="mx-auto flex w-full max-w-[860px] flex-1 flex-col">
+            <div className="flex items-center justify-between">
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-full text-[#989898]">
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-7 w-7"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.8"
+                >
+                  <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </div>
-              <div className="rounded-3xl border border-border/60 bg-card/80 p-5 shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] backdrop-blur">
-                <p className="text-sm text-muted-foreground">Pronto para IA</p>
-                <p className="mt-3 font-display text-2xl font-semibold">
-                  Gemini conectável
+
+              <div className="rounded-md p-1">
+                <Image
+                  src={logo}
+                  alt="Logo Tráfego Academy"
+                  width={48}
+                  height={48}
+                  className="h-12 w-12 rounded-md object-contain"
+                  priority
+                />
+              </div>
+
+              <div className="h-12 w-12" />
+            </div>
+
+            <div className="mx-auto flex w-full max-w-[780px] flex-1 flex-col pt-8 lg:pt-9">
+              <LoginForm />
+
+              <div className="mt-auto pt-8 text-center">
+                <p className="mx-auto max-w-[44rem] text-[0.84rem] leading-6 text-black">
+                  Ao acessar o portal você concorda com nossa{" "}
+                  <Link
+                    href="/politica-de-privacidade"
+                    className="underline underline-offset-2 transition hover:text-[#7d68f5]"
+                  >
+                    política de privacidade
+                  </Link>{" "}
+                  e com os{" "}
+                  <Link
+                    href="/termos-de-servico"
+                    className="underline underline-offset-2 transition hover:text-[#7d68f5]"
+                  >
+                    termos de serviço
+                  </Link>
+                  .
+                </p>
+                <p className="mt-3 text-[0.82rem] text-[#8f96a3]">
+                  © Copyright 2024-2026 Tráfego Academy
                 </p>
               </div>
             </div>
-          </section>
-
-          <LoginForm />
-        </div>
-
-        <div className="flex flex-wrap items-center justify-center gap-4 pb-4 text-sm text-muted-foreground">
-          <Link href="/politica-de-privacidade" className="transition hover:text-primary">
-            Política de Privacidade
-          </Link>
-          <Link href="/termos-de-servico" className="transition hover:text-primary">
-            Termos de Serviço
-          </Link>
-          <Link href="/exclusao-de-dados" className="transition hover:text-primary">
-            Exclusão de Dados
-          </Link>
-        </div>
+          </div>
+        </section>
       </div>
     </main>
   );

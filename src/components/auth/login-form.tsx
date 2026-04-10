@@ -2,10 +2,9 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { LockKeyhole, ShieldCheck } from "lucide-react";
+import { ArrowRight, ShieldCheck } from "lucide-react";
 import { loginAction, type LoginState } from "@/app/login/actions";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -15,8 +14,13 @@ function SubmitButton() {
   const { pending } = useFormStatus();
 
   return (
-    <Button className="w-full" size="lg" disabled={pending}>
-      {pending ? "Entrando..." : "Acessar portal"}
+    <Button
+      className="h-14 w-full rounded-2xl bg-[linear-gradient(135deg,#4d7cff_0%,#815cff_55%,#b787ff_100%)] text-sm font-extrabold uppercase tracking-[0.08em] text-white shadow-[0_16px_40px_rgba(114,92,255,0.28)] hover:brightness-105"
+      size="lg"
+      disabled={pending}
+    >
+      <span>{pending ? "Entrando..." : "Acessar portal"}</span>
+      <ArrowRight className="size-5" />
     </Button>
   );
 }
@@ -25,71 +29,77 @@ export function LoginForm() {
   const [state, formAction] = useActionState(loginAction, initialState);
 
   return (
-    <Card className="border-border/60 bg-card/90 shadow-[0_30px_80px_-36px_rgba(8,18,29,0.55)] backdrop-blur">
-      <CardHeader className="space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="rounded-2xl bg-primary/12 p-3 text-primary">
-            <LockKeyhole className="size-5" />
-          </div>
-          <div>
-            <CardTitle className="font-display text-2xl">
-              Entrar no dashboard
-            </CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Somente contas criadas manualmente pelo administrador.
-            </p>
+    <div className="flex h-full flex-col">
+      <div>
+        <p className="text-sm font-semibold text-[#a4a8b0] sm:text-base">
+          Seja bem-vindo ao portal
+        </p>
+        <h2 className="mt-3 max-w-[12ch] font-display text-[2.3rem] leading-[0.98] tracking-[-0.06em] text-[#090909] sm:text-[3.2rem]">
+          Faça login para acompanhar suas campanhas
+        </h2>
+        <p className="mt-4 max-w-2xl text-sm leading-7 text-[#7f8794] sm:text-base">
+          Use o acesso liberado manualmente pela equipe da Tráfego Academy para
+          entrar no seu dashboard de métricas.
+        </p>
+      </div>
+
+      <form action={formAction} className="mt-8 space-y-5">
+        <div className="space-y-2">
+          <Label htmlFor="username" className="text-sm font-semibold text-[#636b78]">
+            Usuário
+          </Label>
+          <Input
+            id="username"
+            name="username"
+            placeholder="Digite seu usuário"
+            defaultValue="admin"
+            required
+            className="h-15 rounded-[20px] border border-[#d9dde6] bg-white px-6 text-base text-[#131313] shadow-none placeholder:text-[#b0b6c4] focus-visible:border-[#8f87ff] focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="password" className="text-sm font-semibold text-[#636b78]">
+            Senha
+          </Label>
+          <Input
+            id="password"
+            name="password"
+            type="password"
+            placeholder="Digite sua senha"
+            defaultValue="admin"
+            required
+            className="h-15 rounded-[20px] border border-[#d9dde6] bg-white px-6 text-base text-[#131313] shadow-none placeholder:text-[#b0b6c4] focus-visible:border-[#8f87ff] focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15"
+          />
+        </div>
+
+        {state.error ? (
+          <p className="rounded-[18px] border border-[#f0b1b8] bg-[#fff2f4] px-5 py-4 text-sm text-[#c43d4b]">
+            {state.error}
+          </p>
+        ) : null}
+
+        <div className="flex justify-end">
+          <div className="w-full max-w-[260px]">
+            <SubmitButton />
           </div>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <form action={formAction} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="username">Usuário</Label>
-            <Input
-              id="username"
-              name="username"
-              placeholder="admin ou nome de cliente"
-              defaultValue="admin"
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Senha</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              placeholder="Digite sua senha"
-              defaultValue="admin"
-              required
-            />
-          </div>
+      </form>
 
-          {state.error ? (
-            <p className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              {state.error}
-            </p>
-          ) : null}
-
-          <SubmitButton />
-        </form>
-
-        <div className="rounded-3xl border border-border/60 bg-muted/60 p-4">
-          <div className="flex items-start gap-3">
-            <ShieldCheck className="mt-0.5 size-5 text-primary" />
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <p>
-                Protótipo de desenvolvimento com acesso inicial:
-                <strong className="ml-1 text-foreground">admin / admin</strong>
-              </p>
-              <p>
-                Em produção, essa autenticação deve migrar para Supabase Auth
-                com credenciais seguras e criação de usuários apenas via admin.
-              </p>
-            </div>
+      <div className="mt-10 overflow-hidden rounded-[24px] border border-[#e7e7e7] bg-white shadow-[0_10px_28px_rgba(0,0,0,0.08)]">
+        <div className="px-7 py-7 sm:px-9">
+          <div className="mb-4 text-center text-[2.8rem] font-black leading-none text-[#7a64ff]">
+            “
           </div>
+          <p className="text-sm leading-7 text-[#99a1af] sm:text-base">
+            Tenha em um só lugar a leitura do desempenho das campanhas, evolução
+            dos resultados e o acompanhamento contínuo da operação.
+          </p>
         </div>
-      </CardContent>
-    </Card>
+        <div className="flex items-center gap-3 bg-[#eee7ff] px-7 py-4 text-sm text-[#7d68f5] sm:px-9">
+          <ShieldCheck className="size-4" />
+          <p>Ambiente privado com acessos definidos pela equipe Tráfego Academy.</p>
+        </div>
+      </div>
+    </div>
   );
 }
