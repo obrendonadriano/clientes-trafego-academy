@@ -144,6 +144,41 @@ function mapUser(row: DbUserRow): User {
   };
 }
 
+type AdminClient = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
+
+async function fetchAllMetricRows(adminClient: AdminClient) {
+  const pageSize = 1000;
+  const rows: DbMetricRow[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await adminClient
+      .from("campaign_metrics")
+      .select(
+        "campaign_id, date, granularity, hour_bucket, hour_label, amount_spent, reach, impressions, clicks, ctr, result_count, result_label, cpc, cpm, leads, cost_per_lead, roi, roas, frequency",
+      )
+      .order("date", { ascending: true })
+      .order("campaign_id", { ascending: true })
+      .order("hour_bucket", { ascending: true, nullsFirst: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const batch = (data as DbMetricRow[] | null) ?? [];
+    rows.push(...batch);
+
+    if (batch.length < pageSize) {
+      break;
+    }
+
+    from += pageSize;
+  }
+
+  return rows;
+}
+
 function mapClient(row: DbClientRow): Client {
   return {
     id: row.id,
@@ -302,7 +337,7 @@ export async function getAppSnapshot(): Promise<AppDataSnapshot> {
     return getMockSnapshot();
   }
 
-  const [usersResult, clientsResult, campaignsResult, permissionsResult, metricsResult, reportsResult, syncStatusResult] =
+  const [usersResult, clientsResult, campaignsResult, permissionsResult, metricRowsFromDb, reportsResult, syncStatusResult] =
     await Promise.all([
       adminClient
         .from("users")
@@ -319,10 +354,7 @@ export async function getAppSnapshot(): Promise<AppDataSnapshot> {
       adminClient
         .from("user_campaign_permissions")
         .select("user_id, campaign_id"),
-      adminClient
-        .from("campaign_metrics")
-        .select("campaign_id, date, granularity, hour_bucket, hour_label, amount_spent, reach, impressions, clicks, ctr, result_count, result_label, cpc, cpm, leads, cost_per_lead, roi, roas, frequency")
-        .order("date", { ascending: true }),
+      fetchAllMetricRows(adminClient),
       adminClient
         .from("ai_reports")
         .select("id, client_id, period_start, period_end, generated_text, created_at, clients(nome_empresa, whatsapp)")
@@ -332,19 +364,18 @@ export async function getAppSnapshot(): Promise<AppDataSnapshot> {
         .select("provider, interval_minutes, status, last_attempt_at, last_success_at, next_run_at, message"),
     ]);
 
-  if (usersResult.error || clientsResult.error || campaignsResult.error || permissionsResult.error || metricsResult.error || reportsResult.error) {
+  if (usersResult.error || clientsResult.error || campaignsResult.error || permissionsResult.error || reportsResult.error) {
     throw new Error(
       usersResult.error?.message ||
         clientsResult.error?.message ||
         campaignsResult.error?.message ||
         permissionsResult.error?.message ||
-        metricsResult.error?.message ||
         reportsResult.error?.message ||
         "Falha ao carregar os dados do Supabase.",
     );
   }
 
-  const metricRows = (metricsResult.data as DbMetricRow[]).map(mapMetricRow);
+  const metricRows = metricRowsFromDb.map(mapMetricRow);
   const metricRowsByCampaign = new Map<string, RawCampaignMetric[]>();
 
   for (const row of metricRows) {
