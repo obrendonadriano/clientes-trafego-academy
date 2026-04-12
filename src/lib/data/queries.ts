@@ -1,4 +1,3 @@
-import { cache } from "react";
 import { format, parseISO } from "date-fns";
 import { getMockSnapshot } from "@/lib/mock-data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -296,7 +295,7 @@ function mapCampaign(
   };
 }
 
-export const getAppSnapshot = cache(async (): Promise<AppDataSnapshot> => {
+export async function getAppSnapshot(): Promise<AppDataSnapshot> {
   const adminClient = createSupabaseAdminClient();
 
   if (!adminClient) {
@@ -393,7 +392,7 @@ export const getAppSnapshot = cache(async (): Promise<AppDataSnapshot> => {
     metricRows,
     syncStatuses,
   };
-});
+}
 
 export async function getClientUsers() {
   const snapshot = await getAppSnapshot();
