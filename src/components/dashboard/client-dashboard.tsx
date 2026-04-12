@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
-import { CampaignsTable } from "@/components/dashboard/campaigns-table";
 import { DashboardShell } from "@/components/dashboard/shell";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import {
@@ -196,7 +195,7 @@ export function ClientDashboard({
           />
         </div>
 
-        <div id="comparativos" className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr] scroll-mt-8">
+        <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
           <PerformanceChart
             data={selected.chartData}
             periodLabel={selected.periodLabel}
@@ -262,10 +261,6 @@ export function ClientDashboard({
               </div>
             </CardContent>
           </Card>
-        </div>
-
-        <div id="campanhas" className="scroll-mt-8">
-          <CampaignsTable campaigns={selected.campaigns} />
         </div>
       </div>
     </DashboardShell>

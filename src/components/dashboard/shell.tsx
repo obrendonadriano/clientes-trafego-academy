@@ -53,23 +53,13 @@ export function DashboardShell({
       : [
           {
             label: "Visão geral",
-            href: "#visao-geral",
+            href: "/dashboard",
             icon: <LayoutDashboard className="size-4" />,
           },
           {
             label: "Campanhas",
-            href: "#campanhas",
+            href: "/dashboard/campanhas",
             icon: <BarChart3 className="size-4" />,
-          },
-          {
-            label: "Métricas",
-            href: "#metricas",
-            icon: <FileText className="size-4" />,
-          },
-          {
-            label: "Comparativos",
-            href: "#comparativos",
-            icon: <FileText className="size-4" />,
           },
         ];
 
