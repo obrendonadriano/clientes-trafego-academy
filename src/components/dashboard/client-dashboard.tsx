@@ -15,6 +15,7 @@ import {
   filterMetricsByRange,
   formatPeriodLabel,
   getDateRangeForPeriod,
+  getPreferredResultLabelForCampaignName,
   getReferenceNowForPeriod,
   getPreviousDateRange,
   summarizeMetrics,
@@ -115,6 +116,9 @@ export function ClientDashboard({
       .map((campaign) => {
         const rows = metricsByCampaign.get(campaign.id) ?? [];
         const summary = summarizeMetrics(rows);
+        const preferredResultLabel =
+          getPreferredResultLabelForCampaignName(campaign.name) ??
+          summary.resultLabel;
 
         return {
           ...campaign,
@@ -124,7 +128,7 @@ export function ClientDashboard({
             clicks: String(Math.round(summary.clicks)),
             ctr: formatPercent(summary.ctr),
             results: String(Math.round(summary.results)),
-            resultLabel: summary.resultLabel,
+            resultLabel: preferredResultLabel,
             leads: String(Math.round(summary.leads)),
             costPerLead: formatCurrency(summary.costPerLead),
             roas: `${summary.roas.toFixed(2).replace(".", ",")}x`,

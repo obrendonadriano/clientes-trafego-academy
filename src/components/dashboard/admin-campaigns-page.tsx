@@ -15,6 +15,7 @@ import { FormPendingButton } from "@/components/ui/form-pending-button";
 import {
   filterMetricsByRange,
   getDateRangeForPeriod,
+  getPreferredResultLabelForCampaignName,
   getReferenceNowForPeriod,
   summarizeMetrics,
 } from "@/lib/dashboard-metrics";
@@ -74,6 +75,9 @@ export function AdminCampaignsPage({
       .map((campaign) => {
         const rows = metricMap.get(campaign.id) ?? [];
         const summary = summarizeMetrics(rows);
+        const preferredResultLabel =
+          getPreferredResultLabelForCampaignName(campaign.name) ??
+          summary.resultLabel;
 
         return {
           ...campaign,
@@ -83,7 +87,7 @@ export function AdminCampaignsPage({
             clicks: String(Math.round(summary.clicks)),
             ctr: formatPercent(summary.ctr),
             results: String(Math.round(summary.results)),
-            resultLabel: summary.resultLabel,
+            resultLabel: preferredResultLabel,
             leads: String(Math.round(summary.leads)),
             costPerLead: formatCurrency(summary.costPerLead),
             roas: formatMultiplier(summary.roas),

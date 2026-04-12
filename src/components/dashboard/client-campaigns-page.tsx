@@ -12,6 +12,7 @@ import {
   formatPeriodLabel,
   getDateRangeForPeriod,
   getLeadEquivalent,
+  getPreferredResultLabelForCampaignName,
   getReferenceNowForPeriod,
 } from "@/lib/dashboard-metrics";
 import type {
@@ -98,6 +99,9 @@ export function ClientCampaignsPage({
             resultLabel: "Leads no site",
           },
         );
+        const preferredResultLabel =
+          getPreferredResultLabelForCampaignName(campaign.name) ??
+          totals.resultLabel;
 
         return {
           ...campaign,
@@ -109,7 +113,7 @@ export function ClientCampaignsPage({
               totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0,
             ),
             results: String(Math.round(totals.results)),
-            resultLabel: totals.resultLabel,
+            resultLabel: preferredResultLabel,
             leads: String(Math.round(totals.leads)),
             costPerLead: formatCurrency(
               totals.leads > 0 ? totals.amountSpent / totals.leads : 0,

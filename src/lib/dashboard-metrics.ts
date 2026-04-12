@@ -72,6 +72,28 @@ export function getLeadEquivalent(row: Pick<RawCampaignMetric, "leads" | "result
   return 0;
 }
 
+export function getPreferredResultLabelForCampaignName(campaignName: string) {
+  const normalizedCampaignName = campaignName.trim().toLowerCase();
+
+  if (normalizedCampaignName.includes("carros")) {
+    return "Conversas por mensagens iniciadas";
+  }
+
+  if (
+    normalizedCampaignName.includes("funk in") ||
+    normalizedCampaignName.includes("tardezinha") ||
+    normalizedCampaignName.includes("melhor eu ir")
+  ) {
+    return "Compras no site";
+  }
+
+  if (normalizedCampaignName.includes("dilson stein")) {
+    return "Leads no site";
+  }
+
+  return null;
+}
+
 function isSingleDayRange(range: DateRange) {
   return isSameDay(range.start, range.end);
 }
