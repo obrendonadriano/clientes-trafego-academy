@@ -12,9 +12,10 @@ export type SideNavItem = {
 
 type SideNavProps = {
   items: SideNavItem[];
+  onNavigate?: () => void;
 };
 
-export function SideNav({ items }: SideNavProps) {
+export function SideNav({ items, onNavigate }: SideNavProps) {
   const pathname = usePathname();
 
   return (
@@ -28,6 +29,7 @@ export function SideNav({ items }: SideNavProps) {
           <Link
             key={item.href}
             href={item.href}
+            onClick={onNavigate}
             className={cn(
               "flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition active:scale-[0.985]",
               isActive
