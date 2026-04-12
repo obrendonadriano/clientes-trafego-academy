@@ -116,7 +116,7 @@ export function PublicLanding({
             <div className="mx-auto flex w-full max-w-[780px] flex-1 flex-col pt-1 sm:pt-8 lg:pt-6">
               <LoginForm />
 
-              <div className="mt-auto pt-3 text-center sm:mt-8 sm:pt-4 lg:pt-6">
+              <div className="mt-3 pt-2 text-center sm:mt-8 sm:pt-4 lg:mt-auto lg:pt-6">
                 <p className="mx-auto max-w-[44rem] text-[0.8rem] leading-5 text-black sm:text-[0.84rem] sm:leading-6">
                   Ao acessar o portal você concorda com nossa{" "}
                   <Link
