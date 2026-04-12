@@ -15,7 +15,6 @@ export default async function AdminCampaignsRoute() {
     >
       <AdminCampaignsPage
         campaigns={data.campaigns}
-        clients={data.clients}
         metricRows={data.metricRows}
       />
     </DashboardShell>

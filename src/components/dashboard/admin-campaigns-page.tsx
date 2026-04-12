@@ -1,12 +1,10 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
-import { createCampaignAction } from "@/app/admin/actions";
 import {
   importMetaCampaignsAction,
   importMetaInsightsAction,
 } from "@/app/admin/campanhas/actions";
-import { AdminFormCard } from "@/components/admin/admin-form-card";
 import { CampaignsTable } from "@/components/dashboard/campaigns-table";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import {
@@ -14,20 +12,16 @@ import {
   type PeriodFilterValue,
 } from "@/components/dashboard/period-filter";
 import { FormPendingButton } from "@/components/ui/form-pending-button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import {
   filterMetricsByRange,
   getDateRangeForPeriod,
   getReferenceNowForPeriod,
   summarizeMetrics,
 } from "@/lib/dashboard-metrics";
-import type { CampaignWithMetrics, Client, RawCampaignMetric } from "@/lib/types";
+import type { CampaignWithMetrics, RawCampaignMetric } from "@/lib/types";
 
 type AdminCampaignsPageProps = {
   campaigns: CampaignWithMetrics[];
-  clients: Client[];
   metricRows: RawCampaignMetric[];
 };
 
@@ -49,7 +43,6 @@ function formatMultiplier(value: number) {
 
 export function AdminCampaignsPage({
   campaigns,
-  clients,
   metricRows,
 }: AdminCampaignsPageProps) {
   const [state, importAction] = useActionState(importMetaCampaignsAction, {});
@@ -215,51 +208,7 @@ export function AdminCampaignsPage({
         ) : null}
       </div>
 
-      <div className="space-y-6">
-        <CampaignsTable campaigns={selected.campaigns} />
-
-        <AdminFormCard
-          title="Nova campanha"
-          description="Vincule uma campanha a um cliente já cadastrado."
-          action={createCampaignAction}
-          submitLabel="Salvar campanha"
-        >
-          <div className="space-y-2">
-            <Label htmlFor="campaignName">Nome da campanha</Label>
-            <Input id="campaignName" name="name" required />
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select id="status" name="status" defaultValue="Ativa">
-                <option value="Ativa">Ativa</option>
-                <option value="Pausada">Pausada</option>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="platform">Plataforma</Label>
-              <Select id="platform" name="platform" defaultValue="Meta Ads">
-                <option value="Meta Ads">Meta Ads</option>
-                <option value="Google Ads">Google Ads</option>
-                <option value="TikTok Ads">TikTok Ads</option>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="campaignClientId">Cliente</Label>
-            <Select id="campaignClientId" name="clientId" defaultValue="">
-              <option value="" disabled>
-                Selecione um cliente
-              </option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.companyName}
-                </option>
-              ))}
-            </Select>
-          </div>
-        </AdminFormCard>
-      </div>
+      <CampaignsTable campaigns={selected.campaigns} />
     </div>
   );
 }
