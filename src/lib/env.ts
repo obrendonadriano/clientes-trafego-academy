@@ -1,9 +1,16 @@
 import { getSupabasePublishableKey, getSupabaseUrl } from "@/lib/supabase/env";
 
-export function isSupabaseConfigured() {
+export function isSupabaseBrowserConfigured() {
   return Boolean(
     getSupabaseUrl() &&
-      getSupabasePublishableKey() &&
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      getSupabasePublishableKey(),
   );
+}
+
+export function isSupabaseAdminConfigured() {
+  return Boolean(getSupabaseUrl() && process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+export function isSupabaseConfigured() {
+  return isSupabaseBrowserConfigured() && isSupabaseAdminConfigured();
 }

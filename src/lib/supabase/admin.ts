@@ -1,9 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
-import { isSupabaseConfigured } from "@/lib/env";
+import { isSupabaseAdminConfigured } from "@/lib/env";
 import { getSupabaseUrl } from "@/lib/supabase/env";
 
 export function createSupabaseAdminClient() {
-  if (!isSupabaseConfigured()) {
+  if (!isSupabaseAdminConfigured()) {
     return null;
   }
 
