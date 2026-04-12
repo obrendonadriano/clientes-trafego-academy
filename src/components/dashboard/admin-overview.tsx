@@ -14,6 +14,7 @@ import {
   filterMetricsByRange,
   formatPeriodLabel,
   getDateRangeForPeriod,
+  getLatestMetricReferenceDate,
   getPreviousDateRange,
   summarizeMetrics,
 } from "@/lib/dashboard-metrics";
@@ -82,7 +83,8 @@ export function AdminOverview({
   });
 
   const selected = useMemo(() => {
-    const range = getDateRangeForPeriod(period, customRange);
+    const referenceDate = getLatestMetricReferenceDate(metricRows);
+    const range = getDateRangeForPeriod(period, customRange, referenceDate);
     const previousRange = getPreviousDateRange(range);
     const currentRows = filterMetricsByRange(metricRows, range);
     const previousRows = comparePrevious
@@ -90,8 +92,8 @@ export function AdminOverview({
       : [];
     const totals = summarizeMetrics(currentRows);
     const previousTotals = summarizeMetrics(previousRows);
-    const periodLabel = formatPeriodLabel(period, customRange);
-    const chart = buildPerformanceSeries(metricRows, period, customRange);
+    const periodLabel = formatPeriodLabel(period, customRange, referenceDate);
+    const chart = buildPerformanceSeries(metricRows, period, customRange, referenceDate);
 
     return {
       periodLabel,

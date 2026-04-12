@@ -105,6 +105,27 @@ function getDayLabel(date: Date) {
   return format(date, "dd/MM", { locale: ptBR });
 }
 
+export function getLatestMetricReferenceDate(
+  rows: RawCampaignMetric[],
+  fallback = new Date(),
+) {
+  if (rows.length === 0) {
+    return fallback;
+  }
+
+  let latest = parseISO(rows[0].date);
+
+  for (const row of rows) {
+    const current = parseISO(row.date);
+
+    if (current.getTime() > latest.getTime()) {
+      latest = current;
+    }
+  }
+
+  return latest;
+}
+
 export function getDateRangeForPeriod(
   period: DashboardPeriodValue,
   customRange?: { start: string; end: string },

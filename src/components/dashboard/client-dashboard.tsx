@@ -15,6 +15,7 @@ import {
   filterMetricsByRange,
   formatPeriodLabel,
   getDateRangeForPeriod,
+  getLatestMetricReferenceDate,
   getPreviousDateRange,
   summarizeMetrics,
 } from "@/lib/dashboard-metrics";
@@ -93,7 +94,8 @@ export function ClientDashboard({
   });
 
   const selected = useMemo(() => {
-    const range = getDateRangeForPeriod(period, customRange);
+    const referenceDate = getLatestMetricReferenceDate(metricRows);
+    const range = getDateRangeForPeriod(period, customRange, referenceDate);
     const previousRange = getPreviousDateRange(range);
     const currentRows = filterMetricsByRange(metricRows, range);
     const previousRows = comparePrevious
@@ -126,7 +128,7 @@ export function ClientDashboard({
             leads: String(Math.round(summary.leads)),
             costPerLead: formatCurrency(summary.costPerLead),
             roas: `${summary.roas.toFixed(2).replace(".", ",")}x`,
-            periodLabel: formatPeriodLabel(period, customRange),
+            periodLabel: formatPeriodLabel(period, customRange, referenceDate),
           },
           metricCount: rows.length,
         };
@@ -136,8 +138,8 @@ export function ClientDashboard({
     return {
       totals,
       hasData: currentRows.length > 0,
-      periodLabel: formatPeriodLabel(period, customRange),
-      chartData: buildPerformanceSeries(metricRows, period, customRange),
+      periodLabel: formatPeriodLabel(period, customRange, referenceDate),
+      chartData: buildPerformanceSeries(metricRows, period, customRange, referenceDate),
       campaigns: filteredCampaigns,
       leadsChange: calculateChange(totals.leads, previousTotals.leads),
       ctrChange: calculateChange(totals.ctr, previousTotals.ctr),
