@@ -133,7 +133,7 @@ export function ClientDashboard({
           metricCount: rows.length,
         };
       })
-      .filter((campaign) => campaign.metricCount > 0 || currentRows.length === 0);
+      .filter((campaign) => campaign.metricCount > 0);
 
     return {
       totals,

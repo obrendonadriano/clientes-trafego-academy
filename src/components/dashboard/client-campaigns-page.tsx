@@ -119,7 +119,7 @@ export function ClientCampaignsPage({
           metricCount: rows.length,
         };
       })
-      .filter((campaign) => campaign.metricCount > 0 || currentRows.length === 0);
+      .filter((campaign) => campaign.metricCount > 0);
   }, [campaigns, customRange, metricRows, period]);
 
   return (
