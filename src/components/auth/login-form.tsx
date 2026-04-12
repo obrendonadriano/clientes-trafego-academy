@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { loginAction, type LoginState } from "@/app/login/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,8 +34,9 @@ export function LoginForm() {
         <p className="text-[0.78rem] font-semibold text-[#a4a8b0] sm:text-base">
           Seja bem-vindo ao portal
         </p>
-        <h2 className="mt-1 max-w-[13ch] font-display text-[1.68rem] leading-[0.94] tracking-[-0.065em] text-[#090909] sm:mt-3 sm:text-[3.2rem]">
-          Faça login para acompanhar suas campanhas
+        <h2 className="mt-1 font-display text-[2rem] leading-[0.92] tracking-[-0.07em] text-[#090909] sm:mt-3 sm:max-w-[13ch] sm:text-[3.2rem]">
+          <span className="block whitespace-nowrap">Faça login para acompanhar</span>
+          <span className="block">suas campanhas</span>
         </h2>
         <p className="mt-2 max-w-2xl text-[0.84rem] leading-5 text-[#7f8794] sm:mt-4 sm:text-base sm:leading-7">
           Use o acesso liberado manualmente pela equipe da Tráfego Academy para
@@ -43,7 +44,7 @@ export function LoginForm() {
         </p>
       </div>
 
-      <form action={formAction} className="mt-3.5 space-y-3 sm:mt-8 sm:space-y-5">
+      <form action={formAction} className="mt-3 space-y-3 sm:mt-8 sm:space-y-5">
         <div className="space-y-2">
           <Label htmlFor="username" className="text-sm font-semibold text-[#636b78]">
             Usuário
@@ -84,22 +85,6 @@ export function LoginForm() {
           </div>
         </div>
       </form>
-
-      <div className="mt-3 overflow-hidden rounded-[22px] border border-[#e7e7e7] bg-white shadow-[0_10px_28px_rgba(0,0,0,0.08)] sm:mt-10 sm:rounded-[24px]">
-        <div className="px-4 py-3 sm:px-9 sm:py-7">
-          <div className="mb-1 text-center text-[1.4rem] font-black leading-none text-[#7a64ff] sm:mb-4 sm:text-[2.8rem]">
-            “
-          </div>
-          <p className="text-[0.76rem] leading-5 text-[#99a1af] sm:text-base sm:leading-7">
-            Tenha em um só lugar a leitura do desempenho das campanhas, evolução
-            dos resultados e o acompanhamento contínuo da operação.
-          </p>
-        </div>
-        <div className="flex items-center gap-2.5 bg-[#eee7ff] px-4 py-2.5 text-[0.72rem] leading-5 text-[#7d68f5] sm:px-9 sm:py-4 sm:text-sm">
-          <ShieldCheck className="size-4 shrink-0 sm:size-4" />
-          <p>Ambiente privado com acessos definidos pela equipe Tráfego Academy.</p>
-        </div>
-      </div>
     </div>
   );
 }

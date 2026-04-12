@@ -83,7 +83,7 @@ export function PublicLanding({
           </div>
         </section>
 
-        <section className="relative flex min-h-[100dvh] flex-1 flex-col overflow-x-hidden bg-white px-4 pb-2 pt-2 sm:px-8 lg:h-screen lg:rounded-l-[32px] lg:px-10 lg:pb-4 lg:pt-5">
+        <section className="relative flex min-h-[100dvh] flex-1 flex-col overflow-x-hidden bg-white px-4 pb-4 pt-2 sm:px-8 sm:pb-6 lg:h-screen lg:rounded-l-[32px] lg:px-10 lg:pb-4 lg:pt-5">
           <div className="mx-auto flex w-full max-w-[860px] flex-1 flex-col">
             <div className="flex items-center justify-between">
               <div className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#989898] sm:h-12 sm:w-12">
@@ -113,11 +113,11 @@ export function PublicLanding({
               <div className="h-10 w-10 sm:h-12 sm:w-12" />
             </div>
 
-            <div className="mx-auto flex w-full max-w-[780px] flex-1 flex-col pt-2 sm:pt-8 lg:pt-9">
+            <div className="mx-auto flex w-full max-w-[780px] flex-1 flex-col pt-1 sm:pt-8 lg:pt-6">
               <LoginForm />
 
-              <div className="mt-auto pt-2 text-center sm:pt-8">
-                <p className="mx-auto max-w-[44rem] text-[0.68rem] leading-4 text-black sm:text-[0.84rem] sm:leading-6">
+              <div className="mt-5 pt-0 text-center sm:mt-8 sm:pt-4 lg:mt-auto lg:pt-6">
+                <p className="mx-auto max-w-[44rem] text-[0.8rem] leading-5 text-black sm:text-[0.84rem] sm:leading-6">
                   Ao acessar o portal você concorda com nossa{" "}
                   <Link
                     href="/politica-de-privacidade"
@@ -134,7 +134,7 @@ export function PublicLanding({
                   </Link>
                   .
                 </p>
-                <p className="mt-1.5 text-[0.68rem] text-[#8f96a3] sm:mt-3 sm:text-[0.82rem]">
+                <p className="mt-2 text-[0.8rem] text-[#8f96a3] sm:mt-3 sm:text-[0.82rem]">
                   © Copyright 2024-2026 Tráfego Academy
                 </p>
               </div>
