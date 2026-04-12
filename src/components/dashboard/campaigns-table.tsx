@@ -17,7 +17,6 @@ type SortKey =
   | "clicks"
   | "ctr"
   | "results"
-  | "leads"
   | "costPerLead"
   | "roas";
 
@@ -34,7 +33,6 @@ const columns: Array<{
   { key: "clicks", label: "Cliques", className: "min-w-[90px]" },
   { key: "ctr", label: "CTR", className: "min-w-[88px]" },
   { key: "results", label: "Resultados", className: "min-w-[128px]" },
-  { key: "leads", label: "Leads", className: "min-w-[88px]" },
   { key: "costPerLead", label: "CPL", className: "min-w-[108px]" },
   { key: "roas", label: "ROAS", className: "min-w-[88px]" },
 ];
@@ -90,8 +88,6 @@ function getSortableValue(campaign: CampaignWithMetrics, key: SortKey) {
       return parsePercent(campaign.metrics.ctr);
     case "results":
       return parseNumber(campaign.metrics.results);
-    case "leads":
-      return parseNumber(campaign.metrics.leads);
     case "costPerLead":
       return parseCurrency(campaign.metrics.costPerLead);
     case "roas":
@@ -157,7 +153,6 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
         acc.clicks += parseNumber(campaign.metrics.clicks);
         acc.ctr.push(parsePercent(campaign.metrics.ctr));
         acc.results += parseNumber(campaign.metrics.results);
-        acc.leads += parseNumber(campaign.metrics.leads);
         acc.costPerLead.push(parseCurrency(campaign.metrics.costPerLead));
         acc.roas.push(parseMultiplier(campaign.metrics.roas));
         return acc;
@@ -167,7 +162,6 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
         clicks: 0,
         ctr: [] as number[],
         results: 0,
-        leads: 0,
         costPerLead: [] as number[],
         roas: [] as number[],
       },
@@ -267,9 +261,6 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
                     </p>
                   </div>
                 </td>
-                <td className="min-w-[88px] border-b border-border/40 px-4 py-3 align-middle">
-                  {campaign.metrics.leads}
-                </td>
                 <td className="min-w-[108px] border-b border-border/40 px-4 py-3 align-middle">
                   {campaign.metrics.costPerLead}
                 </td>
@@ -296,9 +287,6 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
               </td>
               <td className="border-t border-border/60 px-4 py-3 font-semibold">
                 {totals.results.toLocaleString("pt-BR")}
-              </td>
-              <td className="border-t border-border/60 px-4 py-3 font-semibold">
-                {totals.leads.toLocaleString("pt-BR")}
               </td>
               <td className="border-t border-border/60 px-4 py-3 font-semibold">
                 {formatCurrency(averageCostPerLead)}
