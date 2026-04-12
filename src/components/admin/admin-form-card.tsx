@@ -39,13 +39,13 @@ export function AdminFormCard({
   const [state, formAction] = useActionState(action, initialState);
 
   return (
-    <Card className="border-border/60 bg-background/60">
+    <Card className="min-w-0 overflow-hidden border-border/60 bg-background/60">
       <CardHeader>
         <CardTitle className="font-display text-2xl">{title}</CardTitle>
         <p className="text-sm text-muted-foreground">{description}</p>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <form action={formAction} className="space-y-4">
+      <CardContent className="min-w-0 space-y-4 overflow-hidden">
+        <form action={formAction} className="min-w-0 space-y-4 overflow-hidden">
           {children}
 
           {state.error ? (

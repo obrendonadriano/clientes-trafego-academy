@@ -112,7 +112,7 @@ export function AdminClientsPage({
   }, [campaigns, clientUsers, clients, customRange, metricRows, permissions, period]);
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6 overflow-hidden">
       <div>
         <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">
           Clientes
@@ -158,17 +158,17 @@ export function AdminClientsPage({
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <AdminFormCard
           title="Novo cliente"
           description="Preencha uma vez só para deixar o cliente pronto no sistema."
           action={createClientWorkspaceAction}
           submitLabel="Criar cliente"
         >
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4 overflow-hidden">
             <div>
               <p className="text-sm font-medium text-foreground">Empresa</p>
-              <div className="mt-3 grid gap-4 md:grid-cols-2">
+              <div className="mt-3 grid min-w-0 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="companyName">Nome da empresa</Label>
                   <Input id="companyName" name="companyName" required />
@@ -180,7 +180,7 @@ export function AdminClientsPage({
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid min-w-0 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="whatsapp">WhatsApp</Label>
                 <Input id="whatsapp" name="whatsapp" required />
@@ -198,7 +198,7 @@ export function AdminClientsPage({
 
             <div>
               <p className="text-sm font-medium text-foreground">Acesso ao portal</p>
-              <div className="mt-3 grid gap-4 md:grid-cols-3">
+              <div className="mt-3 grid min-w-0 gap-4 md:grid-cols-3">
                 <div className="space-y-2">
                   <Label htmlFor="accountName">Nome exibido</Label>
                   <Input id="accountName" name="accountName" required />
@@ -229,30 +229,30 @@ export function AdminClientsPage({
           </div>
         </AdminFormCard>
 
-        <Card className="border-border/60 bg-background/60">
+        <Card className="min-w-0 overflow-hidden border-border/60 bg-background/60">
           <CardHeader>
             <CardTitle className="font-display text-2xl">
               Clientes cadastrados
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="min-w-0 space-y-3 overflow-hidden">
             {selected.clientCards.map(({ client, linkedUser, allowedCampaigns, totals }) => (
               <div
                 key={client.id}
-                className="rounded-2xl border border-border/60 bg-card px-4 py-4"
+                className="min-w-0 overflow-hidden rounded-2xl border border-border/60 bg-card px-4 py-4"
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium">{client.companyName}</p>
                     <p className="text-sm text-muted-foreground">{client.contactName}</p>
-                    <p className="mt-2 text-sm text-muted-foreground">
+                    <p className="mt-2 min-w-0 text-sm text-muted-foreground">
                       Login:{" "}
-                      <strong className="text-foreground">
+                      <strong className="break-all text-foreground">
                         {linkedUser?.email || "Ainda sem acesso criado"}
                       </strong>
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={client.active ? "success" : "secondary"}>
                       {client.active ? "Ativo" : "Inativo"}
                     </Badge>
@@ -264,7 +264,7 @@ export function AdminClientsPage({
                     </Link>
                   </div>
                 </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2">
                   <div className="rounded-2xl bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
                     Investimento:{" "}
                     <strong className="text-foreground">
@@ -288,11 +288,11 @@ export function AdminClientsPage({
                     </strong>
                   </div>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                  <span className="rounded-full bg-muted px-3 py-1">
+                <div className="mt-3 flex min-w-0 flex-wrap gap-2 text-xs text-muted-foreground">
+                  <span className="max-w-full break-words rounded-full bg-muted px-3 py-1">
                     {allowedCampaigns.length} campanhas liberadas
                   </span>
-                  <span className="rounded-full bg-muted px-3 py-1">
+                  <span className="max-w-full break-all rounded-full bg-muted px-3 py-1">
                     {client.whatsapp}
                   </span>
                 </div>

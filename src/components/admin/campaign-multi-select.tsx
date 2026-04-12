@@ -39,14 +39,14 @@ export function CampaignMultiSelect({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="min-w-0 space-y-3 overflow-hidden">
       <Input
         placeholder="Pesquisar campanha por nome"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />
 
-      <div className="rounded-3xl border border-border/60 bg-card/60 p-2">
+      <div className="min-w-0 overflow-hidden rounded-3xl border border-border/60 bg-card/60 p-2">
         <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
           {filteredCampaigns.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/60 px-4 py-6 text-sm text-muted-foreground">
@@ -69,9 +69,9 @@ export function CampaignMultiSelect({
                     onChange={() => toggleCampaign(campaign.id)}
                     className="mt-1 size-4 rounded border-border"
                   />
-                  <div>
-                    <p className="font-medium text-foreground">{campaign.name}</p>
-                    <p className="text-sm text-muted-foreground">
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words font-medium text-foreground">{campaign.name}</p>
+                    <p className="break-words text-sm text-muted-foreground">
                       {campaign.clientName || "Sem cliente"} • {campaign.platform}
                     </p>
                   </div>

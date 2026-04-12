@@ -148,7 +148,7 @@ export function PeriodFilter({
       </div>
 
       {active === "Personalizado" ? (
-        <div className="mt-4 grid min-w-0 gap-3 rounded-[1.4rem] border border-border/60 bg-card/80 p-4 md:grid-cols-[1fr_1fr_auto]">
+        <div className="mt-4 grid min-w-0 gap-3 overflow-hidden rounded-[1.4rem] border border-border/60 bg-card/80 p-3 sm:p-4 md:grid-cols-[1fr_1fr_auto]">
           <label className="min-w-0 space-y-2">
             <span className="text-sm font-medium text-foreground">Data inicial</span>
             <input
@@ -158,7 +158,7 @@ export function PeriodFilter({
               onChange={(event) =>
                 handleRangeChange({ start: event.target.value, end })
               }
-              className="flex h-12 min-w-0 w-full max-w-full rounded-2xl border border-input bg-background/70 px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-ring"
+              className="flex h-12 min-w-0 w-full max-w-full overflow-hidden rounded-2xl border border-input bg-background/70 px-3 py-3 text-[0.95rem] outline-none transition focus:border-primary focus:ring-4 focus:ring-ring sm:px-4 sm:text-sm"
             />
           </label>
           <label className="min-w-0 space-y-2">
@@ -170,7 +170,7 @@ export function PeriodFilter({
               onChange={(event) =>
                 handleRangeChange({ start, end: event.target.value })
               }
-              className="flex h-12 min-w-0 w-full max-w-full rounded-2xl border border-input bg-background/70 px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-ring"
+              className="flex h-12 min-w-0 w-full max-w-full overflow-hidden rounded-2xl border border-input bg-background/70 px-3 py-3 text-[0.95rem] outline-none transition focus:border-primary focus:ring-4 focus:ring-ring sm:px-4 sm:text-sm"
             />
           </label>
           <div className="flex min-w-0 items-end">

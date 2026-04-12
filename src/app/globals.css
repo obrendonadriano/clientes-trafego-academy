@@ -98,6 +98,17 @@ input[type="radio"] {
   accent-color: var(--primary);
 }
 
+input[type="date"] {
+  min-width: 0;
+  max-width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+}
+
 .dark body {
   background:
     radial-gradient(circle at top, rgba(125, 104, 245, 0.22), transparent 26%),
