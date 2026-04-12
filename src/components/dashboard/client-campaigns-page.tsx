@@ -11,7 +11,8 @@ import {
   filterMetricsByRange,
   formatPeriodLabel,
   getDateRangeForPeriod,
-  getLeadEquivalent,
+  getPreferredLeadCount,
+  getPreferredResultCount,
   getPreferredResultLabelForCampaignName,
   getReferenceNowForPeriod,
 } from "@/lib/dashboard-metrics";
@@ -78,30 +79,24 @@ export function ClientCampaignsPage({
 
         const totals = rows.reduce(
           (acc, row) => {
-            const leadEquivalent = getLeadEquivalent(row);
             acc.amountSpent += row.amountSpent;
             acc.clicks += row.clicks;
             acc.impressions += row.impressions;
-            acc.results += row.results;
-            acc.leads += leadEquivalent;
             acc.roas += row.roas;
-            acc.resultLabel = row.resultLabel || acc.resultLabel;
             return acc;
           },
           {
             amountSpent: 0,
             clicks: 0,
             impressions: 0,
-            results: 0,
-            leads: 0,
-            costPerLead: 0,
             roas: 0,
-            resultLabel: "Leads no site",
           },
         );
         const preferredResultLabel =
           getPreferredResultLabelForCampaignName(campaign.name) ??
-          totals.resultLabel;
+          "Sem resultado";
+        const preferredResultCount = getPreferredResultCount(rows, campaign.name);
+        const preferredLeadCount = getPreferredLeadCount(rows, campaign.name);
 
         return {
           ...campaign,
@@ -112,11 +107,11 @@ export function ClientCampaignsPage({
             ctr: formatPercent(
               totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0,
             ),
-            results: String(Math.round(totals.results)),
+            results: String(Math.round(preferredResultCount)),
             resultLabel: preferredResultLabel,
-            leads: String(Math.round(totals.leads)),
+            leads: String(Math.round(preferredLeadCount)),
             costPerLead: formatCurrency(
-              totals.leads > 0 ? totals.amountSpent / totals.leads : 0,
+              preferredLeadCount > 0 ? totals.amountSpent / preferredLeadCount : 0,
             ),
             roas: `${(totals.roas / rows.length).toFixed(2).replace(".", ",")}x`,
             periodLabel,

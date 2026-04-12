@@ -45,6 +45,13 @@ export type MetricTotals = {
   frequency: number;
 };
 
+export type PreferredResultCategory =
+  | "purchase"
+  | "lead"
+  | "message"
+  | "registration"
+  | "other";
+
 export function getLeadEquivalent(row: Pick<RawCampaignMetric, "leads" | "results" | "resultLabel">) {
   if (row.leads > 0) {
     return row.leads;
@@ -92,6 +99,90 @@ export function getPreferredResultLabelForCampaignName(campaignName: string) {
   }
 
   return null;
+}
+
+export function getPreferredResultCategoryForCampaignName(
+  campaignName: string,
+): PreferredResultCategory {
+  const normalizedCampaignName = campaignName.trim().toLowerCase();
+
+  if (normalizedCampaignName.includes("carros")) {
+    return "message";
+  }
+
+  if (
+    normalizedCampaignName.includes("funk in") ||
+    normalizedCampaignName.includes("tardezinha") ||
+    normalizedCampaignName.includes("melhor eu ir")
+  ) {
+    return "purchase";
+  }
+
+  if (normalizedCampaignName.includes("dilson stein")) {
+    return "lead";
+  }
+
+  return "other";
+}
+
+export function getResultCategoryFromLabel(label: string): PreferredResultCategory {
+  const normalizedLabel = label.trim().toLowerCase();
+
+  if (
+    normalizedLabel.includes("compra") ||
+    normalizedLabel.includes("purchase")
+  ) {
+    return "purchase";
+  }
+
+  if (
+    normalizedLabel.includes("mensagen") ||
+    normalizedLabel.includes("messaging") ||
+    normalizedLabel.includes("message") ||
+    normalizedLabel.includes("conversation") ||
+    normalizedLabel.includes("conversa")
+  ) {
+    return "message";
+  }
+
+  if (normalizedLabel.includes("lead")) {
+    return "lead";
+  }
+
+  if (normalizedLabel.includes("cadastro") || normalizedLabel.includes("registration")) {
+    return "registration";
+  }
+
+  return "other";
+}
+
+export function getPreferredResultCount(
+  rows: RawCampaignMetric[],
+  campaignName: string,
+) {
+  const preferredCategory = getPreferredResultCategoryForCampaignName(campaignName);
+
+  if (preferredCategory === "other") {
+    return rows.reduce((sum, row) => sum + row.results, 0);
+  }
+
+  return rows.reduce((sum, row) => {
+    return sum +
+      (getResultCategoryFromLabel(row.resultLabel) === preferredCategory
+        ? row.results
+        : 0);
+  }, 0);
+}
+
+export function getPreferredLeadCount(
+  rows: RawCampaignMetric[],
+  campaignName: string,
+) {
+  if (getPreferredResultCategoryForCampaignName(campaignName) !== "lead") {
+    return 0;
+  }
+
+  return rows.reduce((sum, row) => sum + getLeadEquivalent(row), 0);
 }
 
 function isSingleDayRange(range: DateRange) {

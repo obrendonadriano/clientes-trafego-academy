@@ -15,6 +15,8 @@ import { FormPendingButton } from "@/components/ui/form-pending-button";
 import {
   filterMetricsByRange,
   getDateRangeForPeriod,
+  getPreferredLeadCount,
+  getPreferredResultCount,
   getPreferredResultLabelForCampaignName,
   getReferenceNowForPeriod,
   summarizeMetrics,
@@ -78,6 +80,8 @@ export function AdminCampaignsPage({
         const preferredResultLabel =
           getPreferredResultLabelForCampaignName(campaign.name) ??
           summary.resultLabel;
+        const preferredResultCount = getPreferredResultCount(rows, campaign.name);
+        const preferredLeadCount = getPreferredLeadCount(rows, campaign.name);
 
         return {
           ...campaign,
@@ -86,10 +90,12 @@ export function AdminCampaignsPage({
             amountSpent: formatCurrency(summary.amountSpent),
             clicks: String(Math.round(summary.clicks)),
             ctr: formatPercent(summary.ctr),
-            results: String(Math.round(summary.results)),
+            results: String(Math.round(preferredResultCount)),
             resultLabel: preferredResultLabel,
-            leads: String(Math.round(summary.leads)),
-            costPerLead: formatCurrency(summary.costPerLead),
+            leads: String(Math.round(preferredLeadCount)),
+            costPerLead: formatCurrency(
+              preferredLeadCount > 0 ? summary.amountSpent / preferredLeadCount : 0,
+            ),
             roas: formatMultiplier(summary.roas),
             periodLabel: period,
           },
