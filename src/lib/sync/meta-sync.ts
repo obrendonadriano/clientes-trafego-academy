@@ -103,6 +103,7 @@ function parseMetaHourBreakdown(value?: string) {
 
 function getPrimaryResult(
   actions: Array<{ action_type: string; value: string }> | undefined,
+  campaignName?: string,
 ) {
   if (!actions || actions.length === 0) {
     return {
@@ -111,31 +112,80 @@ function getPrimaryResult(
     };
   }
 
-  const priorities: Array<{
+  const normalizedCampaignName = (campaignName ?? "").trim().toLowerCase();
+
+  const purchasePriority = {
+    types: ["purchase", "omni_purchase", "offsite_conversion.fb_pixel_purchase"],
+    label: "Compras no site",
+  };
+
+  const leadPriority = {
+    types: ["lead", "onsite_conversion.lead_grouped", "offsite_conversion.fb_pixel_lead"],
+    label: "Leads no site",
+  };
+
+  const messagingPriority = {
+    types: [
+      "onsite_conversion.messaging_conversation_started_7d",
+      "onsite_conversion.total_messaging_connection",
+      "onsite_conversion.total_messaging_connection_7d",
+      "onsite_conversion.messaging_first_reply",
+    ],
+    label: "Conversas por mensagens iniciadas",
+  };
+
+  const registrationPriority = {
+    types: ["complete_registration", "onsite_conversion.complete_registration"],
+    label: "Cadastros",
+  };
+
+  const landingPagePriority = {
+    types: ["landing_page_view"],
+    label: "Visualizações da página",
+  };
+
+  let priorities: Array<{
     types: string[];
     label: string;
-  }> = [
-    {
-      types: ["purchase", "omni_purchase", "offsite_conversion.fb_pixel_purchase"],
-      label: "Compras no site",
-    },
-    {
-      types: ["lead", "onsite_conversion.lead_grouped", "offsite_conversion.fb_pixel_lead"],
-      label: "Leads no site",
-    },
-    {
-      types: ["onsite_web_lead", "onsite_conversion.messaging_conversation_started_7d"],
-      label: "Leads",
-    },
-    {
-      types: ["complete_registration", "onsite_conversion.complete_registration"],
-      label: "Cadastros",
-    },
-    {
-      types: ["landing_page_view"],
-      label: "Visualizações da página",
-    },
-  ];
+  }>;
+
+  if (normalizedCampaignName.includes("carros")) {
+    priorities = [
+      messagingPriority,
+      leadPriority,
+      purchasePriority,
+      registrationPriority,
+      landingPagePriority,
+    ];
+  } else if (
+    normalizedCampaignName.includes("funk in") ||
+    normalizedCampaignName.includes("tardezinha") ||
+    normalizedCampaignName.includes("melhor eu ir")
+  ) {
+    priorities = [
+      purchasePriority,
+      leadPriority,
+      messagingPriority,
+      registrationPriority,
+      landingPagePriority,
+    ];
+  } else if (normalizedCampaignName.includes("dilson stein")) {
+    priorities = [
+      leadPriority,
+      purchasePriority,
+      messagingPriority,
+      registrationPriority,
+      landingPagePriority,
+    ];
+  } else {
+    priorities = [
+      purchasePriority,
+      leadPriority,
+      messagingPriority,
+      registrationPriority,
+      landingPagePriority,
+    ];
+  }
 
   for (const priority of priorities) {
     const count = getPrioritizedActionValue(actions, priority.types);
@@ -407,7 +457,7 @@ export async function importMetaInsights() {
         "onsite_conversion.total_messaging_connection_7d",
         "onsite_conversion.messaging_first_reply",
       ]);
-      const primaryResult = getPrimaryResult(item.actions);
+      const primaryResult = getPrimaryResult(item.actions, item.campaign_name);
       const normalizedLeads =
         leads > 0 ||
         !["Leads no site", "Leads", "Cadastros"].includes(primaryResult.label)
