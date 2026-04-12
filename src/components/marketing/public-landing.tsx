@@ -1,7 +1,5 @@
 import Link from "next/link";
 import Image from "next/image";
-import logo from "../../../img/logo.png";
-import videoFundo from "../../../img/videofundo.gif";
 import { LoginForm } from "@/components/auth/login-form";
 
 type PublicLandingProps = {
@@ -33,13 +31,13 @@ export function PublicLanding({
       <div className="mx-auto flex min-h-screen max-w-[1920px] flex-col lg:h-screen lg:max-h-screen lg:flex-row lg:overflow-hidden">
         <section className="relative hidden overflow-hidden bg-[#06060d] text-white lg:flex lg:h-screen lg:w-[44%] lg:flex-col lg:justify-between">
           <Image
-            src={videoFundo}
+            src="/brand/login-background.webp"
             alt=""
             aria-hidden="true"
             fill
             priority
-            unoptimized
             className="absolute inset-[-10px] h-[calc(100%+20px)] w-[calc(100%+20px)] max-w-none object-cover object-center"
+            sizes="44vw"
           />
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.86),rgba(6,5,12,0.96)),radial-gradient(circle_at_74%_10%,rgba(112,74,255,0.18),transparent_22%),radial-gradient(circle_at_0%_100%,rgba(76,126,255,0.08),transparent_34%)]" />
           <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:34px_34px]" />
@@ -50,7 +48,7 @@ export function PublicLanding({
             <div className="mb-14 flex items-center gap-4">
               <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-white/10 p-2 backdrop-blur-sm">
                 <Image
-                  src={logo}
+                  src="/brand/logo.webp"
                   alt="Logo Tráfego Academy"
                   width={56}
                   height={56}
@@ -103,7 +101,7 @@ export function PublicLanding({
 
               <div className="rounded-md p-1">
                 <Image
-                  src={logo}
+                  src="/brand/logo.webp"
                   alt="Logo Tráfego Academy"
                   width={48}
                   height={48}

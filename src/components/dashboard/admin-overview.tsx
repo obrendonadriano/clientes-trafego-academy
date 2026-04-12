@@ -1,8 +1,8 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { MetricCard } from "@/components/dashboard/metric-card";
-import { PerformanceChart } from "@/components/dashboard/performance-chart";
 import {
   PeriodFilter,
   type PeriodFilterValue,
@@ -18,6 +18,21 @@ import {
   summarizeMetrics,
 } from "@/lib/dashboard-metrics";
 import { RawCampaignMetric } from "@/lib/types";
+
+const PerformanceChart = dynamic(
+  () =>
+    import("@/components/dashboard/performance-chart").then(
+      (module) => module.PerformanceChart,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="rounded-3xl border border-border/60 bg-background/60 p-4">
+        <div className="h-[280px] animate-pulse rounded-[1.5rem] bg-muted/70" />
+      </div>
+    ),
+  },
+);
 
 type AdminOverviewProps = {
   clientCount: number;
