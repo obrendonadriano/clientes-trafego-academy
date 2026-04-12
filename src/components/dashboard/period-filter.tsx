@@ -98,28 +98,30 @@ export function PeriodFilter({
   }
 
   return (
-    <div className="rounded-[1.75rem] border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(244,245,255,0.94)_100%)] p-3 shadow-[0_18px_40px_-28px_rgba(31,28,64,0.18)] dark:bg-[linear-gradient(180deg,rgba(12,14,28,0.95)_0%,rgba(9,11,22,0.98)_100%)]">
+    <div className="min-w-0 overflow-hidden rounded-[1.75rem] border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(244,245,255,0.94)_100%)] p-3 shadow-[0_18px_40px_-28px_rgba(31,28,64,0.18)] dark:bg-[linear-gradient(180deg,rgba(12,14,28,0.95)_0%,rgba(9,11,22,0.98)_100%)] sm:p-4">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex items-center gap-3 px-2">
+        <div className="min-w-0 px-1 sm:px-2">
+          <div className="flex items-center gap-3">
           <div className="rounded-2xl bg-primary/12 p-2 text-primary">
             <CalendarRange className="size-4" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-medium text-foreground">Período analisado</p>
             <p className="text-xs text-muted-foreground">
               Selecione rapidamente a janela de comparação
             </p>
           </div>
+          </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex min-w-0 flex-wrap gap-2">
           {periods.map((period) => (
             <button
               key={period}
               type="button"
               onClick={() => handleChange(period)}
               className={cn(
-                "rounded-full border px-4 py-2 text-sm font-medium transition active:scale-[0.985]",
+                "rounded-full border px-4 py-2 text-sm font-medium transition active:scale-[0.985] sm:px-5",
                 active === period
                   ? "border-primary bg-primary text-primary-foreground shadow-[0_12px_24px_-16px_rgba(125,104,245,0.75)]"
                   : "border-border/70 bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground",
@@ -134,7 +136,7 @@ export function PeriodFilter({
           type="button"
           onClick={() => onComparePreviousChange?.(!comparePrevious)}
           className={cn(
-            "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition active:scale-[0.985]",
+            "inline-flex w-full items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm transition active:scale-[0.985] xl:w-auto",
             comparePrevious
               ? "border-primary/20 bg-primary/10 text-primary"
               : "border-border/70 bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground",
@@ -146,8 +148,8 @@ export function PeriodFilter({
       </div>
 
       {active === "Personalizado" ? (
-        <div className="mt-4 grid gap-3 rounded-[1.4rem] border border-border/60 bg-card/80 p-4 md:grid-cols-[1fr_1fr_auto]">
-          <label className="space-y-2">
+        <div className="mt-4 grid min-w-0 gap-3 rounded-[1.4rem] border border-border/60 bg-card/80 p-4 md:grid-cols-[1fr_1fr_auto]">
+          <label className="min-w-0 space-y-2">
             <span className="text-sm font-medium text-foreground">Data inicial</span>
             <input
               type="date"
@@ -156,10 +158,10 @@ export function PeriodFilter({
               onChange={(event) =>
                 handleRangeChange({ start: event.target.value, end })
               }
-              className="flex h-12 w-full rounded-2xl border border-input bg-background/70 px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-ring"
+              className="flex h-12 min-w-0 w-full max-w-full rounded-2xl border border-input bg-background/70 px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-ring"
             />
           </label>
-          <label className="space-y-2">
+          <label className="min-w-0 space-y-2">
             <span className="text-sm font-medium text-foreground">Data final</span>
             <input
               type="date"
@@ -168,14 +170,14 @@ export function PeriodFilter({
               onChange={(event) =>
                 handleRangeChange({ start, end: event.target.value })
               }
-              className="flex h-12 w-full rounded-2xl border border-input bg-background/70 px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-ring"
+              className="flex h-12 min-w-0 w-full max-w-full rounded-2xl border border-input bg-background/70 px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-ring"
             />
           </label>
-          <div className="flex items-end">
+          <div className="flex min-w-0 items-end">
             <button
               type="button"
               onClick={handleApplyCustomRange}
-              className="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-medium text-primary transition active:scale-[0.985] hover:bg-primary hover:text-primary-foreground"
+              className="w-full rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-medium text-primary transition active:scale-[0.985] hover:bg-primary hover:text-primary-foreground md:w-auto"
             >
               Aplicar período
             </button>

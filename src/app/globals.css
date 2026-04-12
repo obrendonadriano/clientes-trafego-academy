@@ -80,6 +80,8 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
+  background: var(--background);
 }
 
 body {
@@ -88,6 +90,7 @@ body {
     radial-gradient(circle at 85% 10%, rgba(86, 126, 255, 0.12), transparent 24%),
     var(--background);
   color: var(--foreground);
+  overflow-x: hidden;
 }
 
 input[type="checkbox"],

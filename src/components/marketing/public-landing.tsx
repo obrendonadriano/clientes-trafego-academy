@@ -27,8 +27,8 @@ export function PublicLanding({
   ];
 
   return (
-    <main className="min-h-screen bg-[#080507] text-black">
-      <div className="mx-auto flex min-h-screen max-w-[1920px] flex-col lg:h-screen lg:max-h-screen lg:flex-row lg:overflow-hidden">
+    <main className="min-h-screen overflow-x-hidden bg-white text-black lg:bg-[#080507]">
+      <div className="mx-auto flex min-h-screen max-w-[1920px] flex-col overflow-x-hidden lg:h-screen lg:max-h-screen lg:flex-row lg:overflow-hidden">
         <section className="relative hidden overflow-hidden bg-[#06060d] text-white lg:flex lg:h-screen lg:w-[44%] lg:flex-col lg:justify-between">
           <Image
             src="/brand/login-background.webp"
@@ -83,7 +83,7 @@ export function PublicLanding({
           </div>
         </section>
 
-        <section className="relative flex min-h-[100dvh] flex-1 flex-col bg-white px-4 pb-4 pt-3 sm:px-8 lg:h-screen lg:rounded-l-[32px] lg:px-10 lg:pb-4 lg:pt-5">
+        <section className="relative flex min-h-[100dvh] flex-1 flex-col overflow-x-hidden bg-white px-4 pb-3 pt-2 sm:px-8 lg:h-screen lg:rounded-l-[32px] lg:px-10 lg:pb-4 lg:pt-5">
           <div className="mx-auto flex w-full max-w-[860px] flex-1 flex-col">
             <div className="flex items-center justify-between">
               <div className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#989898] sm:h-12 sm:w-12">
@@ -113,10 +113,10 @@ export function PublicLanding({
               <div className="h-10 w-10 sm:h-12 sm:w-12" />
             </div>
 
-            <div className="mx-auto flex w-full max-w-[780px] flex-1 flex-col pt-3 sm:pt-8 lg:pt-9">
+            <div className="mx-auto flex w-full max-w-[780px] flex-1 flex-col pt-2 sm:pt-8 lg:pt-9">
               <LoginForm />
 
-              <div className="mt-auto pt-4 text-center sm:pt-8">
+              <div className="mt-auto pt-3 text-center sm:pt-8">
                 <p className="mx-auto max-w-[44rem] text-[0.72rem] leading-5 text-black sm:text-[0.84rem] sm:leading-6">
                   Ao acessar o portal você concorda com nossa{" "}
                   <Link

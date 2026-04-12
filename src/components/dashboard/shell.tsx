@@ -140,8 +140,8 @@ export function DashboardShell({
   }
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-4 px-3 py-3 lg:flex-row lg:gap-6 lg:px-6 lg:py-4">
+    <main className="min-h-screen overflow-x-hidden bg-background text-foreground">
+      <div className="mx-auto flex min-h-screen max-w-[1600px] min-w-0 flex-col gap-4 overflow-x-hidden px-3 py-3 lg:flex-row lg:gap-6 lg:px-6 lg:py-4">
         <div className="lg:hidden">
           <div className="flex items-center justify-between rounded-[1.75rem] border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(244,245,255,0.98)_100%)] px-4 py-3 shadow-[0_24px_60px_-28px_rgba(31,28,64,0.2)] dark:bg-[linear-gradient(180deg,rgba(10,12,24,0.92)_0%,rgba(10,14,28,0.98)_100%)]">
             <div>
@@ -166,9 +166,9 @@ export function DashboardShell({
         </div>
 
         {isMobileMenuOpen ? (
-          <div className="fixed inset-0 z-50 bg-black/45 lg:hidden" onClick={() => setIsMobileMenuOpen(false)}>
+          <div className="fixed inset-0 z-50 overflow-hidden bg-black/45 lg:hidden" onClick={() => setIsMobileMenuOpen(false)}>
             <aside
-              className="absolute left-3 top-3 flex h-[calc(100dvh-1.5rem)] w-[min(86vw,320px)] flex-col rounded-[2rem] border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(244,245,255,0.98)_100%)] p-5 shadow-[0_24px_60px_-28px_rgba(31,28,64,0.2)] backdrop-blur dark:bg-[linear-gradient(180deg,rgba(10,12,24,0.98)_0%,rgba(10,14,28,1)_100%)]"
+              className="absolute left-3 top-3 flex h-[calc(100dvh-1.5rem)] w-[min(86vw,320px)] max-w-[calc(100vw-1.5rem)] flex-col rounded-[2rem] border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(244,245,255,0.98)_100%)] p-5 shadow-[0_24px_60px_-28px_rgba(31,28,64,0.2)] backdrop-blur dark:bg-[linear-gradient(180deg,rgba(10,12,24,0.98)_0%,rgba(10,14,28,1)_100%)]"
               onClick={(event) => event.stopPropagation()}
             >
               {renderSidebarContent()}
@@ -180,7 +180,7 @@ export function DashboardShell({
           {renderSidebarContent()}
         </aside>
 
-        <section className="flex-1 rounded-[1.75rem] border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(245,246,255,0.98)_100%)] p-4 shadow-[0_24px_60px_-28px_rgba(31,28,64,0.2)] backdrop-blur dark:bg-[linear-gradient(180deg,rgba(10,13,25,0.92)_0%,rgba(8,11,23,0.97)_100%)] lg:rounded-[2rem] lg:p-8">
+        <section className="min-w-0 flex-1 overflow-x-hidden rounded-[1.75rem] border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(245,246,255,0.98)_100%)] p-4 shadow-[0_24px_60px_-28px_rgba(31,28,64,0.2)] backdrop-blur dark:bg-[linear-gradient(180deg,rgba(10,13,25,0.92)_0%,rgba(8,11,23,0.97)_100%)] lg:rounded-[2rem] lg:p-8">
           <header className="flex flex-col gap-4 border-b border-border/60 pb-5 lg:flex-row lg:items-end lg:justify-between lg:pb-6">
             <div>
               <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground sm:text-sm">
@@ -195,7 +195,7 @@ export function DashboardShell({
             </div>
           </header>
 
-          <div className="mt-6 lg:mt-8">{children}</div>
+          <div className="mt-6 min-w-0 lg:mt-8">{children}</div>
         </section>
       </div>
     </main>
