@@ -20,7 +20,7 @@ import { Select } from "@/components/ui/select";
 import {
   filterMetricsByRange,
   getDateRangeForPeriod,
-  getLatestMetricReferenceDate,
+  getReferenceNowForPeriod,
   summarizeMetrics,
 } from "@/lib/dashboard-metrics";
 import type { CampaignWithMetrics, Client, RawCampaignMetric } from "@/lib/types";
@@ -65,7 +65,7 @@ export function AdminCampaignsPage({
   });
 
   const selected = useMemo(() => {
-    const referenceDate = getLatestMetricReferenceDate(metricRows);
+    const referenceDate = getReferenceNowForPeriod(metricRows, period, customRange);
     const range = getDateRangeForPeriod(period, customRange, referenceDate);
     const periodRows = filterMetricsByRange(metricRows, range);
     const totals = summarizeMetrics(periodRows);

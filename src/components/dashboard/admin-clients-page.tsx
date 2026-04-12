@@ -18,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   filterMetricsByRange,
   getDateRangeForPeriod,
-  getLatestMetricReferenceDate,
+  getReferenceNowForPeriod,
   summarizeMetrics,
 } from "@/lib/dashboard-metrics";
 import type {
@@ -64,7 +64,7 @@ export function AdminClientsPage({
   });
 
   const selected = useMemo(() => {
-    const referenceDate = getLatestMetricReferenceDate(metricRows);
+    const referenceDate = getReferenceNowForPeriod(metricRows, period, customRange);
     const range = getDateRangeForPeriod(period, customRange, referenceDate);
     const rowsInRange = filterMetricsByRange(metricRows, range);
     const metricsByCampaign = new Map<string, RawCampaignMetric[]>();

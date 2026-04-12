@@ -14,7 +14,7 @@ import {
   filterMetricsByRange,
   formatPeriodLabel,
   getDateRangeForPeriod,
-  getLatestMetricReferenceDate,
+  getReferenceNowForPeriod,
   getPreviousDateRange,
   summarizeMetrics,
 } from "@/lib/dashboard-metrics";
@@ -83,7 +83,7 @@ export function AdminOverview({
   });
 
   const selected = useMemo(() => {
-    const referenceDate = getLatestMetricReferenceDate(metricRows);
+    const referenceDate = getReferenceNowForPeriod(metricRows, period, customRange);
     const range = getDateRangeForPeriod(period, customRange, referenceDate);
     const previousRange = getPreviousDateRange(range);
     const currentRows = filterMetricsByRange(metricRows, range);

@@ -1,4 +1,5 @@
 import {
+  addDays,
   endOfDay,
   endOfMonth,
   format,
@@ -124,6 +125,31 @@ export function getLatestMetricReferenceDate(
   }
 
   return latest;
+}
+
+export function getReferenceNowForPeriod(
+  rows: RawCampaignMetric[],
+  period: DashboardPeriodValue,
+  customRange?: { start: string; end: string },
+  now = new Date(),
+) {
+  if (period !== "Hoje" && period !== "Ontem") {
+    return now;
+  }
+
+  const defaultRange = getDateRangeForPeriod(period, customRange, now);
+
+  if (getRowsInRange(rows, defaultRange).length > 0) {
+    return now;
+  }
+
+  const latest = getLatestMetricReferenceDate(rows, now);
+
+  if (period === "Hoje") {
+    return latest;
+  }
+
+  return addDays(latest, 1);
 }
 
 export function getDateRangeForPeriod(

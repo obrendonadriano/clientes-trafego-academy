@@ -11,7 +11,7 @@ import {
   filterMetricsByRange,
   formatPeriodLabel,
   getDateRangeForPeriod,
-  getLatestMetricReferenceDate,
+  getReferenceNowForPeriod,
 } from "@/lib/dashboard-metrics";
 import type {
   CampaignWithMetrics,
@@ -50,7 +50,7 @@ export function ClientCampaignsPage({
   });
 
   const filteredCampaigns = useMemo(() => {
-    const referenceDate = getLatestMetricReferenceDate(metricRows);
+    const referenceDate = getReferenceNowForPeriod(metricRows, period, customRange);
     const range = getDateRangeForPeriod(period, customRange, referenceDate);
     const currentRows = filterMetricsByRange(metricRows, range);
     const metricsByCampaign = new Map<string, RawCampaignMetric[]>();
