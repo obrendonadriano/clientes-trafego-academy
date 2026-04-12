@@ -401,8 +401,18 @@ export async function importMetaInsights() {
         "lead",
         "onsite_conversion.lead_grouped",
         "offsite_conversion.fb_pixel_lead",
+        "onsite_web_lead",
+        "onsite_conversion.messaging_conversation_started_7d",
+        "onsite_conversion.total_messaging_connection",
+        "onsite_conversion.total_messaging_connection_7d",
+        "onsite_conversion.messaging_first_reply",
       ]);
       const primaryResult = getPrimaryResult(item.actions);
+      const normalizedLeads =
+        leads > 0 ||
+        !["Leads no site", "Leads", "Cadastros"].includes(primaryResult.label)
+          ? leads
+          : primaryResult.count;
 
       const roas =
         item.purchase_roas?.reduce(
@@ -427,8 +437,8 @@ export async function importMetaInsights() {
         result_label: primaryResult.label,
         cpc: Number(item.cpc || 0),
         cpm: Number(item.cpm || 0),
-        leads,
-        cost_per_lead: leads > 0 ? spend / leads : 0,
+        leads: normalizedLeads,
+        cost_per_lead: normalizedLeads > 0 ? spend / normalizedLeads : 0,
         roi: 0,
         roas,
         frequency: Number(item.frequency || 0),

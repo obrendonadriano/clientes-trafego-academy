@@ -45,6 +45,33 @@ export type MetricTotals = {
   frequency: number;
 };
 
+export function getLeadEquivalent(row: Pick<RawCampaignMetric, "leads" | "results" | "resultLabel">) {
+  if (row.leads > 0) {
+    return row.leads;
+  }
+
+  const label = row.resultLabel.trim().toLowerCase();
+
+  if (!label || label === "sem resultado") {
+    return 0;
+  }
+
+  const leadLikePatterns = [
+    "lead",
+    "cadastro",
+    "messaging",
+    "message",
+    "conversation",
+    "conversa",
+  ];
+
+  if (leadLikePatterns.some((pattern) => label.includes(pattern))) {
+    return row.results;
+  }
+
+  return 0;
+}
+
 function isSingleDayRange(range: DateRange) {
   return isSameDay(range.start, range.end);
 }
@@ -198,12 +225,13 @@ export function filterMetricsByRange(
 export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
   const totals = rows.reduce(
     (acc, row) => {
+      const leadEquivalent = getLeadEquivalent(row);
       acc.amountSpent += row.amountSpent;
       acc.reach += row.reach;
       acc.impressions += row.impressions;
       acc.clicks += row.clicks;
       acc.results += row.results;
-      acc.leads += row.leads;
+      acc.leads += leadEquivalent;
       acc.resultLabels.push(row.resultLabel);
       acc.roi.push(row.roi);
       acc.roas.push(row.roas);
@@ -273,20 +301,21 @@ function groupMetricsByKey(
       row.granularity === "hour" && row.hourBucket >= 0
         ? row.hourBucket
         : date.getTime();
+    const leadEquivalent = getLeadEquivalent(row);
 
     if (!current) {
       groups.set(key, {
         date,
         sortValue,
         amountSpent: row.amountSpent,
-        leads: row.leads,
+        leads: leadEquivalent,
         label: getLabel(row, date),
       });
       continue;
     }
 
     current.amountSpent += row.amountSpent;
-    current.leads += row.leads;
+    current.leads += leadEquivalent;
   }
 
   return Array.from(groups.values())

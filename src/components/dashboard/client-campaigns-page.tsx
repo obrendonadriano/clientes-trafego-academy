@@ -11,6 +11,7 @@ import {
   filterMetricsByRange,
   formatPeriodLabel,
   getDateRangeForPeriod,
+  getLeadEquivalent,
   getReferenceNowForPeriod,
 } from "@/lib/dashboard-metrics";
 import type {
@@ -76,12 +77,12 @@ export function ClientCampaignsPage({
 
         const totals = rows.reduce(
           (acc, row) => {
+            const leadEquivalent = getLeadEquivalent(row);
             acc.amountSpent += row.amountSpent;
             acc.clicks += row.clicks;
             acc.impressions += row.impressions;
             acc.results += row.results;
-            acc.leads += row.leads;
-            acc.costPerLead += row.costPerLead;
+            acc.leads += leadEquivalent;
             acc.roas += row.roas;
             acc.resultLabel = row.resultLabel || acc.resultLabel;
             return acc;
