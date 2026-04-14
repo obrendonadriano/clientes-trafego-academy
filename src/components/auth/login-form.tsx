@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { ArrowRight, Instagram, Music2, Play, Video } from "lucide-react";
+import { ArrowRight, AtSign, Camera, CirclePlay, Music2 } from "lucide-react";
 import { loginAction, type LoginState } from "@/app/login/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,10 +102,10 @@ export function LoginForm() {
               Redes Sociais
             </p>
             <div className="flex items-center gap-3">
-              <Instagram className="size-4 shrink-0" />
-              <Play className="size-4 shrink-0" />
+              <Camera className="size-4 shrink-0" />
+              <CirclePlay className="size-4 shrink-0" />
               <Music2 className="size-4 shrink-0" />
-              <Video className="size-4 shrink-0" />
+              <AtSign className="size-4 shrink-0" />
             </div>
           </div>
         </div>
