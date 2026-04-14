@@ -197,7 +197,9 @@ export function AdminClientsPage({
             </div>
 
             <div>
-              <p className="text-sm font-medium text-foreground">Acesso ao portal</p>
+              <p className="font-display text-2xl font-semibold text-foreground">
+                Acesso ao portal
+              </p>
               <div className="mt-3 grid min-w-0 gap-4 md:grid-cols-3">
                 <div className="space-y-2">
                   <Label htmlFor="accountName">Nome exibido</Label>
