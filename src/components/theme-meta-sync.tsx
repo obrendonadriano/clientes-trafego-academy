@@ -13,6 +13,8 @@ export function ThemeMetaSync() {
   const { resolvedTheme } = useTheme();
 
   useEffect(() => {
+    document.documentElement.dataset.surface = pathname === "/login" ? "login" : "app";
+
     const themeColor =
       pathname === "/login" ? LOGIN_THEME_COLOR : resolvedTheme === "dark" ? DARK_THEME_COLOR : LIGHT_THEME_COLOR;
 
