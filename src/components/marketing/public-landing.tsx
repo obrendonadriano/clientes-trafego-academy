@@ -17,6 +17,8 @@ export function PublicLanding({
   title = "Acompanhe de perto a performance das suas campanhas.",
   subtitle = "Seu portal privado para acessar métricas, evolução dos resultados e relatórios da operação com uma experiência mais refinada e direta.",
 }: PublicLandingProps) {
+  const footerTone = "text-[0.8rem] leading-5 text-[#8f96a3]";
+
   const logoCloud = [
     "Meta Ads",
     "Google Ads",
@@ -123,61 +125,63 @@ export function PublicLanding({
               <LoginForm />
 
               <div className="mt-3 pt-2 text-center sm:mt-8 sm:pt-4 lg:mt-auto lg:pt-6">
-                <div className="mb-3 text-center text-[0.8rem] leading-5 text-[#8f96a3] sm:hidden">
-                  <p className="font-medium text-[#8f96a3]">Redes Sociais</p>
-                  <div className="mt-2 flex items-center justify-center gap-1.5 text-[#8f96a3]">
-                    <Link
-                      href="https://www.instagram.com/otrafegoacademy"
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-label="Instagram da Tráfego Academy"
-                      className="inline-flex h-10 w-10 items-center justify-center transition hover:opacity-85"
-                    >
-                      <InstagramIcon />
-                    </Link>
-                    <button
-                      type="button"
-                      aria-label="YouTube"
-                      className="inline-flex h-10 w-10 items-center justify-center"
-                    >
-                      <YoutubeIcon />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="TikTok"
-                      className="inline-flex h-10 w-10 items-center justify-center"
-                    >
-                      <TikTokIcon />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Rede B"
-                      className="inline-flex h-10 w-10 items-center justify-center"
-                    >
-                      <BrandBIcon />
-                    </button>
+                <div className="space-y-2.5 sm:space-y-3">
+                  <div className={`text-center ${footerTone} sm:hidden`}>
+                    <p className={footerTone}>Redes Sociais</p>
+                    <div className="mt-2 flex items-center justify-center gap-1.5 text-[#8f96a3]">
+                      <Link
+                        href="https://www.instagram.com/otrafegoacademy"
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label="Instagram da Tráfego Academy"
+                        className="inline-flex h-10 w-10 items-center justify-center text-[#8f96a3] transition hover:opacity-85"
+                      >
+                        <InstagramIcon />
+                      </Link>
+                      <button
+                        type="button"
+                        aria-label="YouTube"
+                        className="inline-flex h-10 w-10 items-center justify-center text-[#8f96a3]"
+                      >
+                        <YoutubeIcon />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="TikTok"
+                        className="inline-flex h-10 w-10 items-center justify-center text-[#8f96a3]"
+                      >
+                        <TikTokIcon />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Rede B"
+                        className="inline-flex h-10 w-10 items-center justify-center text-[#8f96a3]"
+                      >
+                        <BrandBIcon />
+                      </button>
+                    </div>
                   </div>
+                  <p className={`mx-auto max-w-[44rem] ${footerTone} sm:text-[0.84rem] sm:leading-6 sm:text-[#8f96a3]`}>
+                    Ao acessar o portal você concorda com nossa{" "}
+                    <Link
+                      href="/politica-de-privacidade"
+                      className="text-[#8f96a3] underline underline-offset-2 transition hover:text-[#7d68f5]"
+                    >
+                      política de privacidade
+                    </Link>{" "}
+                    e com os{" "}
+                    <Link
+                      href="/termos-de-servico"
+                      className="text-[#8f96a3] underline underline-offset-2 transition hover:text-[#7d68f5]"
+                    >
+                      termos de serviço
+                    </Link>
+                    .
+                  </p>
+                  <p className={`${footerTone} sm:text-[0.82rem]`}>
+                    © Copyright 2024-2026 Tráfego Academy
+                  </p>
                 </div>
-                <p className="mx-auto max-w-[44rem] text-[0.8rem] leading-5 text-[#8f96a3] sm:text-[0.84rem] sm:leading-6 sm:text-black">
-                  Ao acessar o portal você concorda com nossa{" "}
-                  <Link
-                    href="/politica-de-privacidade"
-                    className="text-[#8f96a3] underline underline-offset-2 transition hover:text-[#7d68f5] sm:text-black"
-                  >
-                    política de privacidade
-                  </Link>{" "}
-                  e com os{" "}
-                  <Link
-                    href="/termos-de-servico"
-                    className="text-[#8f96a3] underline underline-offset-2 transition hover:text-[#7d68f5] sm:text-black"
-                  >
-                    termos de serviço
-                  </Link>
-                  .
-                </p>
-                <p className="mt-2 text-[0.8rem] text-[#8f96a3] sm:mt-3 sm:text-[0.82rem]">
-                  © Copyright 2024-2026 Tráfego Academy
-                </p>
               </div>
             </div>
           </div>
