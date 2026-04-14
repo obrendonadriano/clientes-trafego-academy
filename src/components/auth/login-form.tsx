@@ -161,7 +161,7 @@ export function LoginForm() {
         <p className="text-center font-display text-[0.95rem] font-bold tracking-[0.02em] text-black">
           Redes Sociais
         </p>
-        <div className="mt-5 flex items-center justify-between gap-3">
+        <div className="mt-5 flex items-center justify-center gap-1.5">
           <Link
             href="https://www.instagram.com/otrafegoacademy"
             target="_blank"
