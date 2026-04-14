@@ -157,8 +157,8 @@ export function LoginForm() {
         </div>
       </div>
 
-      <div className="mt-3 rounded-[26px] bg-[#07070b] px-5 py-5 text-white shadow-[0_18px_34px_rgba(0,0,0,0.18)] sm:hidden">
-        <p className="text-center font-display text-[0.95rem] font-bold tracking-[0.02em]">
+      <div className="mt-3 px-1 py-1 text-black sm:hidden">
+        <p className="text-center font-display text-[0.95rem] font-bold tracking-[0.02em] text-black">
           Redes Sociais
         </p>
         <div className="mt-5 flex items-center justify-between gap-3">
@@ -167,28 +167,28 @@ export function LoginForm() {
             target="_blank"
             rel="noreferrer"
             aria-label="Instagram da Tráfego Academy"
-            className="inline-flex h-12 w-12 items-center justify-center text-white transition hover:opacity-85"
+            className="inline-flex h-12 w-12 items-center justify-center text-black transition hover:opacity-85"
           >
             <InstagramIcon />
           </Link>
           <button
             type="button"
             aria-label="YouTube"
-            className="inline-flex h-12 w-12 items-center justify-center text-white"
+            className="inline-flex h-12 w-12 items-center justify-center text-black"
           >
             <YoutubeIcon />
           </button>
           <button
             type="button"
             aria-label="TikTok"
-            className="inline-flex h-12 w-12 items-center justify-center text-white"
+            className="inline-flex h-12 w-12 items-center justify-center text-black"
           >
             <TikTokIcon />
           </button>
           <button
             type="button"
             aria-label="Rede B"
-            className="inline-flex h-12 w-12 items-center justify-center text-white"
+            className="inline-flex h-12 w-12 items-center justify-center text-black"
           >
             <BrandBIcon />
           </button>
