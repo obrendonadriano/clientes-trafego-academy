@@ -116,6 +116,14 @@ input[type="date"]::-webkit-date-and-time-value {
     linear-gradient(180deg, #06070d 0%, #090b13 52%, #0a0d18 100%);
 }
 
+@media (max-width: 1023px) {
+  html,
+  body,
+  .dark body {
+    background: #ffffff;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

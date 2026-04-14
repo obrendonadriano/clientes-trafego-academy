@@ -1,14 +1,69 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { ArrowRight, AtSign, Camera, CirclePlay, Music2 } from "lucide-react";
+import { ArrowRight, ShieldCheck } from "lucide-react";
 import { loginAction, type LoginState } from "@/app/login/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const initialState: LoginState = {};
+
+function InstagramIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-8" fill="none">
+      <rect x="3.25" y="3.25" width="17.5" height="17.5" rx="5.5" stroke="currentColor" strokeWidth="1.9" />
+      <circle cx="12" cy="12" r="4.1" stroke="currentColor" strokeWidth="1.9" />
+      <circle cx="17.4" cy="6.7" r="1.2" fill="currentColor" />
+    </svg>
+  );
+}
+
+function YoutubeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-8" fill="none">
+      <rect x="3.5" y="5" width="17" height="14" rx="4.5" stroke="currentColor" strokeWidth="1.9" />
+      <path d="M10 9.2 15.4 12 10 14.8V9.2Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function TikTokIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-8" fill="none">
+      <path
+        d="M13.2 4.2v8.2a3.6 3.6 0 1 1-3-3.54"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M13.2 4.2c.7 1.88 2.2 3.16 4.6 3.42"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function BrandBIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-8" fill="none">
+      <path
+        d="M7 4.2h5.7c2.5 0 4 1.33 4 3.4 0 1.53-.8 2.6-2.18 3.04C16.42 11.03 18 12.3 18 14.7c0 2.9-2.17 4.1-5.35 4.1H7V4.2Z"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinejoin="round"
+      />
+      <path d="M9.1 6.5h3.05c1.53 0 2.35.63 2.35 1.75S13.68 10 12.15 10H9.1V6.5Z" fill="currentColor" />
+      <path d="M9.1 12.2h3.45c1.8 0 2.75.72 2.75 2.02 0 1.35-.95 2.08-2.75 2.08H9.1V12.2Z" fill="currentColor" />
+    </svg>
+  );
+}
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -55,7 +110,7 @@ export function LoginForm() {
             placeholder="Digite seu usuário"
             autoComplete="username"
             required
-            className="h-[50px] rounded-[18px] border border-[#cfd6e3] bg-[#fbfcff] px-4 text-[0.92rem] text-[#131313] shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_2px_rgba(16,24,40,0.04)] placeholder:text-[#b0b6c4] focus-visible:border-[#8f87ff] focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15 sm:h-[62px] sm:rounded-[20px] sm:px-6 sm:text-base"
+            className="h-[50px] rounded-[18px] border border-[#cfd6e3] bg-[#fbfcff] px-4 text-base text-[#131313] shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_2px_rgba(16,24,40,0.04)] placeholder:text-[#b0b6c4] focus-visible:border-[#8f87ff] focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15 sm:h-[62px] sm:rounded-[20px] sm:px-6"
           />
         </div>
         <div className="space-y-2">
@@ -69,7 +124,7 @@ export function LoginForm() {
             placeholder="Digite sua senha"
             autoComplete="current-password"
             required
-            className="h-[50px] rounded-[18px] border border-[#cfd6e3] bg-[#fbfcff] px-4 text-[0.92rem] text-[#131313] shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_2px_rgba(16,24,40,0.04)] placeholder:text-[#b0b6c4] focus-visible:border-[#8f87ff] focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15 sm:h-[62px] sm:rounded-[20px] sm:px-6 sm:text-base"
+            className="h-[50px] rounded-[18px] border border-[#cfd6e3] bg-[#fbfcff] px-4 text-base text-[#131313] shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_2px_rgba(16,24,40,0.04)] placeholder:text-[#b0b6c4] focus-visible:border-[#8f87ff] focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15 sm:h-[62px] sm:rounded-[20px] sm:px-6"
           />
         </div>
 
@@ -96,18 +151,47 @@ export function LoginForm() {
             dos resultados e o acompanhamento contínuo da operação.
           </p>
         </div>
-        <div className="bg-[#eee7ff] px-4 py-3 text-[#7d68f5]">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[0.76rem] font-semibold tracking-[0.02em] text-[#7d68f5]">
-              Redes Sociais
-            </p>
-            <div className="flex items-center gap-3">
-              <Camera className="size-4 shrink-0" />
-              <CirclePlay className="size-4 shrink-0" />
-              <Music2 className="size-4 shrink-0" />
-              <AtSign className="size-4 shrink-0" />
-            </div>
-          </div>
+        <div className="flex items-center gap-2.5 bg-[#eee7ff] px-4 py-2 text-[0.72rem] leading-5 text-[#7d68f5]">
+          <ShieldCheck className="size-4 shrink-0" />
+          <p>Ambiente privado com acessos definidos pela equipe Tráfego Academy.</p>
+        </div>
+      </div>
+
+      <div className="mt-3 rounded-[26px] bg-[#07070b] px-5 py-5 text-white shadow-[0_18px_34px_rgba(0,0,0,0.18)] sm:hidden">
+        <p className="text-center font-display text-[0.95rem] font-bold tracking-[0.02em]">
+          Redes Sociais
+        </p>
+        <div className="mt-5 flex items-center justify-between gap-3">
+          <Link
+            href="https://www.instagram.com/otrafegoacademy"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Instagram da Tráfego Academy"
+            className="inline-flex h-12 w-12 items-center justify-center text-white transition hover:opacity-85"
+          >
+            <InstagramIcon />
+          </Link>
+          <button
+            type="button"
+            aria-label="YouTube"
+            className="inline-flex h-12 w-12 items-center justify-center text-white"
+          >
+            <YoutubeIcon />
+          </button>
+          <button
+            type="button"
+            aria-label="TikTok"
+            className="inline-flex h-12 w-12 items-center justify-center text-white"
+          >
+            <TikTokIcon />
+          </button>
+          <button
+            type="button"
+            aria-label="Rede B"
+            className="inline-flex h-12 w-12 items-center justify-center text-white"
+          >
+            <BrandBIcon />
+          </button>
         </div>
       </div>
     </div>
