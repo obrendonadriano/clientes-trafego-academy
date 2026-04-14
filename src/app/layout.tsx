@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Manrope, Space_Grotesk } from "next/font/google";
 import favicon from "../../img/favicoin.png";
 import "./globals.css";
+import { ThemeMetaSync } from "@/components/theme-meta-sync";
 import { ThemeProvider } from "@/components/theme-provider";
 
 const manrope = Manrope({
@@ -27,8 +28,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  colorScheme: "light",
-  themeColor: "#ffffff",
+  colorScheme: "dark light",
+  themeColor: "#08070d",
 };
 
 export default function RootLayout({
@@ -49,6 +50,7 @@ export default function RootLayout({
         <ThemeProvider
           defaultTheme="dark"
         >
+          <ThemeMetaSync />
           {children}
         </ThemeProvider>
       </body>

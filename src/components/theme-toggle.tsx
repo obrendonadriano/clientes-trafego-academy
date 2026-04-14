@@ -8,7 +8,7 @@ export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
   const nextTheme = isDark ? "light" : "dark";
-  const label = nextTheme === "light" ? "Tema branco" : "Tema escuro";
+  const label = nextTheme === "light" ? "Tema claro" : "Tema escuro";
 
   return (
     <Button
