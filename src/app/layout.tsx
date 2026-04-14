@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Manrope, Space_Grotesk } from "next/font/google";
 import favicon from "../../img/favicoin.png";
 import "./globals.css";
@@ -24,6 +24,10 @@ export const metadata: Metadata = {
     shortcut: favicon.src,
     apple: favicon.src,
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({

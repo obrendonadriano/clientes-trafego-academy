@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, Instagram, Music2, Play, Video } from "lucide-react";
 import { loginAction, type LoginState } from "@/app/login/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,9 +96,18 @@ export function LoginForm() {
             dos resultados e o acompanhamento contínuo da operação.
           </p>
         </div>
-        <div className="flex items-center gap-2.5 bg-[#eee7ff] px-4 py-2 text-[0.72rem] leading-5 text-[#7d68f5]">
-          <ShieldCheck className="size-4 shrink-0" />
-          <p>Ambiente privado com acessos definidos pela equipe Tráfego Academy.</p>
+        <div className="bg-[#eee7ff] px-4 py-3 text-[#7d68f5]">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[0.76rem] font-semibold tracking-[0.02em] text-[#7d68f5]">
+              Redes Sociais
+            </p>
+            <div className="flex items-center gap-3">
+              <Instagram className="size-4 shrink-0" />
+              <Play className="size-4 shrink-0" />
+              <Music2 className="size-4 shrink-0" />
+              <Video className="size-4 shrink-0" />
+            </div>
+          </div>
         </div>
       </div>
     </div>
