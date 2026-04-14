@@ -1,6 +1,12 @@
 import Link from "next/link";
 import Image from "next/image";
-import { LoginForm } from "@/components/auth/login-form";
+import {
+  BrandBIcon,
+  InstagramIcon,
+  LoginForm,
+  TikTokIcon,
+  YoutubeIcon,
+} from "@/components/auth/login-form";
 
 type PublicLandingProps = {
   title?: string;
@@ -117,18 +123,53 @@ export function PublicLanding({
               <LoginForm />
 
               <div className="mt-3 pt-2 text-center sm:mt-8 sm:pt-4 lg:mt-auto lg:pt-6">
-                <p className="mx-auto max-w-[44rem] text-[0.8rem] leading-5 text-black sm:text-[0.84rem] sm:leading-6">
+                <div className="mb-3 text-center text-[0.8rem] leading-5 text-[#8f96a3] sm:hidden">
+                  <p className="font-medium text-[#8f96a3]">Redes Sociais</p>
+                  <div className="mt-2 flex items-center justify-center gap-1.5 text-[#8f96a3]">
+                    <Link
+                      href="https://www.instagram.com/otrafegoacademy"
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label="Instagram da Tráfego Academy"
+                      className="inline-flex h-10 w-10 items-center justify-center transition hover:opacity-85"
+                    >
+                      <InstagramIcon />
+                    </Link>
+                    <button
+                      type="button"
+                      aria-label="YouTube"
+                      className="inline-flex h-10 w-10 items-center justify-center"
+                    >
+                      <YoutubeIcon />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="TikTok"
+                      className="inline-flex h-10 w-10 items-center justify-center"
+                    >
+                      <TikTokIcon />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Rede B"
+                      className="inline-flex h-10 w-10 items-center justify-center"
+                    >
+                      <BrandBIcon />
+                    </button>
+                  </div>
+                </div>
+                <p className="mx-auto max-w-[44rem] text-[0.8rem] leading-5 text-[#8f96a3] sm:text-[0.84rem] sm:leading-6 sm:text-black">
                   Ao acessar o portal você concorda com nossa{" "}
                   <Link
                     href="/politica-de-privacidade"
-                    className="underline underline-offset-2 transition hover:text-[#7d68f5]"
+                    className="text-[#8f96a3] underline underline-offset-2 transition hover:text-[#7d68f5] sm:text-black"
                   >
                     política de privacidade
                   </Link>{" "}
                   e com os{" "}
                   <Link
                     href="/termos-de-servico"
-                    className="underline underline-offset-2 transition hover:text-[#7d68f5]"
+                    className="text-[#8f96a3] underline underline-offset-2 transition hover:text-[#7d68f5] sm:text-black"
                   >
                     termos de serviço
                   </Link>

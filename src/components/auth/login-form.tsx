@@ -1,6 +1,4 @@
 "use client";
-
-import Link from "next/link";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { ArrowRight, ShieldCheck } from "lucide-react";
@@ -11,7 +9,7 @@ import { Label } from "@/components/ui/label";
 
 const initialState: LoginState = {};
 
-function InstagramIcon() {
+export function InstagramIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="size-8" fill="none">
       <rect x="3.25" y="3.25" width="17.5" height="17.5" rx="5.5" stroke="currentColor" strokeWidth="1.9" />
@@ -21,7 +19,7 @@ function InstagramIcon() {
   );
 }
 
-function YoutubeIcon() {
+export function YoutubeIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="size-8" fill="none">
       <rect x="3.5" y="5" width="17" height="14" rx="4.5" stroke="currentColor" strokeWidth="1.9" />
@@ -30,7 +28,7 @@ function YoutubeIcon() {
   );
 }
 
-function TikTokIcon() {
+export function TikTokIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="size-8" fill="none">
       <path
@@ -50,7 +48,7 @@ function TikTokIcon() {
   );
 }
 
-function BrandBIcon() {
+export function BrandBIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="size-8" fill="none">
       <path
@@ -154,44 +152,6 @@ export function LoginForm() {
         <div className="flex items-center gap-2.5 bg-[#eee7ff] px-4 py-2 text-[0.72rem] leading-5 text-[#7d68f5]">
           <ShieldCheck className="size-4 shrink-0" />
           <p>Ambiente privado com acessos definidos pela equipe Tráfego Academy.</p>
-        </div>
-      </div>
-
-      <div className="mt-3 px-1 py-1 text-black sm:hidden">
-        <p className="text-center font-display text-[0.95rem] font-bold tracking-[0.02em] text-black">
-          Redes Sociais
-        </p>
-        <div className="mt-5 flex items-center justify-center gap-1.5">
-          <Link
-            href="https://www.instagram.com/otrafegoacademy"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Instagram da Tráfego Academy"
-            className="inline-flex h-12 w-12 items-center justify-center text-black transition hover:opacity-85"
-          >
-            <InstagramIcon />
-          </Link>
-          <button
-            type="button"
-            aria-label="YouTube"
-            className="inline-flex h-12 w-12 items-center justify-center text-black"
-          >
-            <YoutubeIcon />
-          </button>
-          <button
-            type="button"
-            aria-label="TikTok"
-            className="inline-flex h-12 w-12 items-center justify-center text-black"
-          >
-            <TikTokIcon />
-          </button>
-          <button
-            type="button"
-            aria-label="Rede B"
-            className="inline-flex h-12 w-12 items-center justify-center text-black"
-          >
-            <BrandBIcon />
-          </button>
         </div>
       </div>
     </div>
