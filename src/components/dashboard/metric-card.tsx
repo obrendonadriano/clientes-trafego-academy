@@ -15,43 +15,43 @@ export function MetricCard({
   positive = true,
 }: MetricCardProps) {
   return (
-    <div className="relative overflow-hidden rounded-[1.75rem] border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(245,246,255,0.98)_100%)] p-5 shadow-[0_24px_48px_-30px_rgba(29,31,67,0.18)] dark:bg-[linear-gradient(180deg,rgba(12,14,28,0.96)_0%,rgba(10,12,24,0.98)_100%)]">
-      <div className="absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,rgba(104,136,255,0.12),rgba(125,104,245,0.92),rgba(183,135,255,0.18))]" />
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm text-muted-foreground">{label}</p>
-          <p className="mt-4 font-display text-4xl font-semibold tracking-[-0.05em] text-foreground">
-            {value}
-          </p>
+    <div className="dashboard-card relative min-h-[242px] rounded-[1.5rem] border p-5 text-foreground">
+      <div className="absolute inset-x-5 top-0 h-1 rounded-b-full bg-[linear-gradient(90deg,rgba(62,214,184,0.18),rgba(122,142,255,0.95),rgba(139,120,255,0.22))]" />
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm leading-6 text-muted-foreground">{label}</p>
         </div>
         <div
           className={cn(
-            "inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium",
+            "inline-flex max-w-[56%] shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold leading-5 sm:text-sm",
             positive
-              ? "bg-primary/14 text-primary"
-              : "bg-destructive/14 text-destructive",
+              ? "bg-primary/[0.18] text-primary dark:text-[#a99cff]"
+              : "bg-destructive/[0.18] text-destructive",
           )}
         >
           {positive ? (
-            <ArrowUpRight className="size-4" />
+            <ArrowUpRight className="size-4 shrink-0" />
           ) : (
-            <ArrowDownRight className="size-4" />
+            <ArrowDownRight className="size-4 shrink-0" />
           )}
-          {change}
+          <span className="min-w-0 break-words">{change}</span>
         </div>
       </div>
-      <div className="mt-6 h-px bg-border/60" />
-      <div className="mt-4 flex items-center justify-between">
+      <p className="mt-5 whitespace-nowrap font-display text-[clamp(2.25rem,2.7vw,2.75rem)] font-semibold leading-none text-foreground">
+        {value}
+      </p>
+      <div className="mt-7 h-px bg-border/70 dark:bg-white/10" />
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
           Indicador
         </p>
         <p className="text-xs text-muted-foreground">Atualizado agora</p>
       </div>
       <div className="mt-3 flex items-end justify-between gap-4">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm leading-6 text-muted-foreground">
           Leitura executiva da operação atual.
         </p>
-        <p className="font-display text-3xl font-semibold tracking-[-0.04em] sr-only">
+        <p className="sr-only font-display text-3xl font-semibold">
           {value}
         </p>
       </div>

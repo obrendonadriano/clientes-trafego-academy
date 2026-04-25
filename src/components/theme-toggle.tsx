@@ -9,17 +9,18 @@ export function ThemeToggle() {
   const isDark = resolvedTheme === "dark";
   const nextTheme = isDark ? "light" : "dark";
   const label = nextTheme === "light" ? "Tema claro" : "Tema escuro";
+  const shortLabel = nextTheme === "light" ? "Claro" : "Escuro";
 
   return (
     <Button
       type="button"
       variant="outline"
-      className="w-full gap-2 rounded-full border-border/70 bg-background/70 text-foreground hover:bg-accent hover:text-accent-foreground lg:w-auto"
+      className="w-full min-w-0 gap-2 rounded-full px-4 lg:w-full"
       onClick={() => setTheme(nextTheme)}
       aria-label={label}
     >
-      {isDark ? <SunMedium className="size-4" /> : <MoonStar className="size-4" />}
-      {label}
+      {isDark ? <SunMedium className="size-4 shrink-0" /> : <MoonStar className="size-4 shrink-0" />}
+      <span className="truncate">{shortLabel}</span>
     </Button>
   );
 }

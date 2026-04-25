@@ -38,8 +38,8 @@ const PerformanceChart = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="rounded-3xl border border-border/60 bg-background/60 p-4">
-        <div className="h-[280px] animate-pulse rounded-[1.5rem] bg-muted/70" />
+      <div className="dashboard-card rounded-[1.5rem] border p-4">
+        <div className="h-[280px] animate-pulse rounded-[1.25rem] bg-muted/70 dark:bg-white/[0.08]" />
       </div>
     ),
   },
@@ -213,60 +213,60 @@ export function ClientDashboard({
             periodLabel={selected.periodLabel}
             emptyMessage="As métricas desta conta ainda não foram importadas para o período selecionado."
           />
-          <Card className="border-border/60 bg-background/60">
+          <Card>
             <CardHeader>
               <CardTitle className="font-display text-2xl">
                 Visão do período
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-sm text-muted-foreground">
-              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+            <CardContent className="space-y-4 text-sm leading-6 text-muted-foreground">
+              <div className="dashboard-row rounded-2xl border px-4 py-3">
                 Campanhas visíveis: <strong className="text-foreground">{campaigns.length}</strong>
               </div>
-              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+              <div className="dashboard-row rounded-2xl border px-4 py-3">
                 Campanhas no período: <strong className="text-foreground">{selected.campaigns.length}</strong>
               </div>
-              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+              <div className="dashboard-row rounded-2xl border px-4 py-3">
                 Investimento total:{" "}
                 <strong className="text-foreground">{formatCurrency(selected.totals.amountSpent)}</strong>
               </div>
-              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+              <div className="dashboard-row rounded-2xl border px-4 py-3">
                 Histórico recente: <strong className="text-foreground">{reports.length} análises</strong>
               </div>
-              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+              <div className="dashboard-row rounded-2xl border px-4 py-3">
                 Última atualização:{" "}
                 <strong className="text-foreground">
                   {formatDateTime(syncStatus?.lastSuccessAt)}
                 </strong>
               </div>
-              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+              <div className="dashboard-row rounded-2xl border px-4 py-3">
                 Próxima atualização:{" "}
                 <strong className="text-foreground">
                   {formatDateTime(syncStatus?.nextRunAt)}
                 </strong>
               </div>
-              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+              <div className="dashboard-row rounded-2xl border px-4 py-3">
                 Frequência média:{" "}
                 <strong className="text-foreground">
                   {selected.totals.frequency.toFixed(2).replace(".", ",")}
                 </strong>
               </div>
-              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+              <div className="dashboard-row rounded-2xl border px-4 py-3">
                 Melhor ROAS do período:{" "}
                 <strong className="text-foreground">
                   {selected.totals.roas.toFixed(2).replace(".", ",")}x
                 </strong>
               </div>
-              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+              <div className="dashboard-row rounded-2xl border px-4 py-3">
                 Filtro atual:{" "}
                 <strong className="text-foreground">{selected.periodLabel}</strong>
               </div>
-              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+              <div className="dashboard-row rounded-2xl border px-4 py-3">
                 Sincronização automática:{" "}
                 <strong className="text-foreground">
                   a cada {syncStatus?.intervalMinutes ?? 15} minutos
                 </strong>
-                <p className="mt-2 text-xs text-muted-foreground">
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
                   {syncStatus?.message ??
                     "Os dados desta conta são atualizados automaticamente pela integração com a Meta Ads."}
                 </p>

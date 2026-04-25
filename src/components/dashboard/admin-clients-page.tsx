@@ -117,10 +117,10 @@ export function AdminClientsPage({
         <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">
           Clientes
         </p>
-        <h3 className="mt-2 font-display text-3xl font-semibold">
+        <h3 className="mt-2 font-display text-3xl font-semibold text-foreground">
           Cadastro unificado do cliente
         </h3>
-        <p className="mt-2 max-w-3xl text-muted-foreground">
+        <p className="mt-2 max-w-3xl leading-7 text-muted-foreground">
           Empresa, acesso ao portal e campanhas permitidas ficam todos no mesmo fluxo.
         </p>
       </div>
@@ -241,11 +241,11 @@ export function AdminClientsPage({
             {selected.clientCards.map(({ client, linkedUser, allowedCampaigns, totals }) => (
               <div
                 key={client.id}
-                className="min-w-0 overflow-hidden rounded-2xl border border-border/60 bg-card px-4 py-4"
+                className="dashboard-row min-w-0 rounded-2xl border px-4 py-4"
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium">{client.companyName}</p>
+                    <p className="font-medium text-foreground">{client.companyName}</p>
                     <p className="text-sm text-muted-foreground">{client.contactName}</p>
                     <p className="mt-2 min-w-0 text-sm text-muted-foreground">
                       Login:{" "}
@@ -260,30 +260,30 @@ export function AdminClientsPage({
                     </Badge>
                     <Link
                       href={`/admin/clientes/${client.id}`}
-                      className="inline-flex h-9 items-center justify-center rounded-full border border-border px-4 text-sm font-medium text-foreground transition hover:bg-accent"
+                      className="inline-flex h-9 items-center justify-center rounded-full border border-border/70 bg-background/50 px-4 text-sm font-medium text-foreground transition hover:bg-muted/70 dark:border-white/10 dark:bg-white/[0.035] dark:hover:bg-white/[0.08]"
                     >
                       Editar
                     </Link>
                   </div>
                 </div>
                 <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2">
-                  <div className="rounded-2xl bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                  <div className="rounded-2xl bg-background/50 dark:bg-white/[0.035] px-3 py-2 text-sm text-muted-foreground">
                     Investimento:{" "}
                     <strong className="text-foreground">
                       {formatCurrency(totals.amountSpent)}
                     </strong>
                   </div>
-                  <div className="rounded-2xl bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                  <div className="rounded-2xl bg-background/50 dark:bg-white/[0.035] px-3 py-2 text-sm text-muted-foreground">
                     Leads:{" "}
                     <strong className="text-foreground">{Math.round(totals.leads)}</strong>
                   </div>
-                  <div className="rounded-2xl bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                  <div className="rounded-2xl bg-background/50 dark:bg-white/[0.035] px-3 py-2 text-sm text-muted-foreground">
                     ROAS:{" "}
                     <strong className="text-foreground">
                       {formatMultiplier(totals.roas)}
                     </strong>
                   </div>
-                  <div className="rounded-2xl bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                  <div className="rounded-2xl bg-background/50 dark:bg-white/[0.035] px-3 py-2 text-sm text-muted-foreground">
                     CPL:{" "}
                     <strong className="text-foreground">
                       {formatCurrency(totals.costPerLead)}
@@ -291,10 +291,10 @@ export function AdminClientsPage({
                   </div>
                 </div>
                 <div className="mt-3 flex min-w-0 flex-wrap gap-2 text-xs text-muted-foreground">
-                  <span className="max-w-full break-words rounded-full bg-muted px-3 py-1">
+                  <span className="max-w-full break-words rounded-full bg-muted/70 dark:bg-white/[0.045] px-3 py-1">
                     {allowedCampaigns.length} campanhas liberadas
                   </span>
-                  <span className="max-w-full break-all rounded-full bg-muted px-3 py-1">
+                  <span className="max-w-full break-all rounded-full bg-muted/70 dark:bg-white/[0.045] px-3 py-1">
                     {client.whatsapp}
                   </span>
                 </div>

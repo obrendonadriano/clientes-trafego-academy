@@ -39,17 +39,17 @@ export function CampaignMultiSelect({
   }
 
   return (
-    <div className="min-w-0 space-y-3 overflow-hidden">
+    <div className="min-w-0 space-y-3">
       <Input
         placeholder="Pesquisar campanha por nome"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />
 
-      <div className="min-w-0 overflow-hidden rounded-3xl border border-border/60 bg-card/60 p-2">
+      <div className="dashboard-row min-w-0 rounded-[1.35rem] border p-2">
         <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
           {filteredCampaigns.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border/60 px-4 py-6 text-sm text-muted-foreground">
+            <div className="rounded-2xl border border-dashed border-border/70 dark:border-white/10 px-4 py-6 text-sm text-muted-foreground">
               Nenhuma campanha encontrada com esse nome.
             </div>
           ) : (
@@ -59,7 +59,7 @@ export function CampaignMultiSelect({
               return (
                 <label
                   key={campaign.id}
-                  className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border/60 bg-background/60 px-4 py-3 transition hover:border-primary/30"
+                  className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border/70 bg-background/50 px-4 py-3 transition hover:border-primary/35 hover:bg-muted/70 dark:border-white/10 dark:bg-black/20 dark:hover:bg-white/[0.045]"
                 >
                   <input
                     type="checkbox"

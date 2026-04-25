@@ -56,9 +56,9 @@ export function PerformanceChart({
       : data;
 
   return (
-    <div className="rounded-3xl border border-border/60 bg-background/60 p-4">
+    <div className="dashboard-card rounded-[1.5rem] border p-4 text-foreground">
       <div className="mb-4">
-        <p className="text-sm text-muted-foreground">{periodLabel}</p>
+        <p className="text-sm leading-6 text-muted-foreground">{periodLabel}</p>
         <h3 className="mt-1 font-display text-2xl font-semibold">
           Investimento vs. resultados
         </h3>
@@ -138,7 +138,7 @@ export function PerformanceChart({
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex h-full items-center justify-center rounded-[1.5rem] border border-dashed border-border/60 bg-card/50 px-6 text-center text-sm text-muted-foreground">
+          <div className="flex h-full items-center justify-center rounded-[1.25rem] border border-dashed border-border/70 bg-background/50 px-6 text-center text-sm leading-6 text-muted-foreground dark:border-white/[0.12] dark:bg-white/[0.035]">
             {emptyMessage}
           </div>
         )}

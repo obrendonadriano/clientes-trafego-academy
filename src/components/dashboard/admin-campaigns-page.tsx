@@ -122,10 +122,10 @@ export function AdminCampaignsPage({
         <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">
           Campanhas
         </p>
-        <h3 className="mt-2 font-display text-3xl font-semibold">
+        <h3 className="mt-2 font-display text-3xl font-semibold text-foreground">
           Gestão de campanhas
         </h3>
-        <p className="mt-2 max-w-3xl text-muted-foreground">
+        <p className="mt-2 max-w-3xl leading-7 text-muted-foreground">
           Cadastre campanhas aqui e depois libere para cada cliente dentro da área de clientes.
         </p>
       </div>
@@ -163,14 +163,14 @@ export function AdminCampaignsPage({
         />
       </div>
 
-      <div className="rounded-[1.75rem] border border-border/60 bg-background/60 p-5">
+      <div className="dashboard-card rounded-[1.5rem] border p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm text-muted-foreground">Importação externa</p>
-            <h4 className="mt-1 font-display text-2xl font-semibold">
+            <h4 className="mt-1 font-display text-2xl font-semibold text-foreground">
               Meta Ads
             </h4>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Importe campanhas conectadas pela Meta e traga para o sistema.
             </p>
           </div>

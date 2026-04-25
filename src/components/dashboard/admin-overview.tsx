@@ -28,8 +28,8 @@ const PerformanceChart = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="rounded-3xl border border-border/60 bg-background/60 p-4">
-        <div className="h-[280px] animate-pulse rounded-[1.5rem] bg-muted/70" />
+      <div className="dashboard-card rounded-[1.5rem] border p-4">
+        <div className="h-[280px] animate-pulse rounded-[1.25rem] bg-muted/70 dark:bg-white/[0.08]" />
       </div>
     ),
   },
@@ -169,42 +169,42 @@ export function AdminOverview({
           periodLabel={selected.periodLabel}
           emptyMessage="Importe métricas da Meta Ads para visualizar a curva real de investimento e resultados."
         />
-        <Card className="border-border/60 bg-background/60">
+        <Card>
           <CardHeader>
             <CardTitle className="font-display text-2xl">
               Situação da operação
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+          <CardContent className="space-y-3 text-sm leading-6 text-muted-foreground">
+            <div className="dashboard-row rounded-2xl border px-4 py-3">
               Clientes ativos:{" "}
               <strong className="text-foreground">{activeClientCount}</strong>
             </div>
-            <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+            <div className="dashboard-row rounded-2xl border px-4 py-3">
               Campanhas ativas:{" "}
               <strong className="text-foreground">{activeCampaignCount}</strong>
             </div>
-            <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+            <div className="dashboard-row rounded-2xl border px-4 py-3">
               Clientes com acesso:{" "}
               <strong className="text-foreground">{clientUserCount}</strong>
             </div>
-            <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+            <div className="dashboard-row rounded-2xl border px-4 py-3">
               Campanhas cadastradas:{" "}
               <strong className="text-foreground">{campaignCount}</strong>
             </div>
-            <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+            <div className="dashboard-row rounded-2xl border px-4 py-3">
               Permissões ativas:{" "}
               <strong className="text-foreground">{permissionCount}</strong>
             </div>
-            <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+            <div className="dashboard-row rounded-2xl border px-4 py-3">
               Clientes cadastrados:{" "}
               <strong className="text-foreground">{clientCount}</strong>
             </div>
-            <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+            <div className="dashboard-row rounded-2xl border px-4 py-3">
               Filtro atual:{" "}
               <strong className="text-foreground">{selected.periodLabel}</strong>
             </div>
-            <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
+            <div className="dashboard-row rounded-2xl border px-4 py-3">
               Status das métricas:{" "}
               <strong className="text-foreground">
                 {selected.hasData ? "dados reais importados" : "sem métricas no período"}

@@ -86,8 +86,8 @@ html {
 
 body {
   background:
-    radial-gradient(circle at top, rgba(125, 104, 245, 0.18), transparent 30%),
-    radial-gradient(circle at 85% 10%, rgba(86, 126, 255, 0.12), transparent 24%),
+    radial-gradient(circle at top, rgba(125, 104, 245, 0.12), transparent 30%),
+    radial-gradient(circle at 85% 10%, rgba(86, 126, 255, 0.08), transparent 24%),
     var(--background);
   color: var(--foreground);
   overflow-x: hidden;
@@ -111,9 +111,59 @@ input[type="date"]::-webkit-date-and-time-value {
 
 .dark body {
   background:
-    radial-gradient(circle at top, rgba(125, 104, 245, 0.22), transparent 26%),
-    radial-gradient(circle at 85% 12%, rgba(86, 126, 255, 0.12), transparent 24%),
-    linear-gradient(180deg, #06070d 0%, #090b13 52%, #0a0d18 100%);
+    linear-gradient(rgba(2, 3, 6, 0.8), rgba(2, 3, 6, 0.86)),
+    linear-gradient(rgba(255, 255, 255, 0.17) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.17) 1px, transparent 1px),
+    #020306;
+  background-size: auto, 28px 28px, 28px 28px, auto;
+}
+
+.dashboard-glass {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 245, 255, 0.9));
+  border-color: rgba(74, 88, 130, 0.14);
+  box-shadow:
+    0 24px 60px -40px rgba(31, 28, 64, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(18px);
+}
+
+.dashboard-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 247, 255, 0.82));
+  border-color: rgba(74, 88, 130, 0.14);
+  box-shadow:
+    0 22px 54px -42px rgba(31, 28, 64, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.74);
+  backdrop-filter: blur(16px);
+}
+
+.dashboard-row {
+  background: rgba(255, 255, 255, 0.74);
+  border-color: rgba(74, 88, 130, 0.12);
+}
+
+.dark .dashboard-glass {
+  background:
+    linear-gradient(180deg, rgba(14, 17, 30, 0.72), rgba(8, 10, 19, 0.58));
+  border-color: rgba(214, 220, 255, 0.14);
+  box-shadow:
+    0 24px 70px -48px rgba(94, 120, 255, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.dark .dashboard-card {
+  background:
+    linear-gradient(180deg, rgba(15, 18, 32, 0.78), rgba(8, 10, 20, 0.68));
+  border-color: rgba(214, 220, 255, 0.13);
+  box-shadow:
+    0 22px 64px -46px rgba(104, 136, 255, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.dark .dashboard-row {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(214, 220, 255, 0.11);
 }
 
 @media (max-width: 1023px) {

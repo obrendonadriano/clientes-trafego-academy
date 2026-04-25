@@ -108,7 +108,7 @@ export function LoginForm() {
             placeholder="Digite seu usuário"
             autoComplete="username"
             required
-            className="h-[50px] rounded-[18px] border border-[#cfd6e3] bg-[#fbfcff] px-4 text-base text-[#131313] shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_2px_rgba(16,24,40,0.04)] placeholder:text-[#b0b6c4] focus-visible:border-[#8f87ff] focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15 sm:h-[62px] sm:rounded-[20px] sm:px-6"
+            className="h-[50px] rounded-[18px] border border-[#e4e8f2] bg-white/95 px-4 text-base text-[#131313] shadow-[0_12px_28px_rgba(31,28,64,0.05),inset_0_1px_0_rgba(255,255,255,0.95)] placeholder:text-[#9aa4b5] focus-visible:border-[#8f87ff] focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15 dark:border-[#e4e8f2] dark:bg-white/95 dark:text-[#131313] dark:placeholder:text-[#9aa4b5] sm:h-[62px] sm:rounded-[20px] sm:px-6"
           />
         </div>
         <div className="space-y-2">
@@ -122,7 +122,7 @@ export function LoginForm() {
             placeholder="Digite sua senha"
             autoComplete="current-password"
             required
-            className="h-[50px] rounded-[18px] border border-[#cfd6e3] bg-[#fbfcff] px-4 text-base text-[#131313] shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_2px_rgba(16,24,40,0.04)] placeholder:text-[#b0b6c4] focus-visible:border-[#8f87ff] focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15 sm:h-[62px] sm:rounded-[20px] sm:px-6"
+            className="h-[50px] rounded-[18px] border border-[#e4e8f2] bg-white/95 px-4 text-base text-[#131313] shadow-[0_12px_28px_rgba(31,28,64,0.05),inset_0_1px_0_rgba(255,255,255,0.95)] placeholder:text-[#9aa4b5] focus-visible:border-[#8f87ff] focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15 dark:border-[#e4e8f2] dark:bg-white/95 dark:text-[#131313] dark:placeholder:text-[#9aa4b5] sm:h-[62px] sm:rounded-[20px] sm:px-6"
           />
         </div>
 
