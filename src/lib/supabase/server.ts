@@ -2,7 +2,13 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { getSupabasePublishableKey, getSupabaseUrl } from "@/lib/supabase/env";
 
-export async function createSupabaseServerClient() {
+type SupabaseServerClientOptions = {
+  allowCookieWrites?: boolean;
+};
+
+export async function createSupabaseServerClient({
+  allowCookieWrites = false,
+}: SupabaseServerClientOptions = {}) {
   const url = getSupabaseUrl();
   const anonKey = getSupabasePublishableKey();
 
@@ -18,6 +24,10 @@ export async function createSupabaseServerClient() {
         return cookieStore.getAll();
       },
       setAll(cookiesToSet) {
+        if (!allowCookieWrites) {
+          return;
+        }
+
         cookiesToSet.forEach(({ name, value, options }) =>
           cookieStore.set(name, value, options),
         );

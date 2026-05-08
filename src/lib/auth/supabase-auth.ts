@@ -34,7 +34,9 @@ function mapProfile(row: ProfileRow): User {
 
 export async function signInWithSupabase(identifier: string, password: string) {
   const adminClient = createSupabaseAdminClient();
-  const serverClient = await createSupabaseServerClient();
+  const serverClient = await createSupabaseServerClient({
+    allowCookieWrites: true,
+  });
 
   if (!adminClient || !serverClient) {
     return null;
@@ -65,7 +67,9 @@ export async function signInWithSupabase(identifier: string, password: string) {
 }
 
 export async function signOutFromSupabase() {
-  const serverClient = await createSupabaseServerClient();
+  const serverClient = await createSupabaseServerClient({
+    allowCookieWrites: true,
+  });
 
   if (!serverClient) {
     return;
