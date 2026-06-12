@@ -14,11 +14,7 @@ export default async function AdminSettingsRoute() {
   ]);
 
   return (
-    <DashboardShell
-      user={user}
-      title="Configurações"
-      subtitle="Gerencie aqui as conexões do sistema e vincule APIs do projeto."
-    >
+    <DashboardShell user={user}>
       <AdminSettingsPage integrations={integrations} metaAccounts={metaAccounts} />
     </DashboardShell>
   );

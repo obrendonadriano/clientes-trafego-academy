@@ -29,11 +29,7 @@ export default async function AdminCampaignsRoute({
   const user = await getCurrentUser();
 
   return (
-    <DashboardShell
-      user={user}
-      title="Campanhas"
-      subtitle="Gerencie as campanhas do sistema antes de liberá-las para cada cliente."
-    >
+    <DashboardShell user={user}>
       <Suspense fallback={<PageSectionSkeleton />}>
         <AdminCampaignsSection searchParams={searchParams} />
       </Suspense>
