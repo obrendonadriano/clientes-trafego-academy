@@ -6,17 +6,27 @@ import type { CampaignWithMetrics } from "@/lib/types";
 
 type CampaignMultiSelectProps = {
   campaigns: CampaignWithMetrics[];
+  // Modo não-controlado: seleção inicial gerenciada internamente.
   selectedIds?: string[];
+  // Modo controlado: o pai é dono da seleção (value + onChange).
+  value?: string[];
+  onChange?: (ids: string[]) => void;
   inputName?: string;
+  showSelectionSummary?: boolean;
 };
 
 export function CampaignMultiSelect({
   campaigns,
   selectedIds = [],
+  value,
+  onChange,
   inputName = "campaignIds",
+  showSelectionSummary = false,
 }: CampaignMultiSelectProps) {
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<string[]>(selectedIds);
+  const [internalSelected, setInternalSelected] = useState<string[]>(selectedIds);
+  const isControlled = value !== undefined;
+  const selected = isControlled ? value : internalSelected;
 
   const filteredCampaigns = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -30,13 +40,24 @@ export function CampaignMultiSelect({
     );
   }, [campaigns, query]);
 
+  function setSelection(ids: string[]) {
+    if (isControlled) {
+      onChange?.(ids);
+    } else {
+      setInternalSelected(ids);
+    }
+  }
+
   function toggleCampaign(campaignId: string) {
-    setSelected((current) =>
-      current.includes(campaignId)
-        ? current.filter((id) => id !== campaignId)
-        : [...current, campaignId],
+    setSelection(
+      selected.includes(campaignId)
+        ? selected.filter((id) => id !== campaignId)
+        : [...selected, campaignId],
     );
   }
+
+  const allSelected =
+    campaigns.length > 0 && campaigns.every((campaign) => selected.includes(campaign.id));
 
   return (
     <div className="min-w-0 space-y-3">
@@ -45,6 +66,31 @@ export function CampaignMultiSelect({
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />
+
+      {showSelectionSummary ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+          <span>
+            {selected.length} de {campaigns.length} campanha
+            {campaigns.length === 1 ? "" : "s"} selecionada
+            {selected.length === 1 ? "" : "s"}
+          </span>
+          <button
+            type="button"
+            className="font-medium text-primary transition hover:opacity-80"
+            onClick={() =>
+              setSelection(allSelected ? [] : campaigns.map((campaign) => campaign.id))
+            }
+          >
+            {allSelected ? "Limpar seleção" : "Selecionar todas"}
+          </button>
+        </div>
+      ) : null}
+
+      {/* A seleção é submetida via hidden inputs para não depender dos
+          checkboxes visíveis (a busca desmonta os que não correspondem). */}
+      {selected.map((id) => (
+        <input key={id} type="hidden" name={inputName} value={id} />
+      ))}
 
       <div className="dashboard-row min-w-0 rounded-[1.35rem] border p-2">
         <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
@@ -63,7 +109,6 @@ export function CampaignMultiSelect({
                 >
                   <input
                     type="checkbox"
-                    name={inputName}
                     value={campaign.id}
                     checked={checked}
                     onChange={() => toggleCampaign(campaign.id)}

@@ -14,6 +14,14 @@ import {
 import { ptBR } from "date-fns/locale";
 import { PerformancePoint, RawCampaignMetric } from "@/lib/types";
 
+// Range custom padrão exibido nos seletores de período (últimos 7 dias reais).
+export function getDefaultCustomRange(now = new Date()) {
+  return {
+    start: format(subDays(startOfDay(now), 6), "yyyy-MM-dd"),
+    end: format(startOfDay(now), "yyyy-MM-dd"),
+  };
+}
+
 export type DashboardPeriodValue =
   | "Hoje"
   | "Ontem"

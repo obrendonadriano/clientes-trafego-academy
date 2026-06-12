@@ -41,6 +41,14 @@ function formatMultiplier(value: number) {
   return `${value.toFixed(2).replace(".", ",")}x`;
 }
 
+function FieldError({ message }: { message?: string }) {
+  if (!message) {
+    return null;
+  }
+
+  return <p className="text-xs text-destructive">{message}</p>;
+}
+
 export function AdminClientProfilePage({
   client,
   linkedUser,
@@ -188,8 +196,11 @@ export function AdminClientProfilePage({
                       id="username"
                       name="username"
                       defaultValue={linkedUser?.username ?? ""}
+                      autoCapitalize="none"
+                      autoCorrect="off"
                       required
                     />
+                    <FieldError message={updateState.fieldErrors?.username} />
                   </div>
                 </div>
 
@@ -203,6 +214,7 @@ export function AdminClientProfilePage({
                       defaultValue={linkedUser?.email ?? ""}
                       required
                     />
+                    <FieldError message={updateState.fieldErrors?.email} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="password">
@@ -235,6 +247,7 @@ export function AdminClientProfilePage({
                 <CampaignMultiSelect
                   campaigns={allCampaigns}
                   selectedIds={selectedCampaignIds}
+                  showSelectionSummary
                 />
               </div>
 

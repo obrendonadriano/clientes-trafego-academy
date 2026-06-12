@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { Copy, MessageCircleMore, Sparkles } from "lucide-react";
 import {
   generateAiReportAction,
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { FormPendingButton } from "@/components/ui/form-pending-button";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { getDefaultCustomRange } from "@/lib/dashboard-metrics";
 import { generateWhatsappLink } from "@/lib/whatsapp";
 import type {
   CampaignWithMetrics,
@@ -36,6 +38,37 @@ type AiReportPanelProps = {
 
 const initialState: GenerateReportState = {};
 
+// Textarea com shimmer durante a geração — precisa estar dentro do form para
+// ler useFormStatus, por isso é um componente separado.
+function ReportTextarea({
+  text,
+  onChange,
+}: {
+  text: string;
+  onChange: (value: string) => void;
+}) {
+  const { pending } = useFormStatus();
+
+  return (
+    <div className="relative">
+      <Textarea
+        className="min-h-[240px]"
+        value={text}
+        disabled={pending}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {pending ? (
+        <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-background/70 backdrop-blur-[2px]">
+          <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <Sparkles className="size-4 animate-pulse text-primary" />
+            Gerando análise…
+          </span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function AiReportPanel({
   initialText,
   initialWhatsapp,
@@ -50,10 +83,7 @@ export function AiReportPanel({
   const [selectedClientId, setSelectedClientId] = useState(clients[0]?.id ?? "");
   const [period, setPeriod] = useState<PeriodFilterValue>("Últimos 30 dias");
   const [comparePrevious, setComparePrevious] = useState(false);
-  const [customRange, setCustomRange] = useState({
-    start: "2026-04-01",
-    end: "2026-04-08",
-  });
+  const [customRange, setCustomRange] = useState(() => getDefaultCustomRange());
 
   const availableCampaigns = useMemo(() => {
     if (!selectedClientId) {
@@ -78,6 +108,48 @@ export function AiReportPanel({
         permissionCampaignIds.has(campaign.id),
     );
   }, [campaigns, clientUsers, permissions, selectedClientId]);
+
+  // Seleção real de campanhas (controlada): começa com todas do cliente e é
+  // redefinida quando o cliente muda.
+  const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(() =>
+    availableCampaigns.map((campaign) => campaign.id),
+  );
+
+  function handleClientChange(clientId: string) {
+    setSelectedClientId(clientId);
+    setDraftText(null);
+
+    const linkedUser = clientUsers.find(
+      (user) => user.role === "client" && user.clientId === clientId,
+    );
+    const permissionCampaignIds = linkedUser
+      ? new Set(
+          permissions
+            .filter((permission) => permission.userId === linkedUser.id)
+            .map((permission) => permission.campaignId),
+        )
+      : new Set<string>();
+
+    setSelectedCampaignIds(
+      campaigns
+        .filter(
+          (campaign) =>
+            campaign.clientId === clientId || permissionCampaignIds.has(campaign.id),
+        )
+        .map((campaign) => campaign.id),
+    );
+  }
+
+  // Quando uma nova análise chega do servidor, descarta o rascunho local para
+  // exibir o texto recém-gerado (padrão de estado derivado durante o render).
+  const [lastServerText, setLastServerText] = useState(state.text);
+  if (state.text !== lastServerText) {
+    setLastServerText(state.text);
+    if (state.text) {
+      setDraftText(null);
+    }
+  }
+
   const selectedClient = clients.find((client) => client.id === selectedClientId);
   const text = draftText ?? state.text ?? initialText;
   const whatsapp = state.whatsapp ?? selectedClient?.whatsapp ?? initialWhatsapp;
@@ -108,10 +180,7 @@ export function AiReportPanel({
               <Select
                 name="clientId"
                 value={selectedClientId}
-                onChange={(event) => {
-                  setSelectedClientId(event.target.value);
-                  setDraftText(null);
-                }}
+                onChange={(event) => handleClientChange(event.target.value)}
               >
                 <option value="" disabled>
                   Selecione um cliente
@@ -130,9 +199,10 @@ export function AiReportPanel({
             <p className="text-sm font-medium text-foreground">Campanhas</p>
             {availableCampaigns.length > 0 ? (
               <CampaignMultiSelect
-                key={selectedClientId || "all-campaigns"}
                 campaigns={availableCampaigns}
-                selectedIds={availableCampaigns.map((campaign) => campaign.id)}
+                value={selectedCampaignIds}
+                onChange={setSelectedCampaignIds}
+                showSelectionSummary
               />
             ) : (
               <div className="rounded-2xl border border-dashed border-border/60 px-4 py-3 text-sm text-muted-foreground">
@@ -165,45 +235,41 @@ export function AiReportPanel({
               {state.success}
             </p>
           ) : null}
+
+          <ReportTextarea text={text} onChange={setDraftText} />
+
+          <div className="flex flex-wrap gap-3">
+            <FormPendingButton
+              type="submit"
+              variant="outline"
+              className="gap-2 rounded-full"
+              disabled={selectedCampaignIds.length === 0}
+              idleLabel="Gerar mensagem"
+              pendingLabel="Gerando mensagem..."
+            >
+              <Sparkles className="size-4" />
+              Gerar mensagem
+            </FormPendingButton>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2 rounded-full"
+              onClick={() => navigator.clipboard.writeText(text)}
+            >
+              <Copy className="size-4" />
+              Copiar mensagem
+            </Button>
+            <a
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+              href={whatsappLink}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <MessageCircleMore className="size-4" />
+              Abrir no WhatsApp
+            </a>
+          </div>
         </form>
-
-        <Textarea
-          className="min-h-[240px]"
-          value={text}
-          onChange={(event) => setDraftText(event.target.value)}
-        />
-
-        <div className="flex flex-wrap gap-3">
-          <FormPendingButton
-            type="submit"
-            form="generate-ai-report-form"
-            variant="outline"
-            className="gap-2 rounded-full"
-            idleLabel="Gerar mensagem"
-            pendingLabel="Gerando mensagem..."
-          >
-            <Sparkles className="size-4" />
-            Gerar mensagem
-          </FormPendingButton>
-          <Button
-            type="button"
-            variant="outline"
-            className="gap-2 rounded-full"
-            onClick={() => navigator.clipboard.writeText(text)}
-          >
-            <Copy className="size-4" />
-            Copiar mensagem
-          </Button>
-          <a
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-            href={whatsappLink}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <MessageCircleMore className="size-4" />
-            Abrir no WhatsApp
-          </a>
-        </div>
 
         {latestReport ? (
           <div className="rounded-2xl border border-border/60 bg-card px-4 py-3 text-sm text-muted-foreground">
@@ -213,7 +279,11 @@ export function AiReportPanel({
             </strong>{" "}
             • {latestReport.periodLabel}
           </div>
-        ) : null}
+        ) : (
+          <div className="rounded-2xl border border-dashed border-border/60 px-4 py-3 text-sm text-muted-foreground">
+            Nenhum relatório gerado ainda. A primeira análise aparecerá aqui.
+          </div>
+        )}
       </div>
     </div>
   );

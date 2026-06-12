@@ -2,18 +2,144 @@ import { getIntegrationSettingByProvider } from "@/lib/integrations";
 
 const META_GRAPH_VERSION = "v22.0";
 
+// Token inválido/expirado (Graph API code 190). Exige reconectar o OAuth.
+export class MetaTokenExpiredError extends Error {
+  constructor(message?: string) {
+    super(
+      message ??
+        "O token de acesso da Meta expirou ou foi revogado. Reconecte a Meta Ads em Configurações.",
+    );
+    this.name = "MetaTokenExpiredError";
+  }
+}
+
+// Limite de requisições da Graph API atingido (codes 4/17/32/613, subcode 80004).
+export class MetaRateLimitError extends Error {
+  constructor(message?: string) {
+    super(
+      message ??
+        "A Meta limitou as requisições temporariamente. A sincronização tentará novamente na próxima execução.",
+    );
+    this.name = "MetaRateLimitError";
+  }
+}
+
+type MetaGraphError = {
+  error?: {
+    message?: string;
+    type?: string;
+    code?: number;
+    error_subcode?: number;
+  };
+};
+
+const META_RATE_LIMIT_CODES = new Set([4, 17, 32, 613]);
+const META_RATE_LIMIT_RETRY_DELAY_MS = 15_000;
+
+function throwForMetaError(status: number, body: MetaGraphError): never {
+  const code = body.error?.code;
+  const subcode = body.error?.error_subcode;
+
+  if (code === 190) {
+    throw new MetaTokenExpiredError();
+  }
+
+  if ((code !== undefined && META_RATE_LIMIT_CODES.has(code)) || subcode === 80004) {
+    throw new MetaRateLimitError();
+  }
+
+  throw new Error(
+    body.error?.message
+      ? `A Meta retornou um erro: ${body.error.message}`
+      : `Falha ao buscar dados da Meta Ads (HTTP ${status}).`,
+  );
+}
+
+// Lê os headers de uso da Graph API; retorna true se algum indicador de
+// consumo estiver perto do limite (>= 95%).
+function isMetaUsageNearLimit(response: Response) {
+  for (const headerName of ["x-business-use-case-usage", "x-ad-account-usage", "x-app-usage"]) {
+    const raw = response.headers.get(headerName);
+
+    if (!raw) {
+      continue;
+    }
+
+    try {
+      const usage = JSON.parse(raw) as unknown;
+      const values: number[] = [];
+
+      const collect = (node: unknown) => {
+        if (typeof node === "number") {
+          values.push(node);
+        } else if (Array.isArray(node)) {
+          node.forEach(collect);
+        } else if (node && typeof node === "object") {
+          for (const [key, value] of Object.entries(node)) {
+            if (/util_pct|cpu_time|total_time|call_count/.test(key) && typeof value === "number") {
+              values.push(value);
+            } else {
+              collect(value);
+            }
+          }
+        }
+      };
+
+      collect(usage);
+
+      if (values.some((value) => value >= 95)) {
+        return true;
+      }
+    } catch {
+      // Header de uso ilegível não deve derrubar a sincronização.
+    }
+  }
+
+  return false;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchMetaPage(url: string) {
+  const response = await fetch(url, {
+    method: "GET",
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    let body: MetaGraphError = {};
+
+    try {
+      body = (await response.json()) as MetaGraphError;
+    } catch {
+      // Corpo não-JSON: segue para o erro genérico.
+    }
+
+    throwForMetaError(response.status, body);
+  }
+
+  return response;
+}
+
 async function fetchMetaPaginated<T>(url: string) {
   const allData: T[] = [];
   let nextUrl: string | null = url;
 
   while (nextUrl) {
-    const response = await fetch(nextUrl, {
-      method: "GET",
-      cache: "no-store",
-    });
+    let response: Response;
 
-    if (!response.ok) {
-      throw new Error("Falha ao buscar dados paginados da Meta Ads.");
+    try {
+      response = await fetchMetaPage(nextUrl);
+    } catch (error) {
+      // Uma única retentativa com backoff quando a Meta limita as chamadas.
+      if (error instanceof MetaRateLimitError) {
+        await sleep(META_RATE_LIMIT_RETRY_DELAY_MS);
+        response = await fetchMetaPage(nextUrl);
+      } else {
+        throw error;
+      }
     }
 
     const payload = (await response.json()) as {
@@ -25,6 +151,15 @@ async function fetchMetaPaginated<T>(url: string) {
 
     allData.push(...(payload.data ?? []));
     nextUrl = payload.paging?.next ?? null;
+
+    // Perto do limite de uso, interrompe a paginação para não estourar o
+    // rate limit — a próxima sincronização completa o restante.
+    if (nextUrl && isMetaUsageNearLimit(response)) {
+      console.warn(
+        "Meta Ads: uso da API próximo do limite; paginação interrompida nesta execução.",
+      );
+      break;
+    }
   }
 
   return allData;

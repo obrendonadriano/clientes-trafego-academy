@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { importMetaCampaigns, runMetaSync } from "@/lib/sync/meta-sync";
 
 export type CampaignImportState = {
@@ -17,6 +17,7 @@ export async function importMetaCampaignsAction(
 
   try {
     const count = await importMetaCampaigns();
+    updateTag("campaigns");
     revalidatePath("/admin/campanhas");
     revalidatePath("/admin/clientes");
     return { success: `${count} campanha(s) importada(s) da Meta Ads.` };

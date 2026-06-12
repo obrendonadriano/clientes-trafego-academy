@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
-import { DashboardShell } from "@/components/dashboard/shell";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import {
   PeriodFilter,
@@ -15,6 +14,7 @@ import {
   filterMetricsByRange,
   formatPeriodLabel,
   getDateRangeForPeriod,
+  getDefaultCustomRange,
   getPreferredLeadCount,
   getPreferredResultCount,
   getPreferredResultLabelForCampaignName,
@@ -27,7 +27,6 @@ import {
   RawCampaignMetric,
   ReportHistoryItem,
   SyncStatus,
-  User,
 } from "@/lib/types";
 
 const PerformanceChart = dynamic(
@@ -45,8 +44,22 @@ const PerformanceChart = dynamic(
   },
 );
 
+const ComparisonChart = dynamic(
+  () =>
+    import("@/components/dashboard/comparison-chart").then(
+      (module) => module.ComparisonChart,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="dashboard-card rounded-[1.5rem] border p-4">
+        <div className="h-[260px] animate-pulse rounded-[1.25rem] bg-muted/70 dark:bg-white/[0.08]" />
+      </div>
+    ),
+  },
+);
+
 type ClientDashboardProps = {
-  user: User;
   campaigns: CampaignWithMetrics[];
   metricRows: RawCampaignMetric[];
   reports: ReportHistoryItem[];
@@ -83,7 +96,6 @@ function formatDateTime(value?: string | null) {
 }
 
 export function ClientDashboard({
-  user,
   campaigns,
   metricRows,
   reports,
@@ -91,10 +103,7 @@ export function ClientDashboard({
 }: ClientDashboardProps) {
   const [period, setPeriod] = useState<PeriodFilterValue>("Últimos 30 dias");
   const [comparePrevious, setComparePrevious] = useState(true);
-  const [customRange, setCustomRange] = useState({
-    start: "2026-04-01",
-    end: "2026-04-08",
-  });
+  const [customRange, setCustomRange] = useState(() => getDefaultCustomRange());
 
   const selected = useMemo(() => {
     const referenceDate = getReferenceNowForPeriod(metricRows, period, customRange);
@@ -147,6 +156,7 @@ export function ClientDashboard({
 
     return {
       totals,
+      previousTotals,
       hasData: currentRows.length > 0,
       periodLabel: formatPeriodLabel(period, customRange, referenceDate),
       chartData: buildPerformanceSeries(metricRows, period, customRange, referenceDate),
@@ -161,12 +171,7 @@ export function ClientDashboard({
   }, [campaigns, comparePrevious, customRange, metricRows, period]);
 
   return (
-    <DashboardShell
-      user={user}
-      title={`Resultados de ${user.clientName}`}
-      subtitle="Visualização simples, profissional e restrita às campanhas liberadas para este cliente."
-    >
-      <div className="space-y-6">
+    <div className="space-y-6">
         <div id="visao-geral" className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between scroll-mt-8">
           <PeriodFilter
             active={period}
@@ -206,6 +211,14 @@ export function ClientDashboard({
             positive={selected.cplChange <= 0}
           />
         </div>
+
+        {comparePrevious ? (
+          <ComparisonChart
+            current={selected.totals}
+            previous={selected.previousTotals}
+            periodLabel={selected.periodLabel}
+          />
+        ) : null}
 
         <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
           <PerformanceChart
@@ -274,7 +287,6 @@ export function ClientDashboard({
             </CardContent>
           </Card>
         </div>
-      </div>
-    </DashboardShell>
+    </div>
   );
 }

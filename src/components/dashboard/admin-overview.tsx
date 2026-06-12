@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import {
   PeriodFilter,
@@ -14,6 +15,7 @@ import {
   filterMetricsByRange,
   formatPeriodLabel,
   getDateRangeForPeriod,
+  getDefaultCustomRange,
   getReferenceNowForPeriod,
   getPreviousDateRange,
   summarizeMetrics,
@@ -30,6 +32,21 @@ const PerformanceChart = dynamic(
     loading: () => (
       <div className="dashboard-card rounded-[1.5rem] border p-4">
         <div className="h-[280px] animate-pulse rounded-[1.25rem] bg-muted/70 dark:bg-white/[0.08]" />
+      </div>
+    ),
+  },
+);
+
+const ComparisonChart = dynamic(
+  () =>
+    import("@/components/dashboard/comparison-chart").then(
+      (module) => module.ComparisonChart,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="dashboard-card rounded-[1.5rem] border p-4">
+        <div className="h-[260px] animate-pulse rounded-[1.25rem] bg-muted/70 dark:bg-white/[0.08]" />
       </div>
     ),
   },
@@ -75,12 +92,24 @@ export function AdminOverview({
   activeCampaignCount,
   metricRows,
 }: AdminOverviewProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [, startTransition] = useTransition();
   const [period, setPeriod] = useState<PeriodFilterValue>("Últimos 30 dias");
   const [comparePrevious, setComparePrevious] = useState(true);
-  const [customRange, setCustomRange] = useState({
-    start: "2026-04-01",
-    end: "2026-04-08",
-  });
+  const [customRange, setCustomRange] = useState(() => getDefaultCustomRange());
+
+  // Range custom pode ir além da janela padrão carregada (92 dias): sincroniza
+  // a URL para o servidor refazer a busca com o período completo.
+  function handleApplyCustomRange() {
+    setPeriod("Personalizado");
+    startTransition(() => {
+      router.replace(
+        `${pathname}?start=${customRange.start}&end=${customRange.end}`,
+        { scroll: false },
+      );
+    });
+  }
 
   const selected = useMemo(() => {
     const referenceDate = getReferenceNowForPeriod(metricRows, period, customRange);
@@ -99,6 +128,8 @@ export function AdminOverview({
       periodLabel,
       hasData: currentRows.length > 0,
       totals,
+      previousTotals,
+      hasPreviousData: previousRows.length > 0,
       cards: [
         {
           label: "Investimento total",
@@ -148,7 +179,7 @@ export function AdminOverview({
         onComparePreviousChange={setComparePrevious}
         customRange={customRange}
         onCustomRangeChange={setCustomRange}
-        onApplyCustomRange={() => setPeriod("Personalizado")}
+        onApplyCustomRange={handleApplyCustomRange}
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -162,6 +193,14 @@ export function AdminOverview({
           />
         ))}
       </div>
+
+      {comparePrevious ? (
+        <ComparisonChart
+          current={selected.totals}
+          previous={selected.previousTotals}
+          periodLabel={selected.periodLabel}
+        />
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
         <PerformanceChart

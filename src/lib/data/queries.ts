@@ -1,18 +1,33 @@
+import { unstable_cache } from "next/cache";
 import { format, parseISO } from "date-fns";
 import { getMockSnapshot } from "@/lib/mock-data";
+import { isSupabaseAdminConfigured } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getMetaSyncStatus } from "@/lib/sync/meta-sync";
 import {
-  AppDataSnapshot,
+  clampMetricsWindowForRole,
+  type MetricsWindow,
+} from "@/lib/data/date-range";
+import {
   CampaignWithMetrics,
   Client,
   IntegrationSetting,
   RawCampaignMetric,
+  ReportHistoryItem,
   SyncStatus,
   User,
 } from "@/lib/types";
-import { getReportHistory } from "@/lib/mock-data";
 import { getSupabasePublishableKey, getSupabaseUrl } from "@/lib/supabase/env";
+
+export const CACHE_TAGS = {
+  users: "users",
+  clients: "clients",
+  campaigns: "campaigns",
+  permissions: "permissions",
+  metrics: "metrics",
+  reports: "reports",
+  sync: "sync",
+} as const;
 
 type DbUserRow = {
   id: string;
@@ -95,6 +110,26 @@ type DbReportRow = {
   }> | null;
 };
 
+type DbSyncStatusRow = {
+  provider: "meta_ads" | "gemini" | "supabase";
+  interval_minutes: number;
+  status: SyncStatus["status"];
+  last_attempt_at: string | null;
+  last_success_at: string | null;
+  next_run_at: string | null;
+  message: string | null;
+};
+
+// Campanha sem métricas agregadas — forma serializável usada pelo cache.
+export type CampaignBase = {
+  id: string;
+  name: string;
+  status: "Ativa" | "Pausada";
+  platform: string;
+  clientId: string | null;
+  clientName?: string;
+};
+
 function formatReportPeriodLabel(periodStart: string | null, periodEnd: string | null) {
   if (!periodStart || !periodEnd) {
     return "Período não informado";
@@ -106,16 +141,6 @@ function formatReportPeriodLabel(periodStart: string | null, periodEnd: string |
     return "Período não informado";
   }
 }
-
-type DbSyncStatusRow = {
-  provider: "meta_ads" | "gemini" | "supabase";
-  interval_minutes: number;
-  status: SyncStatus["status"];
-  last_attempt_at: string | null;
-  last_success_at: string | null;
-  next_run_at: string | null;
-  message: string | null;
-};
 
 function toNumber(value: number | string | null | undefined) {
   return Number(value ?? 0);
@@ -144,41 +169,6 @@ function mapUser(row: DbUserRow): User {
   };
 }
 
-type AdminClient = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
-
-async function fetchAllMetricRows(adminClient: AdminClient) {
-  const pageSize = 1000;
-  const rows: DbMetricRow[] = [];
-  let from = 0;
-
-  while (true) {
-    const { data, error } = await adminClient
-      .from("campaign_metrics")
-      .select(
-        "campaign_id, date, granularity, hour_bucket, hour_label, amount_spent, reach, impressions, clicks, ctr, result_count, result_label, cpc, cpm, leads, cost_per_lead, roi, roas, frequency",
-      )
-      .order("date", { ascending: true })
-      .order("campaign_id", { ascending: true })
-      .order("hour_bucket", { ascending: true, nullsFirst: true })
-      .range(from, from + pageSize - 1);
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    const batch = (data as DbMetricRow[] | null) ?? [];
-    rows.push(...batch);
-
-    if (batch.length < pageSize) {
-      break;
-    }
-
-    from += pageSize;
-  }
-
-  return rows;
-}
-
 function mapClient(row: DbClientRow): Client {
   return {
     id: row.id,
@@ -187,6 +177,33 @@ function mapClient(row: DbClientRow): Client {
     whatsapp: row.whatsapp ?? "",
     notes: row.observacoes ?? "",
     active: row.ativo,
+  };
+}
+
+function mapCampaignBase(row: DbCampaignRow): CampaignBase {
+  return {
+    id: row.id,
+    name: row.nome,
+    status: row.status === "Ativa" ? "Ativa" : "Pausada",
+    platform: row.plataforma,
+    clientId: row.client_id,
+    clientName: row.clients?.[0]?.nome_empresa,
+  };
+}
+
+function mapReport(row: DbReportRow): ReportHistoryItem {
+  return {
+    id: row.id,
+    clientId: row.client_id ?? undefined,
+    clientName: row.clients?.[0]?.nome_empresa ?? "Cliente removido",
+    whatsapp: row.clients?.[0]?.whatsapp ?? "",
+    periodLabel: formatReportPeriodLabel(row.period_start, row.period_end),
+    preview:
+      row.generated_text.length > 160
+        ? `${row.generated_text.slice(0, 160)}…`
+        : row.generated_text,
+    generatedText: row.generated_text,
+    createdAt: row.created_at,
   };
 }
 
@@ -221,7 +238,24 @@ function mapMetricRow(row: DbMetricRow): RawCampaignMetric {
   };
 }
 
-function aggregateMetrics(rows: RawCampaignMetric[]): DbMetricRow | undefined {
+type AggregatedMetric = {
+  amount_spent: number;
+  reach: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  result_count: number;
+  result_label: string;
+  cpc: number;
+  cpm: number;
+  leads: number;
+  cost_per_lead: number;
+  roi: number;
+  roas: number;
+  frequency: number;
+};
+
+function aggregateMetrics(rows: RawCampaignMetric[]): AggregatedMetric | undefined {
   if (rows.length === 0) {
     return undefined;
   }
@@ -268,13 +302,6 @@ function aggregateMetrics(rows: RawCampaignMetric[]): DbMetricRow | undefined {
   );
 
   return {
-    campaign_id: normalizedRows[0].campaignId,
-    date:
-      normalizedRows[normalizedRows.length - 1]?.date ??
-      normalizedRows[0].date,
-    granularity: "day",
-    hour_bucket: -1,
-    hour_label: "",
     amount_spent: totals.amount_spent,
     reach: totals.reach,
     impressions: totals.impressions,
@@ -299,17 +326,12 @@ function aggregateMetrics(rows: RawCampaignMetric[]): DbMetricRow | undefined {
   };
 }
 
-function mapCampaign(
-  row: DbCampaignRow,
-  metric?: DbMetricRow,
+function toCampaignWithMetrics(
+  base: CampaignBase,
+  metric?: AggregatedMetric,
 ): CampaignWithMetrics {
   return {
-    id: row.id,
-    name: row.nome,
-    status: row.status === "Ativa" ? "Ativa" : "Pausada",
-    platform: row.plataforma,
-    clientId: row.client_id,
-    clientName: row.clients?.[0]?.nome_empresa,
+    ...base,
     metrics: {
       amountSpent: formatCurrency(metric?.amount_spent ?? 0),
       reach: String(metric?.reach ?? 0),
@@ -330,176 +352,519 @@ function mapCampaign(
   };
 }
 
-export async function getAppSnapshot(): Promise<AppDataSnapshot> {
+function withWindowMetrics(
+  bases: CampaignBase[],
+  metricRows: RawCampaignMetric[],
+): CampaignWithMetrics[] {
+  const rowsByCampaign = new Map<string, RawCampaignMetric[]>();
+
+  for (const row of metricRows) {
+    const items = rowsByCampaign.get(row.campaignId) ?? [];
+    items.push(row);
+    rowsByCampaign.set(row.campaignId, items);
+  }
+
+  return bases.map((base) =>
+    toCampaignWithMetrics(base, aggregateMetrics(rowsByCampaign.get(base.id) ?? [])),
+  );
+}
+
+function requireAdminClient() {
   const adminClient = createSupabaseAdminClient();
 
   if (!adminClient) {
-    return getMockSnapshot();
+    throw new Error("Supabase service role não configurado.");
   }
 
-  const [usersResult, clientsResult, campaignsResult, permissionsResult, metricRowsFromDb, reportsResult, syncStatusResult] =
-    await Promise.all([
-      adminClient
-        .from("users")
-        .select("id, auth_user_id, nome, username, email, role, whatsapp, ativo, client_id, clients(nome_empresa)")
-        .order("created_at", { ascending: true }),
-      adminClient
-        .from("clients")
-        .select("id, nome_empresa, responsavel, whatsapp, observacoes, ativo")
-        .order("created_at", { ascending: true }),
-      adminClient
-        .from("campaigns")
-        .select("id, nome, status, plataforma, client_id, clients(nome_empresa)")
-        .order("created_at", { ascending: true }),
-      adminClient
-        .from("user_campaign_permissions")
-        .select("user_id, campaign_id"),
-      fetchAllMetricRows(adminClient),
-      adminClient
-        .from("ai_reports")
-        .select("id, client_id, period_start, period_end, generated_text, created_at, clients(nome_empresa, whatsapp)")
-        .order("created_at", { ascending: false }),
-      adminClient
-        .from("sync_statuses")
-        .select("provider, interval_minutes, status, last_attempt_at, last_success_at, next_run_at, message"),
-    ]);
+  return adminClient;
+}
 
-  if (usersResult.error || clientsResult.error || campaignsResult.error || permissionsResult.error || reportsResult.error) {
-    throw new Error(
-      usersResult.error?.message ||
-        clientsResult.error?.message ||
-        campaignsResult.error?.message ||
-        permissionsResult.error?.message ||
-        reportsResult.error?.message ||
-        "Falha ao carregar os dados do Supabase.",
-    );
-  }
+// ---------------------------------------------------------------------------
+// Primitivas cacheadas (unstable_cache + tags). Nada aqui pode ler cookies.
+// As actions e o sync invalidam via revalidateTag(CACHE_TAGS.*).
+// ---------------------------------------------------------------------------
 
-  const metricRows = metricRowsFromDb.map(mapMetricRow);
-  const metricRowsByCampaign = new Map<string, RawCampaignMetric[]>();
+const fetchUsersCached = unstable_cache(
+  async () => {
+    const { data, error } = await requireAdminClient()
+      .from("users")
+      .select(
+        "id, auth_user_id, nome, username, email, role, whatsapp, ativo, client_id, clients(nome_empresa)",
+      )
+      .order("created_at", { ascending: true });
 
-  for (const row of metricRows) {
-    const items = metricRowsByCampaign.get(row.campaignId) ?? [];
-    items.push(row);
-    metricRowsByCampaign.set(row.campaignId, items);
-  }
+    if (error) {
+      throw new Error(error.message);
+    }
 
-  const syncStatuses =
-    syncStatusResult.error || !syncStatusResult.data
-      ? [await getMetaSyncStatus()]
-      : (syncStatusResult.data as DbSyncStatusRow[]).map((row) => ({
-          provider: row.provider,
-          intervalMinutes: row.interval_minutes,
-          status: row.status,
-          lastAttemptAt: row.last_attempt_at,
-          lastSuccessAt: row.last_success_at,
-          nextRunAt: row.next_run_at,
-          message: row.message,
-        }));
+    return ((data as DbUserRow[] | null) ?? []).map(mapUser);
+  },
+  ["users"],
+  { tags: [CACHE_TAGS.users], revalidate: 300 },
+);
 
-  return {
-    users: (usersResult.data as DbUserRow[]).map(mapUser),
-    clients: (clientsResult.data as DbClientRow[]).map(mapClient),
-    campaigns: (campaignsResult.data as DbCampaignRow[]).map((row) =>
-      mapCampaign(row, aggregateMetrics(metricRowsByCampaign.get(row.id) ?? [])),
-    ),
-    permissions: (permissionsResult.data as DbPermissionRow[]).map((item) => ({
+const fetchClientsCached = unstable_cache(
+  async () => {
+    const { data, error } = await requireAdminClient()
+      .from("clients")
+      .select("id, nome_empresa, responsavel, whatsapp, observacoes, ativo")
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return ((data as DbClientRow[] | null) ?? []).map(mapClient);
+  },
+  ["clients"],
+  { tags: [CACHE_TAGS.clients], revalidate: 300 },
+);
+
+const fetchCampaignBasesCached = unstable_cache(
+  async () => {
+    const { data, error } = await requireAdminClient()
+      .from("campaigns")
+      .select("id, nome, status, plataforma, client_id, clients(nome_empresa)")
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return ((data as DbCampaignRow[] | null) ?? []).map(mapCampaignBase);
+  },
+  ["campaigns"],
+  { tags: [CACHE_TAGS.campaigns], revalidate: 300 },
+);
+
+const fetchPermissionsCached = unstable_cache(
+  async () => {
+    const { data, error } = await requireAdminClient()
+      .from("user_campaign_permissions")
+      .select("user_id, campaign_id");
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return ((data as DbPermissionRow[] | null) ?? []).map((item) => ({
       userId: item.user_id,
       campaignId: item.campaign_id,
-    })),
-    reports:
-      (reportsResult.data as DbReportRow[]).length > 0
-        ? (reportsResult.data as DbReportRow[]).slice(0, 10).map((report) => ({
-            id: report.id,
-            clientId: report.client_id ?? undefined,
-            clientName: report.clients?.[0]?.nome_empresa ?? "Cliente removido",
-            whatsapp: report.clients?.[0]?.whatsapp ?? "",
-            periodLabel: formatReportPeriodLabel(report.period_start, report.period_end),
-            preview: report.generated_text.slice(0, 160),
-            generatedText: report.generated_text,
-            createdAt: report.created_at,
-          }))
-        : getMockSnapshot().reports,
-    metricRows,
-    syncStatuses,
-  };
+    }));
+  },
+  ["permissions"],
+  { tags: [CACHE_TAGS.permissions], revalidate: 300 },
+);
+
+// Janela de métricas filtrada NO BANCO por data (e opcionalmente campanhas).
+// campaignIds deve vir ordenado para chave de cache estável.
+const fetchMetricsWindowCached = unstable_cache(
+  async (startDate: string, endDate: string, campaignIds: string[] | null) => {
+    const adminClient = requireAdminClient();
+    const pageSize = 1000;
+    const rows: DbMetricRow[] = [];
+    let from = 0;
+
+    while (true) {
+      let query = adminClient
+        .from("campaign_metrics")
+        .select(
+          "campaign_id, date, granularity, hour_bucket, hour_label, amount_spent, reach, impressions, clicks, ctr, result_count, result_label, cpc, cpm, leads, cost_per_lead, roi, roas, frequency",
+        )
+        .gte("date", startDate)
+        .lte("date", endDate);
+
+      if (campaignIds) {
+        query = query.in("campaign_id", campaignIds);
+      }
+
+      const { data, error } = await query
+        .order("date", { ascending: true })
+        .order("campaign_id", { ascending: true })
+        .order("hour_bucket", { ascending: true, nullsFirst: true })
+        .range(from, from + pageSize - 1);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const batch = (data as DbMetricRow[] | null) ?? [];
+      rows.push(...batch);
+
+      if (batch.length < pageSize) {
+        break;
+      }
+
+      from += pageSize;
+    }
+
+    return rows.map(mapMetricRow);
+  },
+  ["metrics-window"],
+  { tags: [CACHE_TAGS.metrics], revalidate: 300 },
+);
+
+const fetchReportsCached = unstable_cache(
+  async (clientId: string | null) => {
+    let query = requireAdminClient()
+      .from("ai_reports")
+      .select(
+        "id, client_id, period_start, period_end, generated_text, created_at, clients(nome_empresa, whatsapp)",
+      )
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (clientId) {
+      query = query.eq("client_id", clientId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return ((data as DbReportRow[] | null) ?? []).map(mapReport);
+  },
+  ["reports"],
+  { tags: [CACHE_TAGS.reports], revalidate: 300 },
+);
+
+const fetchSyncStatusesCached = unstable_cache(
+  async (): Promise<SyncStatus[]> => {
+    const { data, error } = await requireAdminClient()
+      .from("sync_statuses")
+      .select(
+        "provider, interval_minutes, status, last_attempt_at, last_success_at, next_run_at, message",
+      );
+
+    if (error || !data || data.length === 0) {
+      return [await getMetaSyncStatus()];
+    }
+
+    return (data as DbSyncStatusRow[]).map((row) => ({
+      provider: row.provider,
+      intervalMinutes: row.interval_minutes,
+      status: row.status,
+      lastAttemptAt: row.last_attempt_at,
+      lastSuccessAt: row.last_success_at,
+      nextRunAt: row.next_run_at,
+      message: row.message,
+    }));
+  },
+  ["sync-statuses"],
+  { tags: [CACHE_TAGS.sync], revalidate: 60 },
+);
+
+function fetchMetricsWindow(window: MetricsWindow, campaignIds?: string[]) {
+  if (campaignIds && campaignIds.length === 0) {
+    return Promise.resolve([] as RawCampaignMetric[]);
+  }
+
+  return fetchMetricsWindowCached(
+    window.startDate,
+    window.endDate,
+    campaignIds ? [...campaignIds].sort() : null,
+  );
 }
 
-export async function getClientUsers() {
-  const snapshot = await getAppSnapshot();
-  return snapshot.users.filter((user) => user.role === "client");
-}
+// ---------------------------------------------------------------------------
+// Funções por página
+// ---------------------------------------------------------------------------
 
-export async function getAdminViewData() {
-  const snapshot = await getAppSnapshot();
+export type AdminOverviewData = {
+  clientCount: number;
+  activeClientCount: number;
+  campaignCount: number;
+  activeCampaignCount: number;
+  clientUserCount: number;
+  permissionCount: number;
+  metricRows: RawCampaignMetric[];
+};
+
+export async function getAdminOverviewData(
+  window: MetricsWindow,
+): Promise<AdminOverviewData> {
+  if (!isSupabaseAdminConfigured()) {
+    const snapshot = getMockSnapshot();
+    return {
+      clientCount: snapshot.clients.length,
+      activeClientCount: snapshot.clients.filter((client) => client.active).length,
+      campaignCount: snapshot.campaigns.length,
+      activeCampaignCount: snapshot.campaigns.filter(
+        (campaign) => campaign.status === "Ativa",
+      ).length,
+      clientUserCount: snapshot.users.filter((user) => user.role === "client").length,
+      permissionCount: snapshot.permissions.length,
+      metricRows: snapshot.metricRows,
+    };
+  }
+
+  const [clients, campaigns, users, permissions, metricRows] = await Promise.all([
+    fetchClientsCached(),
+    fetchCampaignBasesCached(),
+    fetchUsersCached(),
+    fetchPermissionsCached(),
+    fetchMetricsWindow(window),
+  ]);
+
   return {
-    clients: snapshot.clients,
-    campaigns: snapshot.campaigns,
-    permissions: snapshot.permissions,
-    reports: snapshot.reports,
-    metricRows: snapshot.metricRows,
-    clientUsers: snapshot.users.filter((user) => user.role === "client"),
+    clientCount: clients.length,
+    activeClientCount: clients.filter((client) => client.active).length,
+    campaignCount: campaigns.length,
+    activeCampaignCount: campaigns.filter((campaign) => campaign.status === "Ativa")
+      .length,
+    clientUserCount: users.filter((user) => user.role === "client").length,
+    permissionCount: permissions.length,
+    metricRows,
   };
 }
 
-export async function getAdminClientProfileData(clientId: string) {
-  const snapshot = await getAppSnapshot();
-  const client = snapshot.clients.find((item) => item.id === clientId);
+export async function getAdminCampaignsData(window: MetricsWindow) {
+  if (!isSupabaseAdminConfigured()) {
+    const snapshot = getMockSnapshot();
+    return {
+      campaigns: snapshot.campaigns,
+      metricRows: snapshot.metricRows,
+    };
+  }
+
+  const [bases, metricRows] = await Promise.all([
+    fetchCampaignBasesCached(),
+    fetchMetricsWindow(window),
+  ]);
+
+  return {
+    campaigns: withWindowMetrics(bases, metricRows),
+    metricRows,
+  };
+}
+
+// A página de Clientes é só criar/editar: nenhuma métrica é carregada aqui.
+export async function getAdminClientsListData() {
+  if (!isSupabaseAdminConfigured()) {
+    const snapshot = getMockSnapshot();
+    return {
+      clients: snapshot.clients,
+      campaigns: snapshot.campaigns,
+      permissions: snapshot.permissions,
+      clientUsers: snapshot.users.filter((user) => user.role === "client"),
+    };
+  }
+
+  const [clients, bases, permissions, users] = await Promise.all([
+    fetchClientsCached(),
+    fetchCampaignBasesCached(),
+    fetchPermissionsCached(),
+    fetchUsersCached(),
+  ]);
+
+  return {
+    clients,
+    campaigns: bases.map((base) => toCampaignWithMetrics(base)),
+    permissions,
+    clientUsers: users.filter((user) => user.role === "client"),
+  };
+}
+
+export async function getAdminClientProfileData(
+  clientId: string,
+  window: MetricsWindow,
+) {
+  if (!isSupabaseAdminConfigured()) {
+    const snapshot = getMockSnapshot();
+    const client = snapshot.clients.find((item) => item.id === clientId);
+
+    if (!client) {
+      return null;
+    }
+
+    const linkedUser =
+      snapshot.users.find(
+        (user) => user.role === "client" && user.clientId === client.id,
+      ) ?? null;
+    const selectedCampaignIds = linkedUser
+      ? snapshot.permissions
+          .filter((permission) => permission.userId === linkedUser.id)
+          .map((permission) => permission.campaignId)
+      : [];
+
+    return {
+      client,
+      linkedUser,
+      selectedCampaignIds,
+      allowedCampaigns: snapshot.campaigns.filter((campaign) =>
+        selectedCampaignIds.includes(campaign.id),
+      ),
+      allCampaigns: snapshot.campaigns,
+      metricRows: snapshot.metricRows.filter((row) =>
+        selectedCampaignIds.includes(row.campaignId),
+      ),
+    };
+  }
+
+  const [clients, users, permissions, bases] = await Promise.all([
+    fetchClientsCached(),
+    fetchUsersCached(),
+    fetchPermissionsCached(),
+    fetchCampaignBasesCached(),
+  ]);
+
+  const client = clients.find((item) => item.id === clientId);
 
   if (!client) {
     return null;
   }
 
   const linkedUser =
-    snapshot.users.find(
-      (user) => user.role === "client" && user.clientId === client.id,
-    ) ?? null;
+    users.find((user) => user.role === "client" && user.clientId === client.id) ??
+    null;
 
   const selectedCampaignIds = linkedUser
-    ? snapshot.permissions
+    ? permissions
         .filter((permission) => permission.userId === linkedUser.id)
         .map((permission) => permission.campaignId)
     : [];
 
-  const allowedCampaigns = snapshot.campaigns.filter((campaign) =>
-    selectedCampaignIds.includes(campaign.id),
-  );
+  const metricRows = await fetchMetricsWindow(window, selectedCampaignIds);
+  const allCampaigns = withWindowMetrics(bases, metricRows);
 
   return {
     client,
     linkedUser,
     selectedCampaignIds,
-    allowedCampaigns,
-    allCampaigns: snapshot.campaigns,
-    metricRows: snapshot.metricRows.filter((row) =>
-      selectedCampaignIds.includes(row.campaignId),
+    allowedCampaigns: allCampaigns.filter((campaign) =>
+      selectedCampaignIds.includes(campaign.id),
     ),
+    allCampaigns,
+    metricRows,
   };
 }
 
-export async function getCampaignsVisibleToUser(userId: string) {
-  const snapshot = await getAppSnapshot();
-  const allowedIds = new Set(
-    snapshot.permissions
-      .filter((permission) => permission.userId === userId)
-      .map((permission) => permission.campaignId),
-  );
+export async function getClientPortalData(user: User, window: MetricsWindow) {
+  // Validação de backend: cliente nunca recebe mais que 3 meses,
+  // independentemente do que vier da UI ou da URL.
+  const safeWindow = clampMetricsWindowForRole(user.role, window);
 
-  return snapshot.campaigns.filter((campaign) => allowedIds.has(campaign.id));
-}
+  if (!isSupabaseAdminConfigured()) {
+    const snapshot = getMockSnapshot();
+    const allowedIds = new Set(
+      snapshot.permissions
+        .filter((permission) => permission.userId === user.id)
+        .map((permission) => permission.campaignId),
+    );
+    const campaigns = snapshot.campaigns.filter((campaign) =>
+      allowedIds.has(campaign.id),
+    );
 
-export async function getClientDashboardData(user: User) {
-  const snapshot = await getAppSnapshot();
-  const campaigns = await getCampaignsVisibleToUser(user.id);
-  const allowedIds = new Set(campaigns.map((campaign) => campaign.id));
+    return {
+      campaigns,
+      metricRows: snapshot.metricRows.filter((row) => allowedIds.has(row.campaignId)),
+      reports: snapshot.reports.filter(
+        (report) => !user.clientId || report.clientId === user.clientId,
+      ),
+      syncStatus:
+        snapshot.syncStatuses.find((status) => status.provider === "meta_ads") ??
+        null,
+    };
+  }
+
+  const [permissions, bases, syncStatuses, reports] = await Promise.all([
+    fetchPermissionsCached(),
+    fetchCampaignBasesCached(),
+    fetchSyncStatusesCached(),
+    user.clientId ? fetchReportsCached(user.clientId) : Promise.resolve([]),
+  ]);
+
+  const allowedIds = permissions
+    .filter((permission) => permission.userId === user.id)
+    .map((permission) => permission.campaignId);
+  const allowedIdSet = new Set(allowedIds);
+
+  const metricRows = await fetchMetricsWindow(safeWindow, allowedIds);
 
   return {
-    campaigns,
-    metricRows: snapshot.metricRows.filter((row) => allowedIds.has(row.campaignId)),
-    reports: getReportHistory(),
+    campaigns: withWindowMetrics(
+      bases.filter((base) => allowedIdSet.has(base.id)),
+      metricRows,
+    ),
+    metricRows,
+    reports,
     syncStatus:
-      snapshot.syncStatuses.find((status) => status.provider === "meta_ads") ??
-      null,
+      syncStatuses.find((status) => status.provider === "meta_ads") ?? null,
+  };
+}
+
+export async function getReportsPageData() {
+  if (!isSupabaseAdminConfigured()) {
+    const snapshot = getMockSnapshot();
+    return {
+      clients: snapshot.clients,
+      campaigns: snapshot.campaigns,
+      clientUsers: snapshot.users.filter((user) => user.role === "client"),
+      permissions: snapshot.permissions,
+      reports: snapshot.reports,
+    };
+  }
+
+  const [clients, bases, users, permissions, reports] = await Promise.all([
+    fetchClientsCached(),
+    fetchCampaignBasesCached(),
+    fetchUsersCached(),
+    fetchPermissionsCached(),
+    fetchReportsCached(null),
+  ]);
+
+  return {
+    clients,
+    // O painel de relatórios só precisa de nome/cliente das campanhas.
+    campaigns: bases.map((base) => toCampaignWithMetrics(base)),
+    clientUsers: users.filter((user) => user.role === "client"),
+    permissions,
+    reports,
+  };
+}
+
+// Dados para a action de geração de relatório IA: busca direcionada por
+// cliente/campanhas e métricas do range exato (filtrado no banco).
+export async function getReportGenerationData(input: {
+  clientId: string;
+  campaignIds: string[];
+  window: MetricsWindow;
+}) {
+  if (!isSupabaseAdminConfigured()) {
+    const snapshot = getMockSnapshot();
+    const client =
+      snapshot.clients.find((item) => item.id === input.clientId) ?? null;
+    const campaigns = snapshot.campaigns.filter((campaign) =>
+      input.campaignIds.includes(campaign.id),
+    );
+
+    return {
+      client,
+      campaigns,
+      metricRows: snapshot.metricRows.filter((row) =>
+        input.campaignIds.includes(row.campaignId),
+      ),
+    };
+  }
+
+  const [clients, bases] = await Promise.all([
+    fetchClientsCached(),
+    fetchCampaignBasesCached(),
+  ]);
+
+  const client = clients.find((item) => item.id === input.clientId) ?? null;
+  const campaigns = bases.filter((base) => input.campaignIds.includes(base.id));
+  const metricRows = await fetchMetricsWindow(
+    input.window,
+    campaigns.map((campaign) => campaign.id),
+  );
+
+  return {
+    client,
+    campaigns: campaigns.map((base) => toCampaignWithMetrics(base)),
+    metricRows,
   };
 }
 

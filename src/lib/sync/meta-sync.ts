@@ -1,18 +1,25 @@
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { fetchMetaCampaigns, fetchMetaInsights, getMetaAdsConfig } from "@/lib/meta-ads";
+import {
+  fetchMetaCampaigns,
+  fetchMetaInsights,
+  getMetaAdsConfig,
+  MetaRateLimitError,
+  MetaTokenExpiredError,
+} from "@/lib/meta-ads";
 import { IntegrationProvider, SyncStatus } from "@/lib/types";
 
 const META_SYNC_INTERVAL_MINUTES = 15;
 const META_PROVIDER: IntegrationProvider = "meta_ads";
 
+// Importante: client_id NÃO faz parte do payload de import — o upsert não
+// pode sobrescrever o vínculo com cliente feito manualmente pelo admin.
 type CampaignImportRow = {
   nome: string;
   status: string;
   plataforma: string;
   external_id: string;
   source: string;
-  client_id: null;
 };
 
 type MetricImportRow = {
@@ -264,6 +271,16 @@ async function persistSyncStatus(input: Omit<SyncStatusPayload, "provider" | "in
   await adminClient.from("sync_statuses").insert(payload);
 }
 
+function chunk<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+
+  return chunks;
+}
+
 async function upsertCampaignRows(rows: CampaignImportRow[]) {
   const adminClient = createSupabaseAdminClient();
 
@@ -271,20 +288,17 @@ async function upsertCampaignRows(rows: CampaignImportRow[]) {
     throw new Error("Supabase admin não configurado para importar campanhas.");
   }
 
-  for (const row of rows) {
-    const existing = await adminClient
+  if (rows.length === 0) {
+    return;
+  }
+
+  // Upsert em lote por external_id. Como client_id não está no payload, o
+  // ON CONFLICT só atualiza nome/status/plataforma/source e novas linhas
+  // entram sem vínculo (o admin vincula ao cliente depois).
+  for (const batch of chunk(rows, 500)) {
+    const { error } = await adminClient
       .from("campaigns")
-      .select("id")
-      .eq("external_id", row.external_id)
-      .maybeSingle<{ id: string }>();
-
-    if (existing.error) {
-      throw new Error(existing.error.message);
-    }
-
-    const { error } = existing.data
-      ? await adminClient.from("campaigns").update(row).eq("id", existing.data.id)
-      : await adminClient.from("campaigns").insert(row);
+      .upsert(batch, { onConflict: "external_id" });
 
     if (error) {
       throw new Error(error.message);
@@ -299,23 +313,13 @@ async function upsertMetricRows(rows: MetricImportRow[]) {
     throw new Error("Supabase admin não configurado para importar métricas.");
   }
 
-  for (const row of rows) {
-    const existing = await adminClient
+  // Upsert em lote sobre a chave única (campaign_id, date, granularity,
+  // hour_bucket), substituindo o select+insert por linha (2 idas ao banco
+  // por métrica) que dominava o tempo de sincronização.
+  for (const batch of chunk(rows, 500)) {
+    const { error } = await adminClient
       .from("campaign_metrics")
-      .select("id")
-      .eq("campaign_id", row.campaign_id)
-      .eq("date", row.date)
-      .eq("granularity", row.granularity)
-      .eq("hour_bucket", row.hour_bucket)
-      .maybeSingle<{ id: string }>();
-
-    if (existing.error) {
-      throw new Error(existing.error.message);
-    }
-
-    const { error } = existing.data
-      ? await adminClient.from("campaign_metrics").update(row).eq("id", existing.data.id)
-      : await adminClient.from("campaign_metrics").insert(row);
+      .upsert(batch, { onConflict: "campaign_id,date,granularity,hour_bucket" });
 
     if (error) {
       throw new Error(error.message);
@@ -349,7 +353,6 @@ export async function importMetaCampaigns() {
     plataforma: "Meta Ads",
     external_id: campaign.id,
     source: "meta_ads",
-    client_id: null,
   }));
 
   await upsertCampaignRows(rows);
@@ -505,10 +508,10 @@ export async function importMetaInsights() {
     ).values(),
   );
 
+  // Conta sem campanhas ativas ou sem dados no período não é erro — registra
+  // zero métricas e segue (campanhas pausadas mantêm o histórico já salvo).
   if (uniqueRows.length === 0) {
-    throw new Error(
-      "Nenhuma métrica foi importada. Verifique se as campanhas já foram importadas e se a conta possui dados disponíveis.",
-    );
+    return 0;
   }
 
   await upsertMetricRows(uniqueRows);
@@ -541,6 +544,13 @@ export async function runMetaSync() {
       message: `Última sincronização concluída com ${campaignCount} campanha(s) e ${metricCount} registro(s) de métricas.`,
     });
 
+    // Campanhas recém-importadas aparecem imediatamente nos formulários e
+    // listas (multi-select de edição do cliente inclusive).
+    // "max" = stale-while-revalidate; obrigatório aqui porque o cron route
+    // handler não pode chamar updateTag (restrito a Server Actions).
+    revalidateTag("campaigns", "max");
+    revalidateTag("metrics", "max");
+    revalidateTag("sync", "max");
     revalidatePath("/admin");
     revalidatePath("/admin/campanhas");
     revalidatePath("/admin/clientes");
@@ -554,8 +564,16 @@ export async function runMetaSync() {
     } satisfies MetaSyncResult;
   } catch (error) {
     const nextRunAt = getNextRunAt(new Date());
-    const message =
+    let message =
       error instanceof Error ? error.message : "Falha inesperada ao sincronizar Meta Ads.";
+
+    if (error instanceof MetaTokenExpiredError) {
+      message =
+        "Token da Meta expirou ou foi revogado. Acesse Configurações e reconecte a Meta Ads para retomar a sincronização.";
+    } else if (error instanceof MetaRateLimitError) {
+      message =
+        "A Meta limitou as requisições temporariamente. A sincronização será retomada automaticamente na próxima execução.";
+    }
 
     await persistSyncStatus({
       status: "error",
@@ -563,6 +581,8 @@ export async function runMetaSync() {
       next_run_at: nextRunAt,
       message,
     });
+
+    revalidateTag("sync", "max");
 
     throw error;
   }

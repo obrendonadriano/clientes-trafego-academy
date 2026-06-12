@@ -1,11 +1,32 @@
+import { Suspense } from "react";
 import { AdminCampaignsPage } from "@/components/dashboard/admin-campaigns-page";
 import { DashboardShell } from "@/components/dashboard/shell";
+import { PageSectionSkeleton } from "@/components/dashboard/skeletons";
 import { getCurrentUser } from "@/lib/auth/session";
-import { getAdminViewData } from "@/lib/data/queries";
+import { resolveMetricsWindow } from "@/lib/data/date-range";
+import { getAdminCampaignsData } from "@/lib/data/queries";
 
-export default async function AdminCampaignsRoute() {
+type AdminCampaignsRouteProps = {
+  searchParams: Promise<{ start?: string; end?: string }>;
+};
+
+async function AdminCampaignsSection({
+  searchParams,
+}: {
+  searchParams: AdminCampaignsRouteProps["searchParams"];
+}) {
+  const window = resolveMetricsWindow("admin", await searchParams);
+  const data = await getAdminCampaignsData(window);
+
+  return (
+    <AdminCampaignsPage campaigns={data.campaigns} metricRows={data.metricRows} />
+  );
+}
+
+export default async function AdminCampaignsRoute({
+  searchParams,
+}: AdminCampaignsRouteProps) {
   const user = await getCurrentUser();
-  const data = await getAdminViewData();
 
   return (
     <DashboardShell
@@ -13,10 +34,9 @@ export default async function AdminCampaignsRoute() {
       title="Campanhas"
       subtitle="Gerencie as campanhas do sistema antes de liberá-las para cada cliente."
     >
-      <AdminCampaignsPage
-        campaigns={data.campaigns}
-        metricRows={data.metricRows}
-      />
+      <Suspense fallback={<PageSectionSkeleton />}>
+        <AdminCampaignsSection searchParams={searchParams} />
+      </Suspense>
     </DashboardShell>
   );
 }

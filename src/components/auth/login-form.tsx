@@ -63,6 +63,18 @@ export function BrandBIcon() {
   );
 }
 
+// Desabilita os campos enquanto o login está em andamento, para que o clique
+// em "Acessar portal" tenha feedback imediato e não aceite edições no meio.
+function LoginFieldset({ children }: { children: React.ReactNode }) {
+  const { pending } = useFormStatus();
+
+  return (
+    <fieldset disabled={pending} className="space-y-3 sm:space-y-5">
+      {children}
+    </fieldset>
+  );
+}
+
 function SubmitButton() {
   const { pending } = useFormStatus();
 
@@ -97,7 +109,8 @@ export function LoginForm() {
         </p>
       </div>
 
-      <form action={formAction} className="mt-3 space-y-3 sm:mt-8 sm:space-y-5">
+      <form action={formAction} className="mt-3 sm:mt-8">
+        <LoginFieldset>
         <div className="space-y-2">
           <Label htmlFor="username" className="text-sm font-semibold text-[#636b78]">
             Usuário
@@ -137,6 +150,7 @@ export function LoginForm() {
             <SubmitButton />
           </div>
         </div>
+        </LoginFieldset>
       </form>
 
       <div className="mt-3 overflow-hidden rounded-[22px] border border-[#e7e7e7] bg-white shadow-[0_10px_28px_rgba(0,0,0,0.08)] sm:hidden">

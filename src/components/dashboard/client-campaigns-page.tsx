@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { CampaignsTable } from "@/components/dashboard/campaigns-table";
-import { DashboardShell } from "@/components/dashboard/shell";
 import {
   PeriodFilter,
   type PeriodFilterValue,
@@ -11,6 +10,7 @@ import {
   filterMetricsByRange,
   formatPeriodLabel,
   getDateRangeForPeriod,
+  getDefaultCustomRange,
   getPreferredLeadCount,
   getPreferredResultCount,
   getPreferredResultLabelForCampaignName,
@@ -19,11 +19,9 @@ import {
 import type {
   CampaignWithMetrics,
   RawCampaignMetric,
-  User,
 } from "@/lib/types";
 
 type ClientCampaignsPageProps = {
-  user: User;
   campaigns: CampaignWithMetrics[];
   metricRows: RawCampaignMetric[];
 };
@@ -41,16 +39,12 @@ function formatPercent(value: number) {
 }
 
 export function ClientCampaignsPage({
-  user,
   campaigns,
   metricRows,
 }: ClientCampaignsPageProps) {
   const [period, setPeriod] = useState<PeriodFilterValue>("Últimos 30 dias");
   const [comparePrevious, setComparePrevious] = useState(false);
-  const [customRange, setCustomRange] = useState({
-    start: "2026-04-01",
-    end: "2026-04-08",
-  });
+  const [customRange, setCustomRange] = useState(() => getDefaultCustomRange());
 
   const filteredCampaigns = useMemo(() => {
     const referenceDate = getReferenceNowForPeriod(metricRows, period, customRange);
@@ -123,26 +117,20 @@ export function ClientCampaignsPage({
   }, [campaigns, customRange, metricRows, period]);
 
   return (
-    <DashboardShell
-      user={user}
-      title={`Campanhas de ${user.clientName}`}
-      subtitle="Tabela dedicada para acompanhar somente as campanhas liberadas para esta conta."
-    >
-      <div className="space-y-6">
-        <PeriodFilter
-          active={period}
-          onChange={setPeriod}
-          comparePrevious={comparePrevious}
-          onComparePreviousChange={setComparePrevious}
-          customRange={customRange}
-          onCustomRangeChange={setCustomRange}
-          onApplyCustomRange={() => setPeriod("Personalizado")}
-          maxCustomRangeDays={92}
-          customLimitLabel="3 meses"
-        />
+    <div className="space-y-6">
+      <PeriodFilter
+        active={period}
+        onChange={setPeriod}
+        comparePrevious={comparePrevious}
+        onComparePreviousChange={setComparePrevious}
+        customRange={customRange}
+        onCustomRangeChange={setCustomRange}
+        onApplyCustomRange={() => setPeriod("Personalizado")}
+        maxCustomRangeDays={92}
+        customLimitLabel="3 meses"
+      />
 
-        <CampaignsTable campaigns={filteredCampaigns} />
-      </div>
-    </DashboardShell>
+      <CampaignsTable campaigns={filteredCampaigns} />
+    </div>
   );
 }

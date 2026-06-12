@@ -3,6 +3,7 @@
 import * as React from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { CampaignWithMetrics } from "@/lib/types";
 
@@ -198,7 +199,110 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
   }
 
   return (
-    <div className="dashboard-card overflow-hidden rounded-[1.5rem] border text-foreground">
+    <div className="space-y-4">
+      {/* Mobile: cards no lugar da tabela larga (que estouraria a tela). */}
+      <div className="space-y-3 md:hidden">
+        <div className="dashboard-card flex items-center gap-3 rounded-[1.5rem] border px-4 py-3">
+          <span className="shrink-0 text-sm text-muted-foreground">Ordenar por</span>
+          <Select
+            value={`${sortKey}:${sortDirection}`}
+            onChange={(event) => {
+              const [key, direction] = event.target.value.split(":");
+              setSortKey(key as SortKey);
+              setSortDirection(direction as SortDirection);
+            }}
+            className="h-10"
+          >
+            <option value="amountSpent:desc">Maior investimento</option>
+            <option value="amountSpent:asc">Menor investimento</option>
+            <option value="results:desc">Mais resultados</option>
+            <option value="ctr:desc">Maior CTR</option>
+            <option value="costPerLead:asc">Menor CPL</option>
+            <option value="roas:desc">Maior ROAS</option>
+            <option value="name:asc">Nome (A-Z)</option>
+          </Select>
+        </div>
+
+        {sortedCampaigns.map((campaign) => (
+          <div
+            key={campaign.id}
+            className="dashboard-card rounded-[1.5rem] border p-4 text-foreground"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="break-words font-medium leading-snug">{campaign.name}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {campaign.platform}
+                </p>
+              </div>
+              <Badge variant={campaign.status === "Ativa" ? "success" : "secondary"}>
+                {campaign.status}
+              </Badge>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+              <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
+                <p className="text-xs text-muted-foreground">Investido</p>
+                <p className="mt-0.5 font-semibold">{campaign.metrics.amountSpent}</p>
+              </div>
+              <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
+                <p className="text-xs text-muted-foreground">
+                  {campaign.metrics.resultLabel}
+                </p>
+                <p className="mt-0.5 font-semibold">{campaign.metrics.results}</p>
+              </div>
+              <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
+                <p className="text-xs text-muted-foreground">Cliques</p>
+                <p className="mt-0.5 font-semibold">{campaign.metrics.clicks}</p>
+              </div>
+              <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
+                <p className="text-xs text-muted-foreground">CTR</p>
+                <p className="mt-0.5 font-semibold">{campaign.metrics.ctr}</p>
+              </div>
+              <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
+                <p className="text-xs text-muted-foreground">CPL</p>
+                <p className="mt-0.5 font-semibold">{campaign.metrics.costPerLead}</p>
+              </div>
+              <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
+                <p className="text-xs text-muted-foreground">ROAS</p>
+                <p className="mt-0.5 font-semibold">{campaign.metrics.roas}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        <div className="dashboard-card rounded-[1.5rem] border p-4 text-sm text-muted-foreground">
+          <p className="font-semibold text-foreground">
+            Totais • {sortedCampaigns.length} campanha
+            {sortedCampaigns.length === 1 ? "" : "s"}
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+            <span>
+              Investido:{" "}
+              <strong className="text-foreground">
+                {formatCurrency(totals.amountSpent)}
+              </strong>
+            </span>
+            <span>
+              Cliques:{" "}
+              <strong className="text-foreground">
+                {totals.clicks.toLocaleString("pt-BR")}
+              </strong>
+            </span>
+            <span>
+              CTR médio:{" "}
+              <strong className="text-foreground">{formatPercent(averageCtr)}</strong>
+            </span>
+            <span>
+              ROAS médio:{" "}
+              <strong className="text-foreground">
+                {formatMultiplier(averageRoas)}
+              </strong>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="dashboard-card hidden overflow-hidden rounded-[1.5rem] border text-foreground md:block">
       <div className="max-h-[560px] overflow-auto">
         <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
           <thead className="sticky top-0 z-10 bg-muted/95 text-muted-foreground backdrop-blur dark:bg-[#111525]/95">
@@ -297,6 +401,7 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
             </tr>
           </tfoot>
         </table>
+      </div>
       </div>
     </div>
   );

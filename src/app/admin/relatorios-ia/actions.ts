@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { format } from "date-fns";
+import { revalidatePath, updateTag } from "next/cache";
 import { z } from "zod";
 import { getOptionalCurrentUser } from "@/lib/auth/session";
 import {
@@ -10,7 +11,8 @@ import {
   summarizeMetrics,
   type DashboardPeriodValue,
 } from "@/lib/dashboard-metrics";
-import { getAppSnapshot } from "@/lib/data/queries";
+import { clampMetricsWindowForRole } from "@/lib/data/date-range";
+import { CACHE_TAGS, getReportGenerationData } from "@/lib/data/queries";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { generateGeminiAnalysis } from "@/lib/services/gemini";
 
@@ -136,27 +138,55 @@ export async function generateAiReportAction(
       return { error: parsed.error.issues[0]?.message };
     }
 
-    const snapshot = await getAppSnapshot();
-    const client = snapshot.clients.find((item) => item.id === parsed.data.clientId);
+    const currentUser = await getOptionalCurrentUser();
+
+    if (!currentUser || currentUser.role !== "admin") {
+      return { error: "Apenas administradores podem gerar relatórios." };
+    }
+
+    // Limite de período aplicado no backend conforme o papel do usuário.
+    const requestedRange = getDateRangeForPeriod(
+      parsed.data.period as DashboardPeriodValue,
+      {
+        start: parsed.data.customStart || "",
+        end: parsed.data.customEnd || "",
+      },
+    );
+    const window = clampMetricsWindowForRole(currentUser.role, {
+      startDate: format(requestedRange.start, "yyyy-MM-dd"),
+      endDate: format(requestedRange.end, "yyyy-MM-dd"),
+    });
+
+    const uniqueCampaignIds = Array.from(new Set(parsed.data.campaignIds));
+    const data = await getReportGenerationData({
+      clientId: parsed.data.clientId,
+      campaignIds: uniqueCampaignIds,
+      window,
+    });
+
+    const client = data.client;
 
     if (!client) {
       return { error: "Cliente não encontrado." };
     }
 
-    const campaigns = snapshot.campaigns.filter((campaign) =>
-      parsed.data.campaignIds.includes(campaign.id),
+    // Só aceita campanhas vinculadas ao cliente selecionado (ou ainda sem
+    // vínculo), evitando misturar dados de outros clientes no relatório.
+    const campaigns = data.campaigns.filter(
+      (campaign) => !campaign.clientId || campaign.clientId === client.id,
     );
 
     if (campaigns.length === 0) {
       return { error: "Nenhuma campanha válida foi selecionada." };
     }
 
+    const allowedCampaignIds = new Set(campaigns.map((campaign) => campaign.id));
     const range = getDateRangeForPeriod(parsed.data.period as DashboardPeriodValue, {
       start: parsed.data.customStart || "",
       end: parsed.data.customEnd || "",
     });
     const rows = filterMetricsByRange(
-      snapshot.metricRows.filter((row) => parsed.data.campaignIds.includes(row.campaignId)),
+      data.metricRows.filter((row) => allowedCampaignIds.has(row.campaignId)),
       range,
     );
 
@@ -195,19 +225,20 @@ export async function generateAiReportAction(
     }
 
     const adminClient = createSupabaseAdminClient();
-    const currentUser = await getOptionalCurrentUser();
 
     if (adminClient) {
       const reportInsert = await adminClient
         .from("ai_reports")
         .insert({
-        client_id: client.id,
-        user_id: currentUser?.id ?? null,
-        period_start: range.start.toISOString().slice(0, 10),
-        period_end: range.end.toISOString().slice(0, 10),
-        generated_text: text,
-        campaign_id: campaigns[0]?.id ?? null,
-      });
+          client_id: client.id,
+          user_id: currentUser.id,
+          period_start: format(range.start, "yyyy-MM-dd"),
+          period_end: format(range.end, "yyyy-MM-dd"),
+          generated_text: text,
+          // campaign_id legado (primeira campanha) + lista completa.
+          campaign_id: campaigns[0]?.id ?? null,
+          campaign_ids: campaigns.map((campaign) => campaign.id),
+        });
 
       if (reportInsert.error) {
         return {
@@ -217,23 +248,16 @@ export async function generateAiReportAction(
         };
       }
 
-      const excessReports = await adminClient
-        .from("ai_reports")
-        .select("id")
-        .order("created_at", { ascending: false })
-        .range(10, 200);
+      // Limpeza atômica no banco (mantém os 10 mais recentes), sem o
+      // select+delete em duas etapas que causava corrida entre requisições.
+      const prune = await adminClient.rpc("prune_ai_reports", { keep_count: 10 });
 
-      if (excessReports.data && excessReports.data.length > 0) {
-        await adminClient
-          .from("ai_reports")
-          .delete()
-          .in(
-            "id",
-            excessReports.data.map((report) => report.id),
-          );
+      if (prune.error) {
+        console.error("Falha ao limpar histórico de relatórios:", prune.error.message);
       }
     }
 
+    updateTag(CACHE_TAGS.reports);
     revalidatePath("/admin/relatorios-ia");
 
     return {

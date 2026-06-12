@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { differenceInCalendarDays, parseISO, subDays } from "date-fns";
 import { CalendarRange, SlidersHorizontal } from "lucide-react";
+import { getDefaultCustomRange } from "@/lib/dashboard-metrics";
 import { cn } from "@/lib/utils";
 
 export const periods = [
@@ -45,8 +46,9 @@ export function PeriodFilter({
 }: PeriodFilterProps) {
   const [internalActive, setInternalActive] =
     useState<PeriodFilterValue>("Últimos 30 dias");
-  const [customStart, setCustomStart] = useState("2026-04-01");
-  const [customEnd, setCustomEnd] = useState("2026-04-08");
+  const defaultRange = getDefaultCustomRange();
+  const [customStart, setCustomStart] = useState(defaultRange.start);
+  const [customEnd, setCustomEnd] = useState(defaultRange.end);
   const active = controlledActive ?? internalActive;
   const start = customRange?.start ?? customStart;
   const end = customRange?.end ?? customEnd;

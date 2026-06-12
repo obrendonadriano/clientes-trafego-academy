@@ -1,12 +1,29 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
+import { usePathname, useRouter } from "next/navigation";
+import { useActionState, useMemo, useState, useTransition } from "react";
 import {
   importMetaCampaignsAction,
   importMetaInsightsAction,
 } from "@/app/admin/campanhas/actions";
 import { CampaignsTable } from "@/components/dashboard/campaigns-table";
 import { MetricCard } from "@/components/dashboard/metric-card";
+
+const CampaignBreakdownChart = dynamic(
+  () =>
+    import("@/components/dashboard/campaign-breakdown-chart").then(
+      (module) => module.CampaignBreakdownChart,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="dashboard-card rounded-[1.5rem] border p-4">
+        <div className="h-[260px] animate-pulse rounded-[1.25rem] bg-muted/70 dark:bg-white/[0.08]" />
+      </div>
+    ),
+  },
+);
 import {
   PeriodFilter,
   type PeriodFilterValue,
@@ -15,6 +32,7 @@ import { FormPendingButton } from "@/components/ui/form-pending-button";
 import {
   filterMetricsByRange,
   getDateRangeForPeriod,
+  getDefaultCustomRange,
   getPreferredLeadCount,
   getPreferredResultCount,
   getPreferredResultLabelForCampaignName,
@@ -53,12 +71,23 @@ export function AdminCampaignsPage({
     importMetaInsightsAction,
     {},
   );
+  const router = useRouter();
+  const pathname = usePathname();
+  const [, startTransition] = useTransition();
   const [period, setPeriod] = useState<PeriodFilterValue>("Últimos 30 dias");
   const [comparePrevious, setComparePrevious] = useState(true);
-  const [customRange, setCustomRange] = useState({
-    start: "2026-04-01",
-    end: "2026-04-08",
-  });
+  const [customRange, setCustomRange] = useState(() => getDefaultCustomRange());
+
+  // Range custom além da janela padrão (92 dias) exige refetch no servidor.
+  function handleApplyCustomRange() {
+    setPeriod("Personalizado");
+    startTransition(() => {
+      router.replace(
+        `${pathname}?start=${customRange.start}&end=${customRange.end}`,
+        { scroll: false },
+      );
+    });
+  }
 
   const selected = useMemo(() => {
     const referenceDate = getReferenceNowForPeriod(metricRows, period, customRange);
@@ -137,7 +166,7 @@ export function AdminCampaignsPage({
         onComparePreviousChange={setComparePrevious}
         customRange={customRange}
         onCustomRangeChange={setCustomRange}
-        onApplyCustomRange={() => setPeriod("Personalizado")}
+        onApplyCustomRange={handleApplyCustomRange}
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -217,6 +246,15 @@ export function AdminCampaignsPage({
           </p>
         ) : null}
       </div>
+
+      <CampaignBreakdownChart
+        data={selected.campaigns.map((campaign) => ({
+          name: campaign.name,
+          amountSpent: campaign.amountSpentRaw,
+          leads: campaign.leadsRaw,
+        }))}
+        periodLabel={period}
+      />
 
       <CampaignsTable campaigns={selected.campaigns} />
     </div>

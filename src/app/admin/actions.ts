@@ -1,14 +1,154 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { z } from "zod";
 import { isSupabaseConfigured } from "@/lib/env";
+import { CACHE_TAGS } from "@/lib/data/queries";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  clientWorkspaceSchema,
+  toFieldErrors,
+  updateClientWorkspaceSchema,
+} from "@/lib/validation/client-schemas";
+
+type CacheTag = (typeof CACHE_TAGS)[keyof typeof CACHE_TAGS];
+
+// updateTag expira o cache imediatamente: o admin vê a própria escrita na
+// próxima renderização (revalidateTag "max" serviria dado velho uma vez).
+function revalidateData(...tags: CacheTag[]) {
+  for (const tag of tags) {
+    updateTag(tag);
+  }
+}
 
 export type AdminActionState = {
   success?: string;
   error?: string;
+  fieldErrors?: Record<string, string>;
 };
+
+// Traduz erros do Postgres/Supabase Auth para mensagens amigáveis por campo.
+function mapDuplicateError(message: string): AdminActionState | null {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("users_username_key") || normalized.includes("username")) {
+    return {
+      error: "Este usuário já está em uso. Escolha outro.",
+      fieldErrors: { username: "Este usuário já está em uso." },
+    };
+  }
+
+  if (
+    normalized.includes("users_email_key") ||
+    normalized.includes("already registered") ||
+    normalized.includes("already been registered") ||
+    normalized.includes("email")
+  ) {
+    return {
+      error: "Este email já está cadastrado para outro acesso.",
+      fieldErrors: { email: "Este email já está cadastrado." },
+    };
+  }
+
+  if (normalized.includes("duplicate key") || normalized.includes("23505")) {
+    return { error: "Já existe um cadastro com esses dados." };
+  }
+
+  return null;
+}
+
+// Pré-checagem de duplicidade ANTES de criar qualquer registro (evita auth
+// user órfão + rollback). excludeUserId permite editar o próprio registro.
+async function findDuplicateAccount(input: {
+  username: string;
+  email: string;
+  excludeUserId?: string;
+}): Promise<AdminActionState | null> {
+  const adminClient = createSupabaseAdminClient();
+
+  if (!adminClient) {
+    return null;
+  }
+
+  const { data, error } = await adminClient
+    .from("users")
+    .select("id, username, email")
+    .or(`username.eq.${input.username},email.eq.${input.email}`)
+    .limit(5);
+
+  if (error || !data) {
+    return null;
+  }
+
+  const conflict = data.find((row) => row.id !== input.excludeUserId);
+
+  if (!conflict) {
+    return null;
+  }
+
+  if (conflict.username === input.username) {
+    return {
+      error: "Este usuário já está em uso. Escolha outro.",
+      fieldErrors: { username: "Este usuário já está em uso." },
+    };
+  }
+
+  return {
+    error: "Este email já está cadastrado para outro acesso.",
+    fieldErrors: { email: "Este email já está cadastrado." },
+  };
+}
+
+export type AvailabilityResult = {
+  usernameTaken: boolean;
+  emailTaken: boolean;
+};
+
+// Usada pelo formulário para feedback imediato no blur dos campos.
+export async function checkAvailabilityAction(input: {
+  username?: string;
+  email?: string;
+  excludeUserId?: string;
+}): Promise<AvailabilityResult> {
+  const adminClient = createSupabaseAdminClient();
+  const result: AvailabilityResult = { usernameTaken: false, emailTaken: false };
+
+  if (!adminClient || (!input.username && !input.email)) {
+    return result;
+  }
+
+  const filters: string[] = [];
+
+  if (input.username) {
+    filters.push(`username.eq.${input.username}`);
+  }
+
+  if (input.email) {
+    filters.push(`email.eq.${input.email}`);
+  }
+
+  const { data } = await adminClient
+    .from("users")
+    .select("id, username, email")
+    .or(filters.join(","))
+    .limit(5);
+
+  for (const row of data ?? []) {
+    if (row.id === input.excludeUserId) {
+      continue;
+    }
+
+    if (input.username && row.username === input.username) {
+      result.usernameTaken = true;
+    }
+
+    if (input.email && row.email === input.email) {
+      result.emailTaken = true;
+    }
+  }
+
+  return result;
+}
 
 const clientSchema = z.object({
   companyName: z.string().min(2, "Informe o nome da empresa."),
@@ -36,33 +176,6 @@ const accountSchema = z.object({
 const permissionSchema = z.object({
   userId: z.string().uuid("Selecione um usuário válido."),
   campaignId: z.string().uuid("Selecione uma campanha válida."),
-});
-
-const clientWorkspaceSchema = z.object({
-  companyName: z.string().min(2, "Informe o nome da empresa."),
-  contactName: z.string().min(2, "Informe o responsável."),
-  whatsapp: z.string().min(8, "Informe o WhatsApp."),
-  notes: z.string().optional(),
-  accountName: z.string().min(2, "Informe o nome do acesso."),
-  username: z.string().min(3, "Informe um username."),
-  email: z.string().email("Informe um email válido."),
-  password: z.string().min(6, "A senha deve ter ao menos 6 caracteres."),
-});
-
-const updateClientWorkspaceSchema = z.object({
-  clientId: z.string().uuid("Cliente inválido."),
-  userId: z.string().uuid().optional().or(z.literal("")),
-  authUserId: z.string().uuid().optional().or(z.literal("")),
-  companyName: z.string().min(2, "Informe o nome da empresa."),
-  contactName: z.string().min(2, "Informe o responsável."),
-  whatsapp: z.string().min(8, "Informe o WhatsApp."),
-  notes: z.string().optional(),
-  clientActive: z.string().optional(),
-  accountName: z.string().min(2, "Informe o nome do acesso."),
-  username: z.string().min(3, "Informe um username."),
-  email: z.string().email("Informe um email válido."),
-  password: z.string().optional(),
-  accessActive: z.string().optional(),
 });
 
 function guardSupabase() {
@@ -107,6 +220,7 @@ export async function createClientAction(
     return { error: error.message };
   }
 
+  revalidateData(CACHE_TAGS.clients);
   revalidatePath("/admin");
   return { success: "Cliente criado com sucesso." };
 }
@@ -130,13 +244,31 @@ export async function createClientWorkspaceAction(
   });
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message };
+    return {
+      error: parsed.error.issues[0]?.message,
+      fieldErrors: toFieldErrors(parsed.error),
+    };
   }
 
-  const campaignIds = formData
-    .getAll("campaignIds")
-    .map((value) => String(value))
-    .filter(Boolean);
+  // Duplicidade verificada ANTES de criar qualquer registro: falha aqui não
+  // deixa cliente nem auth user órfão.
+  const duplicate = await findDuplicateAccount({
+    username: parsed.data.username,
+    email: parsed.data.email,
+  });
+
+  if (duplicate) {
+    return duplicate;
+  }
+
+  const campaignIds = Array.from(
+    new Set(
+      formData
+        .getAll("campaignIds")
+        .map((value) => String(value))
+        .filter(Boolean),
+    ),
+  );
 
   const adminClient = createSupabaseAdminClient()!;
 
@@ -164,7 +296,8 @@ export async function createClientWorkspaceAction(
 
   if (authResult.error || !authResult.data.user) {
     await adminClient.from("clients").delete().eq("id", clientInsert.data.id);
-    return { error: authResult.error?.message ?? "Falha ao criar usuário auth." };
+    const friendly = authResult.error ? mapDuplicateError(authResult.error.message) : null;
+    return friendly ?? { error: authResult.error?.message ?? "Falha ao criar usuário auth." };
   }
 
   const userInsert = await adminClient
@@ -185,7 +318,12 @@ export async function createClientWorkspaceAction(
   if (userInsert.error || !userInsert.data) {
     await adminClient.auth.admin.deleteUser(authResult.data.user.id);
     await adminClient.from("clients").delete().eq("id", clientInsert.data.id);
-    return { error: userInsert.error?.message ?? "Falha ao registrar perfil do cliente." };
+    const friendly = userInsert.error ? mapDuplicateError(userInsert.error.message) : null;
+    return (
+      friendly ?? {
+        error: userInsert.error?.message ?? "Falha ao registrar perfil do cliente.",
+      }
+    );
   }
 
   if (campaignIds.length > 0) {
@@ -201,6 +339,7 @@ export async function createClientWorkspaceAction(
     }
   }
 
+  revalidateData(CACHE_TAGS.clients, CACHE_TAGS.users, CACHE_TAGS.permissions);
   revalidatePath("/admin");
   return { success: "Cliente criado com acesso ao portal configurado." };
 }
@@ -235,6 +374,7 @@ export async function createCampaignAction(
     return { error: error.message };
   }
 
+  revalidateData(CACHE_TAGS.campaigns);
   revalidatePath("/admin");
   return { success: "Campanha criada com sucesso." };
 }
@@ -263,13 +403,30 @@ export async function updateClientWorkspaceAction(
   });
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message };
+    return {
+      error: parsed.error.issues[0]?.message,
+      fieldErrors: toFieldErrors(parsed.error),
+    };
   }
 
-  const campaignIds = formData
-    .getAll("campaignIds")
-    .map((value) => String(value))
-    .filter(Boolean);
+  const duplicate = await findDuplicateAccount({
+    username: parsed.data.username,
+    email: parsed.data.email,
+    excludeUserId: parsed.data.userId || undefined,
+  });
+
+  if (duplicate) {
+    return duplicate;
+  }
+
+  const campaignIds = Array.from(
+    new Set(
+      formData
+        .getAll("campaignIds")
+        .map((value) => String(value))
+        .filter(Boolean),
+    ),
+  );
 
   const adminClient = createSupabaseAdminClient()!;
   const hasExistingUser = Boolean(parsed.data.userId);
@@ -393,6 +550,7 @@ export async function updateClientWorkspaceAction(
     }
   }
 
+  revalidateData(CACHE_TAGS.clients, CACHE_TAGS.users, CACHE_TAGS.permissions);
   revalidatePath("/admin");
   revalidatePath("/admin/clientes");
   revalidatePath(`/admin/clientes/${parsed.data.clientId}`);
@@ -449,6 +607,12 @@ export async function deleteClientWorkspaceAction(
     return { error: clientDelete.error.message };
   }
 
+  revalidateData(
+    CACHE_TAGS.clients,
+    CACHE_TAGS.users,
+    CACHE_TAGS.permissions,
+    CACHE_TAGS.reports,
+  );
   revalidatePath("/admin");
   revalidatePath("/admin/clientes");
   return { success: "Cliente excluído com sucesso." };
@@ -501,6 +665,7 @@ export async function createClientAccountAction(
     return { error: error.message };
   }
 
+  revalidateData(CACHE_TAGS.users);
   revalidatePath("/admin");
   return { success: "Conta do cliente criada com sucesso." };
 }
@@ -531,6 +696,7 @@ export async function assignCampaignPermissionAction(
     return { error: error.message };
   }
 
+  revalidateData(CACHE_TAGS.permissions);
   revalidatePath("/admin");
   return { success: "Permissão vinculada com sucesso." };
 }

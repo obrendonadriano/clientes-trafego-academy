@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { runMetaSync } from "@/lib/sync/meta-sync";
 
 export const dynamic = "force-dynamic";
+// Sincronização completa (campanhas + métricas) pode passar de 1 minuto em
+// contas grandes; estende o limite da function na Vercel.
+export const maxDuration = 300;
 
 function isAuthorized(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;

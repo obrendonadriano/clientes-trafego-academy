@@ -47,6 +47,12 @@ export function AdminReportsPage({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {reports.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
+                Nenhum relatório gerado até agora. Use o painel ao lado para
+                criar a primeira análise com IA.
+              </div>
+            ) : null}
             {reports.slice(0, 10).map((report) => (
               <div
                 key={report.id}
