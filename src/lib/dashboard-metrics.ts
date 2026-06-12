@@ -51,7 +51,44 @@ export type MetricTotals = {
   roi: number;
   roas: number;
   frequency: number;
+  // Moeda original do conjunto ("BRL" quando nativo ou misturado) e os valores
+  // monetários reconstruídos nessa moeda (para exibir, ex.: US$ ao lado do R$).
+  currency: string;
+  amountSpentOriginal: number;
+  cpcOriginal: number;
+  cpmOriginal: number;
+  costPerLeadOriginal: number;
 };
+
+const moneyFormatters = new Map<string, Intl.NumberFormat>();
+
+// Formata um valor numa moeda (R$, US$, etc.) com locale pt-BR.
+export function formatMoney(value: number, currency = "BRL") {
+  const code = (currency || "BRL").toUpperCase();
+  let formatter = moneyFormatters.get(code);
+
+  if (!formatter) {
+    formatter = new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: code,
+    });
+    moneyFormatters.set(code, formatter);
+  }
+
+  return formatter.format(Number.isFinite(value) ? value : 0);
+}
+
+// Determina a moeda estrangeira única de um conjunto de linhas. Se todas forem
+// BRL, ou se houver mistura de moedas estrangeiras, devolve "BRL".
+export function resolveCurrency(rows: Pick<RawCampaignMetric, "currency">[]) {
+  const foreign = new Set(
+    rows
+      .map((row) => (row.currency || "BRL").toUpperCase())
+      .filter((currency) => currency !== "BRL"),
+  );
+
+  return foreign.size === 1 ? [...foreign][0] : "BRL";
+}
 
 export type PreferredResultCategory =
   | "purchase"
@@ -357,10 +394,16 @@ export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
       acc.roi.push(row.roi);
       acc.roas.push(row.roas);
       acc.frequency.push(row.frequency);
+      // Gasto reconstruído na moeda original (BRL / taxa). Para BRL, taxa = 1.
+      acc.amountSpentOriginal +=
+        row.exchangeRate && row.exchangeRate > 0
+          ? row.amountSpent / row.exchangeRate
+          : row.amountSpent;
       return acc;
     },
     {
       amountSpent: 0,
+      amountSpentOriginal: 0,
       reach: 0,
       impressions: 0,
       clicks: 0,
@@ -372,6 +415,16 @@ export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
       frequency: [] as number[],
     },
   );
+
+  const currency = resolveCurrency(rows);
+  // CPC/CPM/CPL na moeda original derivam do gasto original.
+  const cpcOriginal = totals.clicks > 0 ? totals.amountSpentOriginal / totals.clicks : 0;
+  const cpmOriginal =
+    totals.impressions > 0
+      ? (totals.amountSpentOriginal / totals.impressions) * 1000
+      : 0;
+  const costPerLeadOriginal =
+    totals.leads > 0 ? totals.amountSpentOriginal / totals.leads : 0;
 
   return {
     amountSpent: totals.amountSpent,
@@ -395,6 +448,11 @@ export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
     roi: average(totals.roi),
     roas: average(totals.roas),
     frequency: average(totals.frequency),
+    currency,
+    amountSpentOriginal: totals.amountSpentOriginal,
+    cpcOriginal,
+    cpmOriginal,
+    costPerLeadOriginal,
   };
 }
 

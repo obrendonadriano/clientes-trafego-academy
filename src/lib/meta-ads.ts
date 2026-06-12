@@ -342,11 +342,17 @@ export async function getCurrencyRateToBrl(currency: string): Promise<number> {
     );
 
     if (response.ok) {
-      const data = (await response.json()) as Record<string, { bid?: string }>;
-      const bid = Number(data?.[`${code}BRL`]?.bid);
+      const data = (await response.json()) as Record<
+        string,
+        { bid?: string; ask?: string }
+      >;
+      // ask = preço de venda (o "dólar comercial" que se paga ao comprar);
+      // mais próximo da cotação que o usuário vê. Cai para bid se faltar.
+      const quote = data?.[`${code}BRL`];
+      const rate = Number(quote?.ask ?? quote?.bid);
 
-      if (Number.isFinite(bid) && bid > 0) {
-        return bid;
+      if (Number.isFinite(rate) && rate > 0) {
+        return rate;
       }
     }
   } catch {

@@ -38,6 +38,13 @@ export type CampaignMetric = {
   roas: string;
   frequency: string;
   periodLabel: string;
+  // Moeda original (ex.: "USD") e valores na moeda original, preenchidos só
+  // quando a conta é em moeda estrangeira. Em conta BRL ficam indefinidos.
+  currency?: string;
+  amountSpentOriginal?: string;
+  cpcOriginal?: string;
+  cpmOriginal?: string;
+  costPerLeadOriginal?: string;
 };
 
 export type CampaignWithMetrics = {
@@ -81,6 +88,11 @@ export type RawCampaignMetric = {
   roi: number;
   roas: number;
   frequency: number;
+  // Moeda original da conta e taxa usada na conversão (1 quando já é BRL).
+  // O valor na moeda original é amountSpent / exchangeRate. Opcionais para
+  // compatibilidade com dados mock; mapMetricRow sempre preenche os reais.
+  currency?: string;
+  exchangeRate?: number;
 };
 
 export type ReportHistoryItem = {

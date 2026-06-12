@@ -4,6 +4,7 @@ import { getMockSnapshot } from "@/lib/mock-data";
 import { isSupabaseAdminConfigured } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getMetaSyncStatus } from "@/lib/sync/meta-sync";
+import { formatMoney, resolveCurrency } from "@/lib/dashboard-metrics";
 import {
   clampMetricsWindowForRole,
   type MetricsWindow,
@@ -89,6 +90,8 @@ type DbMetricRow = {
   roi: number;
   roas: number;
   frequency: number;
+  currency: string | null;
+  exchange_rate: number | null;
 };
 
 type DbIntegrationRow = {
@@ -235,6 +238,8 @@ function mapMetricRow(row: DbMetricRow): RawCampaignMetric {
     roi: toNumber(row.roi),
     roas: toNumber(row.roas),
     frequency: toNumber(row.frequency),
+    currency: (row.currency ?? "BRL").toUpperCase(),
+    exchangeRate: row.exchange_rate && row.exchange_rate > 0 ? Number(row.exchange_rate) : 1,
   };
 }
 
@@ -253,6 +258,11 @@ type AggregatedMetric = {
   roi: number;
   roas: number;
   frequency: number;
+  currency: string;
+  amount_spent_original: number;
+  cpc_original: number;
+  cpm_original: number;
+  cost_per_lead_original: number;
 };
 
 function aggregateMetrics(rows: RawCampaignMetric[]): AggregatedMetric | undefined {
@@ -276,6 +286,10 @@ function aggregateMetrics(rows: RawCampaignMetric[]): AggregatedMetric | undefin
   const totals = normalizedRows.reduce(
     (acc, row) => {
       acc.amount_spent += row.amountSpent;
+      acc.amount_spent_original +=
+        row.exchangeRate && row.exchangeRate > 0
+          ? row.amountSpent / row.exchangeRate
+          : row.amountSpent;
       acc.reach += row.reach;
       acc.impressions += row.impressions;
       acc.clicks += row.clicks;
@@ -289,6 +303,7 @@ function aggregateMetrics(rows: RawCampaignMetric[]): AggregatedMetric | undefin
     },
     {
       amount_spent: 0,
+      amount_spent_original: 0,
       reach: 0,
       impressions: 0,
       clicks: 0,
@@ -323,6 +338,15 @@ function aggregateMetrics(rows: RawCampaignMetric[]): AggregatedMetric | undefin
     roi: average(totals.roi),
     roas: average(totals.roas),
     frequency: average(totals.frequency),
+    currency: resolveCurrency(normalizedRows),
+    amount_spent_original: totals.amount_spent_original,
+    cpc_original: totals.clicks > 0 ? totals.amount_spent_original / totals.clicks : 0,
+    cpm_original:
+      totals.impressions > 0
+        ? (totals.amount_spent_original / totals.impressions) * 1000
+        : 0,
+    cost_per_lead_original:
+      totals.leads > 0 ? totals.amount_spent_original / totals.leads : 0,
   };
 }
 
@@ -330,6 +354,9 @@ function toCampaignWithMetrics(
   base: CampaignBase,
   metric?: AggregatedMetric,
 ): CampaignWithMetrics {
+  const currency = metric?.currency ?? "BRL";
+  const isForeign = currency !== "BRL";
+
   return {
     ...base,
     metrics: {
@@ -348,6 +375,13 @@ function toCampaignWithMetrics(
       roas: `${(metric?.roas ?? 0).toFixed(2)}x`,
       frequency: (metric?.frequency ?? 0).toFixed(2),
       periodLabel: metric ? "Última sincronização" : "Aguardando importação",
+      currency,
+      amountSpentOriginal:
+        isForeign && metric ? formatMoney(metric.amount_spent_original, currency) : undefined,
+      cpcOriginal: isForeign && metric ? formatMoney(metric.cpc_original, currency) : undefined,
+      cpmOriginal: isForeign && metric ? formatMoney(metric.cpm_original, currency) : undefined,
+      costPerLeadOriginal:
+        isForeign && metric ? formatMoney(metric.cost_per_lead_original, currency) : undefined,
     },
   };
 }
@@ -469,7 +503,7 @@ const fetchMetricsWindowCached = unstable_cache(
       let query = adminClient
         .from("campaign_metrics")
         .select(
-          "campaign_id, date, granularity, hour_bucket, hour_label, amount_spent, reach, impressions, clicks, ctr, result_count, result_label, cpc, cpm, leads, cost_per_lead, roi, roas, frequency",
+          "campaign_id, date, granularity, hour_bucket, hour_label, amount_spent, reach, impressions, clicks, ctr, result_count, result_label, cpc, cpm, leads, cost_per_lead, roi, roas, frequency, currency, exchange_rate",
         )
         .gte("date", startDate)
         .lte("date", endDate);

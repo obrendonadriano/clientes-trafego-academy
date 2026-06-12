@@ -243,6 +243,11 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
               <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
                 <p className="text-xs text-muted-foreground">Investido</p>
                 <p className="mt-0.5 font-semibold">{campaign.metrics.amountSpent}</p>
+                {campaign.metrics.amountSpentOriginal ? (
+                  <p className="text-xs text-muted-foreground">
+                    {campaign.metrics.amountSpentOriginal}
+                  </p>
+                ) : null}
               </div>
               <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
                 <p className="text-xs text-muted-foreground">
@@ -261,6 +266,11 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
               <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
                 <p className="text-xs text-muted-foreground">CPL</p>
                 <p className="mt-0.5 font-semibold">{campaign.metrics.costPerLead}</p>
+                {campaign.metrics.costPerLeadOriginal ? (
+                  <p className="text-xs text-muted-foreground">
+                    {campaign.metrics.costPerLeadOriginal}
+                  </p>
+                ) : null}
               </div>
               <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
                 <p className="text-xs text-muted-foreground">ROAS</p>
@@ -350,6 +360,11 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
                 </td>
                 <td className="min-w-[116px] border-b border-border/60 dark:border-white/10 px-4 py-3 align-middle">
                   {campaign.metrics.amountSpent}
+                  {campaign.metrics.amountSpentOriginal ? (
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      {campaign.metrics.amountSpentOriginal}
+                    </span>
+                  ) : null}
                 </td>
                 <td className="min-w-[90px] border-b border-border/60 dark:border-white/10 px-4 py-3 align-middle">
                   {campaign.metrics.clicks}
@@ -367,6 +382,11 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
                 </td>
                 <td className="min-w-[108px] border-b border-border/60 dark:border-white/10 px-4 py-3 align-middle">
                   {campaign.metrics.costPerLead}
+                  {campaign.metrics.costPerLeadOriginal ? (
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      {campaign.metrics.costPerLeadOriginal}
+                    </span>
+                  ) : null}
                 </td>
                 <td className="min-w-[88px] border-b border-border/60 dark:border-white/10 px-4 py-3 align-middle">
                   {campaign.metrics.roas}

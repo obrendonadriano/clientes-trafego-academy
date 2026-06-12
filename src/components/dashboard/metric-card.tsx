@@ -6,6 +6,8 @@ type MetricCardProps = {
   value: string;
   change: string;
   positive?: boolean;
+  // Valor secundário (ex.: "US$ 39,14") exibido abaixo do valor principal.
+  sub?: string;
 };
 
 export function MetricCard({
@@ -13,6 +15,7 @@ export function MetricCard({
   value,
   change,
   positive = true,
+  sub,
 }: MetricCardProps) {
   return (
     <div className="dashboard-card relative min-h-[242px] rounded-[1.5rem] border p-5 text-foreground">
@@ -40,6 +43,9 @@ export function MetricCard({
       <p className="mt-5 whitespace-nowrap font-display text-[clamp(2.25rem,2.7vw,2.75rem)] font-semibold leading-none text-foreground">
         {value}
       </p>
+      {sub ? (
+        <p className="mt-2 text-sm font-medium text-muted-foreground">{sub}</p>
+      ) : null}
       <div className="mt-7 h-px bg-border/70 dark:bg-white/10" />
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">

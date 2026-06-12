@@ -8,10 +8,12 @@ import {
 } from "@/components/dashboard/period-filter";
 import {
   filterMetricsByRange,
+  formatMoney,
   formatPeriodLabel,
   getDateRangeForPeriod,
   getDefaultCustomRange,
   getPreferredLeadCount,
+  resolveCurrency,
   getPreferredResultCount,
   getPreferredResultLabelForCampaignName,
   getReferenceNowForPeriod,
@@ -74,6 +76,10 @@ export function ClientCampaignsPage({
         const totals = rows.reduce(
           (acc, row) => {
             acc.amountSpent += row.amountSpent;
+            acc.amountSpentOriginal +=
+              row.exchangeRate && row.exchangeRate > 0
+                ? row.amountSpent / row.exchangeRate
+                : row.amountSpent;
             acc.clicks += row.clicks;
             acc.impressions += row.impressions;
             acc.roas += row.roas;
@@ -81,6 +87,7 @@ export function ClientCampaignsPage({
           },
           {
             amountSpent: 0,
+            amountSpentOriginal: 0,
             clicks: 0,
             impressions: 0,
             roas: 0,
@@ -91,12 +98,17 @@ export function ClientCampaignsPage({
           "Sem resultado";
         const preferredResultCount = getPreferredResultCount(rows, campaign.name);
         const preferredLeadCount = getPreferredLeadCount(rows, campaign.name);
+        const currency = resolveCurrency(rows);
+        const isForeign = currency !== "BRL";
 
         return {
           ...campaign,
           metrics: {
             ...campaign.metrics,
             amountSpent: formatCurrency(totals.amountSpent),
+            amountSpentOriginal: isForeign
+              ? formatMoney(totals.amountSpentOriginal, currency)
+              : undefined,
             clicks: String(Math.round(totals.clicks)),
             ctr: formatPercent(
               totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0,
@@ -107,8 +119,13 @@ export function ClientCampaignsPage({
             costPerLead: formatCurrency(
               preferredLeadCount > 0 ? totals.amountSpent / preferredLeadCount : 0,
             ),
+            costPerLeadOriginal:
+              isForeign && preferredLeadCount > 0
+                ? formatMoney(totals.amountSpentOriginal / preferredLeadCount, currency)
+                : undefined,
             roas: `${(totals.roas / rows.length).toFixed(2).replace(".", ",")}x`,
             periodLabel,
+            currency,
           },
           metricCount: rows.length,
         };

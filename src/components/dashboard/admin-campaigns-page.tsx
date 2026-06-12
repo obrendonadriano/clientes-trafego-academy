@@ -31,6 +31,7 @@ import {
 import { FormPendingButton } from "@/components/ui/form-pending-button";
 import {
   filterMetricsByRange,
+  formatMoney,
   getDateRangeForPeriod,
   getDefaultCustomRange,
   getPreferredLeadCount,
@@ -111,12 +112,16 @@ export function AdminCampaignsPage({
           summary.resultLabel;
         const preferredResultCount = getPreferredResultCount(rows, campaign.name);
         const preferredLeadCount = getPreferredLeadCount(rows, campaign.name);
+        const isForeign = summary.currency !== "BRL";
 
         return {
           ...campaign,
           metrics: {
             ...campaign.metrics,
             amountSpent: formatCurrency(summary.amountSpent),
+            amountSpentOriginal: isForeign
+              ? formatMoney(summary.amountSpentOriginal, summary.currency)
+              : undefined,
             clicks: String(Math.round(summary.clicks)),
             ctr: formatPercent(summary.ctr),
             results: String(Math.round(preferredResultCount)),
@@ -125,8 +130,13 @@ export function AdminCampaignsPage({
             costPerLead: formatCurrency(
               preferredLeadCount > 0 ? summary.amountSpent / preferredLeadCount : 0,
             ),
+            costPerLeadOriginal:
+              isForeign && preferredLeadCount > 0
+                ? formatMoney(summary.amountSpentOriginal / preferredLeadCount, summary.currency)
+                : undefined,
             roas: formatMultiplier(summary.roas),
             periodLabel: period,
+            currency: summary.currency,
           },
           metricCount: rows.length,
           amountSpentRaw: summary.amountSpent,

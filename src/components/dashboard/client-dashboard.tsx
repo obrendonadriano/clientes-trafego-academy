@@ -12,6 +12,7 @@ import {
   buildPerformanceSeries,
   calculateChange,
   filterMetricsByRange,
+  formatMoney,
   formatPeriodLabel,
   getDateRangeForPeriod,
   getDefaultCustomRange,
@@ -72,6 +73,11 @@ function formatCurrency(value: number) {
     currency: "BRL",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+// Valor na moeda estrangeira (ex.: "US$ 39,14") quando a conta não é em BRL.
+function foreignSub(value: number, currency: string) {
+  return currency && currency !== "BRL" ? formatMoney(value, currency) : undefined;
 }
 
 function formatPercent(value: number) {
@@ -207,6 +213,7 @@ export function ClientDashboard({
           <MetricCard
             label="Custo por lead"
             value={formatCurrency(selected.totals.costPerLead)}
+            sub={foreignSub(selected.totals.costPerLeadOriginal, selected.totals.currency)}
             change={comparePrevious ? formatChange(selected.cplChange) : "período atual"}
             positive={selected.cplChange <= 0}
           />
@@ -242,6 +249,11 @@ export function ClientDashboard({
               <div className="dashboard-row rounded-2xl border px-4 py-3">
                 Investimento total:{" "}
                 <strong className="text-foreground">{formatCurrency(selected.totals.amountSpent)}</strong>
+                {foreignSub(selected.totals.amountSpentOriginal, selected.totals.currency) ? (
+                  <span className="ml-1 text-xs">
+                    ({foreignSub(selected.totals.amountSpentOriginal, selected.totals.currency)})
+                  </span>
+                ) : null}
               </div>
               <div className="dashboard-row rounded-2xl border px-4 py-3">
                 Histórico recente: <strong className="text-foreground">{reports.length} análises</strong>

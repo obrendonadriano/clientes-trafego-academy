@@ -167,7 +167,9 @@ alter table public.campaign_metrics
   add column if not exists cost_per_lead numeric(12,2) not null default 0,
   add column if not exists roi numeric(12,2) not null default 0,
   add column if not exists roas numeric(12,2) not null default 0,
-  add column if not exists frequency numeric(8,2) not null default 0;
+  add column if not exists frequency numeric(8,2) not null default 0,
+  add column if not exists currency text not null default 'BRL',
+  add column if not exists exchange_rate numeric(12,6) not null default 1;
 
 alter table public.ai_reports
   add column if not exists client_id uuid,

@@ -50,6 +50,9 @@ type MetricImportRow = {
   roi: number;
   roas: number;
   frequency: number;
+  // Moeda original da conta e taxa usada na conversão para BRL.
+  currency: string;
+  exchange_rate: number;
 };
 
 type SyncStatusRow = {
@@ -503,6 +506,8 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
         roi: 0,
         roas,
         frequency: Number(item.frequency || 0),
+        currency: (accountCurrency || "BRL").toUpperCase(),
+        exchange_rate: currencyRate,
       };
     })
     .filter((row): row is MetricImportRow => Boolean(row));

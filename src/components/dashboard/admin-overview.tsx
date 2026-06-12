@@ -13,6 +13,7 @@ import {
   buildPerformanceSeries,
   calculateChange,
   filterMetricsByRange,
+  formatMoney,
   formatPeriodLabel,
   getDateRangeForPeriod,
   getDefaultCustomRange,
@@ -134,6 +135,10 @@ export function AdminOverview({
         {
           label: "Investimento total",
           value: formatCurrency(totals.amountSpent),
+          sub:
+            totals.currency !== "BRL"
+              ? formatMoney(totals.amountSpentOriginal, totals.currency)
+              : undefined,
           change: comparePrevious
             ? formatChange(
                 calculateChange(totals.amountSpent, previousTotals.amountSpent),
@@ -144,6 +149,7 @@ export function AdminOverview({
         {
           label: "Leads gerados",
           value: String(Math.round(totals.leads)),
+          sub: undefined,
           change: comparePrevious
             ? formatChange(calculateChange(totals.leads, previousTotals.leads))
             : "período atual",
@@ -152,6 +158,7 @@ export function AdminOverview({
         {
           label: "CTR médio",
           value: formatPercent(totals.ctr),
+          sub: undefined,
           change: comparePrevious
             ? formatChange(calculateChange(totals.ctr, previousTotals.ctr))
             : "período atual",
@@ -160,6 +167,7 @@ export function AdminOverview({
         {
           label: "ROAS médio",
           value: formatMultiplier(totals.roas),
+          sub: undefined,
           change: comparePrevious
             ? formatChange(calculateChange(totals.roas, previousTotals.roas))
             : "período atual",
@@ -188,6 +196,7 @@ export function AdminOverview({
             key={card.label}
             label={card.label}
             value={card.value}
+            sub={card.sub}
             change={card.change}
             positive={card.positive}
           />
