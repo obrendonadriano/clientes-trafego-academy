@@ -19,8 +19,10 @@ import type { User } from "@/lib/types";
 
 type DashboardShellProps = {
   children: ReactNode;
-  title: string;
-  subtitle: string;
+  // Opcionais: quando a própria página já traz um título, o shell não
+  // renderiza o cabeçalho para evitar título duplicado.
+  title?: string;
+  subtitle?: string;
   user: User;
   navItems?: SideNavItem[];
 };
@@ -181,21 +183,25 @@ export function DashboardShell({
         </aside>
 
         <section className="min-w-0 flex-1 overflow-x-hidden px-1 py-3 lg:px-3 lg:py-8">
-          <header className="flex flex-col gap-4 border-b border-border/70 pb-5 dark:border-white/10 lg:flex-row lg:items-end lg:justify-between lg:pb-7">
-            <div>
-              <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground sm:text-sm">
-                {user.role === "admin" ? "Área Administrativa" : "Área do Cliente"}
-              </p>
-              <h2 className="mt-2 font-display text-[2.1rem] font-semibold leading-tight text-foreground sm:text-[2.65rem] lg:text-4xl">
-                {title}
-              </h2>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-muted-foreground sm:text-base">
-                {subtitle}
-              </p>
-            </div>
-          </header>
+          {title ? (
+            <header className="flex flex-col gap-4 border-b border-border/70 pb-5 dark:border-white/10 lg:flex-row lg:items-end lg:justify-between lg:pb-7">
+              <div>
+                <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground sm:text-sm">
+                  {user.role === "admin" ? "Área Administrativa" : "Área do Cliente"}
+                </p>
+                <h2 className="mt-2 font-display text-[2.1rem] font-semibold leading-tight text-foreground sm:text-[2.65rem] lg:text-4xl">
+                  {title}
+                </h2>
+                {subtitle ? (
+                  <p className="mt-3 max-w-3xl text-sm leading-7 text-muted-foreground sm:text-base">
+                    {subtitle}
+                  </p>
+                ) : null}
+              </div>
+            </header>
+          ) : null}
 
-          <div className="mt-6 min-w-0 lg:mt-8">{children}</div>
+          <div className={title ? "mt-6 min-w-0 lg:mt-8" : "min-w-0"}>{children}</div>
         </section>
       </div>
     </main>

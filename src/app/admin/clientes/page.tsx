@@ -22,11 +22,7 @@ export default async function AdminClientsRoute() {
   const user = await getCurrentUser();
 
   return (
-    <DashboardShell
-      user={user}
-      title="Clientes"
-      subtitle="Cadastre clientes, acesso ao portal e campanhas permitidas em um único fluxo."
-    >
+    <DashboardShell user={user}>
       <Suspense fallback={<FormPageSkeleton />}>
         <AdminClientsSection />
       </Suspense>

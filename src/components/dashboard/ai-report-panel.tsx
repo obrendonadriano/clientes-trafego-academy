@@ -212,6 +212,7 @@ export function AiReportPanel({
           </div>
 
           <PeriodFilter
+            compact
             active={period}
             onChange={setPeriod}
             comparePrevious={comparePrevious}

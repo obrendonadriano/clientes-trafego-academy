@@ -31,6 +31,9 @@ type PeriodFilterProps = {
   onApplyCustomRange?: () => void;
   maxCustomRangeDays?: number;
   customLimitLabel?: string;
+  // Em containers estreitos (ex.: painel de Relatórios IA), força layout
+  // empilhado para evitar que os botões de período se sobreponham.
+  compact?: boolean;
 };
 
 export function PeriodFilter({
@@ -43,6 +46,7 @@ export function PeriodFilter({
   onApplyCustomRange,
   maxCustomRangeDays,
   customLimitLabel,
+  compact = false,
 }: PeriodFilterProps) {
   const [internalActive, setInternalActive] =
     useState<PeriodFilterValue>("Últimos 30 dias");
@@ -101,7 +105,12 @@ export function PeriodFilter({
 
   return (
     <div className="dashboard-card min-w-0 rounded-[1.5rem] border p-3 text-foreground sm:p-4">
-      <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
+      <div
+        className={cn(
+          "flex flex-col gap-4",
+          !compact && "2xl:flex-row 2xl:items-center 2xl:justify-between",
+        )}
+      >
         <div className="min-w-0 px-1 sm:px-2">
           <div className="flex items-center gap-3">
             <div className="rounded-2xl bg-primary/[0.18] p-2 text-primary">
@@ -138,7 +147,8 @@ export function PeriodFilter({
           type="button"
           onClick={() => onComparePreviousChange?.(!comparePrevious)}
           className={cn(
-            "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold leading-5 transition active:scale-[0.985] 2xl:w-auto",
+            "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold leading-5 transition active:scale-[0.985]",
+            !compact && "2xl:w-auto",
             comparePrevious
               ? "border-primary/25 bg-primary/[0.15] text-primary"
               : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/30 hover:text-foreground dark:border-white/10 dark:bg-white/[0.035] dark:hover:border-white/20 dark:hover:bg-white/[0.06] dark:hover:text-white",

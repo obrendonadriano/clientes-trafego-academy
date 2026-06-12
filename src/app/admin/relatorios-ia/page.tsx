@@ -24,11 +24,7 @@ export default async function AdminReportsRoute() {
   const user = await getCurrentUser();
 
   return (
-    <DashboardShell
-      user={user}
-      title="Relatórios IA"
-      subtitle="Histórico de relatórios e geração de análise ficam juntos na mesma página."
-    >
+    <DashboardShell user={user}>
       <Suspense fallback={<FormPageSkeleton />}>
         <AdminReportsSection />
       </Suspense>
