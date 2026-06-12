@@ -139,6 +139,11 @@ alter table public.campaigns
 alter table public.campaigns
   alter column client_id drop not null;
 
+-- Unicidade do external_id (necessária para o upsert de campanhas da Meta).
+-- Bancos antigos adicionaram a coluna sem a constraint; este index corrige.
+create unique index if not exists campaigns_external_id_key
+  on public.campaigns (external_id);
+
 alter table public.user_campaign_permissions
   add column if not exists user_id uuid,
   add column if not exists campaign_id uuid;
