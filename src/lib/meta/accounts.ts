@@ -57,9 +57,14 @@ export async function listMetaAdAccounts(): Promise<MetaAdAccount[]> {
   return (data as DbMetaAccountRow[]).map(mapAccount);
 }
 
-// Contas ativas resolvidas para o sync. Com fallback retrocompatível: se ainda
-// não houver contas cadastradas mas existir a config antiga (conta única),
-// devolve essa config como uma conta implícita.
+// Normaliza o Ad Account ID (sem o prefixo act_) para comparar/deduplicar.
+function bareAdAccountId(value: string) {
+  return value.replace(/^act_/i, "").trim();
+}
+
+// Contas ativas resolvidas para o sync. Inclui SEMPRE a conta principal da
+// config antiga (campos de cima em Configurações), se preenchida e ativa, mais
+// todas as contas cadastradas na lista — deduplicando pelo Ad Account ID.
 export async function getSyncableMetaAccounts(): Promise<ResolvedMetaAccount[]> {
   const shared = await getMetaAdsConfig();
   const adminClient = createSupabaseAdminClient();
@@ -78,30 +83,44 @@ export async function getSyncableMetaAccounts(): Promise<ResolvedMetaAccount[]> 
     rows.push(...((data as DbMetaAccountRow[] | null) ?? []));
   }
 
-  if (rows.length === 0) {
-    // Fallback: nenhuma conta cadastrada ainda → usa a config única antiga.
-    if (shared.enabled && shared.adAccountId && shared.accessToken) {
-      return [
-        {
-          id: null,
-          label: "Conta principal",
-          adAccountId: shared.adAccountId,
-          accessToken: shared.accessToken,
-        },
-      ];
-    }
+  const accounts: ResolvedMetaAccount[] = [];
+  const seen = new Set<string>();
 
-    return [];
+  // Conta principal (config antiga / campos de cima).
+  if (shared.enabled && shared.adAccountId && shared.accessToken) {
+    accounts.push({
+      id: null,
+      label: "Conta principal",
+      adAccountId: shared.adAccountId,
+      accessToken: shared.accessToken,
+    });
+    seen.add(bareAdAccountId(shared.adAccountId));
   }
 
-  return rows
-    .map((row) => ({
+  // Contas da lista (token próprio ou, se vazio, o compartilhado).
+  for (const row of rows) {
+    const bare = bareAdAccountId(row.ad_account_id);
+
+    if (seen.has(bare)) {
+      continue;
+    }
+
+    const accessToken = row.access_token || shared.accessToken;
+
+    if (!row.ad_account_id || !accessToken) {
+      continue;
+    }
+
+    accounts.push({
       id: row.id,
       label: row.label,
       adAccountId: row.ad_account_id,
-      accessToken: row.access_token || shared.accessToken,
-    }))
-    .filter((account) => Boolean(account.adAccountId && account.accessToken));
+      accessToken,
+    });
+    seen.add(bare);
+  }
+
+  return accounts;
 }
 
 export async function createMetaAdAccount(input: {

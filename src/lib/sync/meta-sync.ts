@@ -3,6 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   fetchMetaCampaigns,
   fetchMetaInsights,
+  MetaPermissionError,
   MetaRateLimitError,
   MetaTokenExpiredError,
 } from "@/lib/meta-ads";
@@ -516,7 +517,12 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
 
 function describeAccountError(error: unknown) {
   if (error instanceof MetaTokenExpiredError) {
-    return "Token expirado ou revogado. Reconecte esta conta em Configurações.";
+    // error.message já traz o motivo real da Meta (ex.: sessão expirada).
+    return `${error.message}. Gere um novo token em Configurações.`;
+  }
+
+  if (error instanceof MetaPermissionError) {
+    return `${error.message}. Verifique se este token tem acesso a esta conta de anúncio.`;
   }
 
   if (error instanceof MetaRateLimitError) {

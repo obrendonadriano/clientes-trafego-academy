@@ -2,14 +2,29 @@ import { getIntegrationSettingByProvider } from "@/lib/integrations";
 
 const META_GRAPH_VERSION = "v22.0";
 
-// Token inválido/expirado (Graph API code 190). Exige reconectar o OAuth.
+// Token inválido/expirado (Graph API code 190). Carrega a mensagem real da
+// Meta para diagnóstico (ex.: "Session has expired", "user not authorized").
 export class MetaTokenExpiredError extends Error {
-  constructor(message?: string) {
+  constructor(metaMessage?: string) {
     super(
-      message ??
-        "O token de acesso da Meta expirou ou foi revogado. Reconecte a Meta Ads em Configurações.",
+      metaMessage
+        ? `Token recusado pela Meta — ${metaMessage}`
+        : "O token de acesso da Meta expirou ou foi revogado.",
     );
     this.name = "MetaTokenExpiredError";
+  }
+}
+
+// Token válido, mas sem permissão para acessar ESTA conta de anúncio
+// (codes 10 / 200 / 803). Causa diferente de token expirado.
+export class MetaPermissionError extends Error {
+  constructor(metaMessage?: string) {
+    super(
+      metaMessage
+        ? `Sem permissão nesta conta — ${metaMessage}`
+        : "O token não tem permissão para acessar esta conta de anúncio.",
+    );
+    this.name = "MetaPermissionError";
   }
 }
 
@@ -34,14 +49,20 @@ type MetaGraphError = {
 };
 
 const META_RATE_LIMIT_CODES = new Set([4, 17, 32, 613]);
+const META_PERMISSION_CODES = new Set([10, 200, 803]);
 const META_RATE_LIMIT_RETRY_DELAY_MS = 15_000;
 
 function throwForMetaError(status: number, body: MetaGraphError): never {
   const code = body.error?.code;
   const subcode = body.error?.error_subcode;
+  const message = body.error?.message;
 
   if (code === 190) {
-    throw new MetaTokenExpiredError();
+    throw new MetaTokenExpiredError(message);
+  }
+
+  if (code !== undefined && META_PERMISSION_CODES.has(code)) {
+    throw new MetaPermissionError(message);
   }
 
   if ((code !== undefined && META_RATE_LIMIT_CODES.has(code)) || subcode === 80004) {
@@ -49,8 +70,8 @@ function throwForMetaError(status: number, body: MetaGraphError): never {
   }
 
   throw new Error(
-    body.error?.message
-      ? `A Meta retornou um erro: ${body.error.message}`
+    message
+      ? `A Meta retornou um erro: ${message}`
       : `Falha ao buscar dados da Meta Ads (HTTP ${status}).`,
   );
 }
