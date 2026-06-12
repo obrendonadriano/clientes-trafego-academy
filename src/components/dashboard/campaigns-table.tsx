@@ -34,7 +34,7 @@ const columns: Array<{
   { key: "clicks", label: "Cliques", className: "min-w-[90px]" },
   { key: "ctr", label: "CTR", className: "min-w-[88px]" },
   { key: "results", label: "Resultados", className: "min-w-[128px]" },
-  { key: "costPerLead", label: "CPL", className: "min-w-[108px]" },
+  { key: "costPerLead", label: "Custo/result.", className: "min-w-[128px]" },
   { key: "roas", label: "ROAS", className: "min-w-[88px]" },
 ];
 
@@ -217,7 +217,7 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
             <option value="amountSpent:asc">Menor investimento</option>
             <option value="results:desc">Mais resultados</option>
             <option value="ctr:desc">Maior CTR</option>
-            <option value="costPerLead:asc">Menor CPL</option>
+            <option value="costPerLead:asc">Menor custo/result.</option>
             <option value="roas:desc">Maior ROAS</option>
             <option value="name:asc">Nome (A-Z)</option>
           </Select>
@@ -264,7 +264,7 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
                 <p className="mt-0.5 font-semibold">{campaign.metrics.ctr}</p>
               </div>
               <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
-                <p className="text-xs text-muted-foreground">CPL</p>
+                <p className="text-xs text-muted-foreground">Custo/result.</p>
                 <p className="mt-0.5 font-semibold">{campaign.metrics.costPerLead}</p>
                 {campaign.metrics.costPerLeadOriginal ? (
                   <p className="text-xs text-muted-foreground">

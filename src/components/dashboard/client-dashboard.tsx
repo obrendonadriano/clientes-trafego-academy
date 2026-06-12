@@ -150,7 +150,7 @@ export function ClientDashboard({
             resultLabel: preferredResultLabel,
             leads: String(Math.round(preferredLeadCount)),
             costPerLead: formatCurrency(
-              preferredLeadCount > 0 ? summary.amountSpent / preferredLeadCount : 0,
+              preferredResultCount > 0 ? summary.amountSpent / preferredResultCount : 0,
             ),
             roas: `${summary.roas.toFixed(2).replace(".", ",")}x`,
             periodLabel: formatPeriodLabel(period, customRange, referenceDate),
@@ -211,7 +211,7 @@ export function ClientDashboard({
             positive={selected.ctrChange >= 0}
           />
           <MetricCard
-            label="Custo por lead"
+            label="Custo por resultado"
             value={formatCurrency(selected.totals.costPerLead)}
             sub={foreignSub(selected.totals.costPerLeadOriginal, selected.totals.currency)}
             change={comparePrevious ? formatChange(selected.cplChange) : "período atual"}

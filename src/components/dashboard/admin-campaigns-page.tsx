@@ -128,11 +128,11 @@ export function AdminCampaignsPage({
             resultLabel: preferredResultLabel,
             leads: String(Math.round(preferredLeadCount)),
             costPerLead: formatCurrency(
-              preferredLeadCount > 0 ? summary.amountSpent / preferredLeadCount : 0,
+              preferredResultCount > 0 ? summary.amountSpent / preferredResultCount : 0,
             ),
             costPerLeadOriginal:
-              isForeign && preferredLeadCount > 0
-                ? formatMoney(summary.amountSpentOriginal / preferredLeadCount, summary.currency)
+              isForeign && preferredResultCount > 0
+                ? formatMoney(summary.amountSpentOriginal / preferredResultCount, summary.currency)
                 : undefined,
             roas: formatMultiplier(summary.roas),
             periodLabel: period,

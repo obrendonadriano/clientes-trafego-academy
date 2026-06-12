@@ -333,8 +333,9 @@ function aggregateMetrics(rows: RawCampaignMetric[]): AggregatedMetric | undefin
         ? (totals.amount_spent / totals.impressions) * 1000
         : 0,
     leads: totals.leads,
+    // Custo por RESULTADO = gasto / resultado principal (bate com a Meta).
     cost_per_lead:
-      totals.leads > 0 ? totals.amount_spent / totals.leads : 0,
+      totals.results > 0 ? totals.amount_spent / totals.results : 0,
     roi: average(totals.roi),
     roas: average(totals.roas),
     frequency: average(totals.frequency),
@@ -346,7 +347,7 @@ function aggregateMetrics(rows: RawCampaignMetric[]): AggregatedMetric | undefin
         ? (totals.amount_spent_original / totals.impressions) * 1000
         : 0,
     cost_per_lead_original:
-      totals.leads > 0 ? totals.amount_spent_original / totals.leads : 0,
+      totals.results > 0 ? totals.amount_spent_original / totals.results : 0,
   };
 }
 

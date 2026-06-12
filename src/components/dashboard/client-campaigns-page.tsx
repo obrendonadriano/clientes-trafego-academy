@@ -117,11 +117,11 @@ export function ClientCampaignsPage({
             resultLabel: preferredResultLabel,
             leads: String(Math.round(preferredLeadCount)),
             costPerLead: formatCurrency(
-              preferredLeadCount > 0 ? totals.amountSpent / preferredLeadCount : 0,
+              preferredResultCount > 0 ? totals.amountSpent / preferredResultCount : 0,
             ),
             costPerLeadOriginal:
-              isForeign && preferredLeadCount > 0
-                ? formatMoney(totals.amountSpentOriginal / preferredLeadCount, currency)
+              isForeign && preferredResultCount > 0
+                ? formatMoney(totals.amountSpentOriginal / preferredResultCount, currency)
                 : undefined,
             roas: `${(totals.roas / rows.length).toFixed(2).replace(".", ",")}x`,
             periodLabel,

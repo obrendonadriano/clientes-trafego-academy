@@ -417,14 +417,16 @@ export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
   );
 
   const currency = resolveCurrency(rows);
-  // CPC/CPM/CPL na moeda original derivam do gasto original.
+  // CPC/CPM na moeda original derivam do gasto original.
   const cpcOriginal = totals.clicks > 0 ? totals.amountSpentOriginal / totals.clicks : 0;
   const cpmOriginal =
     totals.impressions > 0
       ? (totals.amountSpentOriginal / totals.impressions) * 1000
       : 0;
+  // Custo por RESULTADO = gasto / resultado principal (não só leads). Cobre
+  // campanhas de mensagem/compra, batendo com o "Custo por resultado" da Meta.
   const costPerLeadOriginal =
-    totals.leads > 0 ? totals.amountSpentOriginal / totals.leads : 0;
+    totals.results > 0 ? totals.amountSpentOriginal / totals.results : 0;
 
   return {
     amountSpent: totals.amountSpent,
@@ -444,7 +446,7 @@ export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
         ? (totals.amountSpent / totals.impressions) * 1000
         : 0,
     costPerLead:
-      totals.leads > 0 ? totals.amountSpent / totals.leads : 0,
+      totals.results > 0 ? totals.amountSpent / totals.results : 0,
     roi: average(totals.roi),
     roas: average(totals.roas),
     frequency: average(totals.frequency),
