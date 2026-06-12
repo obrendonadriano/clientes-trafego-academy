@@ -371,11 +371,24 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
     throw new Error("Supabase admin não configurado para importar métricas.");
   }
 
-  const [last30DaysInsights, todayHourlyInsights, yesterdayHourlyInsights] = await Promise.all([
+  const [
+    last30DaysInsights,
+    todayDailyInsights,
+    todayHourlyInsights,
+    yesterdayHourlyInsights,
+  ] = await Promise.all([
     fetchMetaInsights({
       adAccountId: account.adAccountId,
       accessToken: account.accessToken,
       datePreset: "last_30d",
+    }),
+    // Dia de HOJE em granularidade diária. Sem isso, os dados de hoje só
+    // existiriam como hora-a-hora e seriam descartados ao somar por dia
+    // (o histórico last_30d fecha em ontem).
+    fetchMetaInsights({
+      adAccountId: account.adAccountId,
+      accessToken: account.accessToken,
+      datePreset: "today",
     }),
     fetchMetaInsights({
       adAccountId: account.adAccountId,
@@ -416,12 +429,21 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
   // que os clientes sempre vejam reais.
   const accountCurrency =
     last30DaysInsights.data.find((item) => item.account_currency)?.account_currency ??
+    todayDailyInsights.data.find((item) => item.account_currency)?.account_currency ??
     todayHourlyInsights.data.find((item) => item.account_currency)?.account_currency ??
     "BRL";
   const currencyRate = await getCurrencyRateToBrl(accountCurrency);
 
   const rows = [
     ...last30DaysInsights.data.map((item) => ({
+      ...item,
+      granularity: "day" as const,
+      hour_bucket: -1,
+      hour_label: "",
+    })),
+    // Hoje em granularidade diária (sobrescreve a linha de hoje do last_30d
+    // se já existir, mantendo o valor mais atualizado).
+    ...todayDailyInsights.data.map((item) => ({
       ...item,
       granularity: "day" as const,
       hour_bucket: -1,
