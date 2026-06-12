@@ -95,7 +95,7 @@ export function AdminOverview({
 }: AdminOverviewProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const [, startTransition] = useTransition();
+  const [isApplying, startTransition] = useTransition();
   const [period, setPeriod] = useState<PeriodFilterValue>("Últimos 30 dias");
   const [comparePrevious, setComparePrevious] = useState(true);
   const [customRange, setCustomRange] = useState(() => getDefaultCustomRange());
@@ -188,6 +188,7 @@ export function AdminOverview({
         customRange={customRange}
         onCustomRangeChange={setCustomRange}
         onApplyCustomRange={handleApplyCustomRange}
+        isApplying={isApplying}
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

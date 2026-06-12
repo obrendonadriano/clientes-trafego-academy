@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { differenceInCalendarDays, parseISO, subDays } from "date-fns";
-import { CalendarRange, SlidersHorizontal } from "lucide-react";
-import { getDefaultCustomRange } from "@/lib/dashboard-metrics";
+import { CalendarRange, LoaderCircle, SlidersHorizontal } from "lucide-react";
+import { formatPeriodLabel, getDefaultCustomRange } from "@/lib/dashboard-metrics";
 import { cn } from "@/lib/utils";
 
 export const periods = [
@@ -34,6 +34,8 @@ type PeriodFilterProps = {
   // Em containers estreitos (ex.: painel de Relatórios IA), força layout
   // empilhado para evitar que os botões de período se sobreponham.
   compact?: boolean;
+  // true enquanto o servidor refaz a busca do período aplicado (admin custom).
+  isApplying?: boolean;
 };
 
 export function PeriodFilter({
@@ -47,6 +49,7 @@ export function PeriodFilter({
   maxCustomRangeDays,
   customLimitLabel,
   compact = false,
+  isApplying = false,
 }: PeriodFilterProps) {
   const [internalActive, setInternalActive] =
     useState<PeriodFilterValue>("Últimos 30 dias");
@@ -102,6 +105,8 @@ export function PeriodFilter({
     handleRangeChange(adjustedRange);
     onApplyCustomRange();
   }
+
+  const activeLabel = formatPeriodLabel(active, { start, end });
 
   return (
     <div className="dashboard-card min-w-0 rounded-[1.5rem] border p-3 text-foreground sm:p-4">
@@ -189,9 +194,18 @@ export function PeriodFilter({
             <button
               type="button"
               onClick={handleApplyCustomRange}
-              className="w-full rounded-2xl border border-primary/25 bg-primary/[0.15] px-4 py-3 text-sm font-semibold text-primary transition active:scale-[0.985] hover:bg-primary hover:text-white md:w-auto"
+              disabled={isApplying}
+              aria-busy={isApplying}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/25 bg-primary/[0.15] px-4 py-3 text-sm font-semibold text-primary transition active:scale-[0.985] hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-70 md:w-auto"
             >
-              Aplicar período
+              {isApplying ? (
+                <>
+                  <LoaderCircle className="size-4 animate-spin" />
+                  Aplicando...
+                </>
+              ) : (
+                "Aplicar período"
+              )}
             </button>
           </div>
           {maxCustomRangeDays ? (
@@ -205,6 +219,21 @@ export function PeriodFilter({
           ) : null}
         </div>
       ) : null}
+
+      {/* Aviso do período em visualização (atualiza ao aplicar). */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/60 px-1 pt-3 text-sm dark:border-white/10 sm:px-2">
+        {isApplying ? (
+          <span className="inline-flex items-center gap-2 rounded-full bg-primary/[0.15] px-3 py-1 font-medium text-primary">
+            <LoaderCircle className="size-3.5 animate-spin" />
+            Atualizando período…
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-2 rounded-full bg-primary/[0.12] px-3 py-1 font-medium text-primary">
+            <CalendarRange className="size-3.5" />
+            Visualizando: {activeLabel}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
