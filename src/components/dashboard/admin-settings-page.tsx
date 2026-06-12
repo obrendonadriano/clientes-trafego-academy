@@ -4,16 +4,18 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { Brain, Database, PlugZap } from "lucide-react";
 import { saveIntegrationSettingsAction, type SettingsActionState } from "@/app/admin/configuracoes/actions";
+import { MetaAccountsManager } from "@/components/admin/meta-accounts-manager";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import type { IntegrationSetting } from "@/lib/types";
+import type { IntegrationSetting, MetaAdAccount } from "@/lib/types";
 
 type AdminSettingsPageProps = {
   integrations: IntegrationSetting[];
+  metaAccounts: MetaAdAccount[];
 };
 
 const initialState: SettingsActionState = {};
@@ -37,7 +39,13 @@ function SaveButton() {
   );
 }
 
-function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
+function IntegrationCard({
+  integration,
+  metaAccounts,
+}: {
+  integration: IntegrationSetting;
+  metaAccounts: MetaAdAccount[];
+}) {
   const [state, formAction] = useActionState(saveIntegrationSettingsAction, initialState);
 
   const icon =
@@ -211,12 +219,21 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
             </p>
           ) : null}
         </form>
+
+        {/* Gerenciador de várias contas de anúncio — fora do form de
+            credenciais porque tem os próprios forms de add/remover. */}
+        {integration.provider === "meta_ads" ? (
+          <MetaAccountsManager accounts={metaAccounts} />
+        ) : null}
       </CardContent>
     </Card>
   );
 }
 
-export function AdminSettingsPage({ integrations }: AdminSettingsPageProps) {
+export function AdminSettingsPage({
+  integrations,
+  metaAccounts,
+}: AdminSettingsPageProps) {
   return (
     <div className="space-y-6">
       <div>
@@ -233,7 +250,11 @@ export function AdminSettingsPage({ integrations }: AdminSettingsPageProps) {
 
       <div className="grid gap-6 xl:grid-cols-2">
         {integrations.map((integration) => (
-          <IntegrationCard key={integration.provider} integration={integration} />
+          <IntegrationCard
+            key={integration.provider}
+            integration={integration}
+            metaAccounts={metaAccounts}
+          />
         ))}
       </div>
     </div>

@@ -127,3 +127,15 @@ export type SyncStatus = {
   nextRunAt?: string | null;
   message?: string | null;
 };
+
+export type MetaAdAccount = {
+  id: string;
+  label: string;
+  adAccountId: string;
+  // Token próprio da conta; quando vazio, usa o token compartilhado da BM.
+  hasOwnToken: boolean;
+  enabled: boolean;
+  status: "pending" | "ok" | "error";
+  lastMessage?: string | null;
+  lastSyncedAt?: string | null;
+};

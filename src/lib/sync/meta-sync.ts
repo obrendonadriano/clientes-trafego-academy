@@ -3,10 +3,14 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   fetchMetaCampaigns,
   fetchMetaInsights,
-  getMetaAdsConfig,
   MetaRateLimitError,
   MetaTokenExpiredError,
 } from "@/lib/meta-ads";
+import {
+  getSyncableMetaAccounts,
+  setMetaAccountSyncStatus,
+  type ResolvedMetaAccount,
+} from "@/lib/meta/accounts";
 import { IntegrationProvider, SyncStatus } from "@/lib/types";
 
 const META_SYNC_INTERVAL_MINUTES = 15;
@@ -20,6 +24,8 @@ type CampaignImportRow = {
   plataforma: string;
   external_id: string;
   source: string;
+  // Origem da campanha (null para a conta única antiga via fallback).
+  meta_account_id: string | null;
 };
 
 type MetricImportRow = {
@@ -327,24 +333,16 @@ async function upsertMetricRows(rows: MetricImportRow[]) {
   }
 }
 
-export async function importMetaCampaigns() {
+export async function importMetaCampaigns(account: ResolvedMetaAccount) {
   const adminClient = createSupabaseAdminClient();
 
   if (!adminClient) {
     throw new Error("Supabase admin não configurado para importar campanhas.");
   }
 
-  const config = await getMetaAdsConfig();
-
-  if (!config.enabled || !config.accessToken || !config.adAccountId) {
-    throw new Error(
-      "Conecte a Meta Ads em Configurações, informe o Ad Account ID e ative a integração antes de importar.",
-    );
-  }
-
   const result = await fetchMetaCampaigns({
-    adAccountId: config.adAccountId,
-    accessToken: config.accessToken,
+    adAccountId: account.adAccountId,
+    accessToken: account.accessToken,
   });
 
   const rows: CampaignImportRow[] = result.data.map((campaign) => ({
@@ -353,6 +351,7 @@ export async function importMetaCampaigns() {
     plataforma: "Meta Ads",
     external_id: campaign.id,
     source: "meta_ads",
+    meta_account_id: account.id,
   }));
 
   await upsertCampaignRows(rows);
@@ -360,44 +359,40 @@ export async function importMetaCampaigns() {
   return rows.length;
 }
 
-export async function importMetaInsights() {
+export async function importMetaInsights(account: ResolvedMetaAccount) {
   const adminClient = createSupabaseAdminClient();
 
   if (!adminClient) {
     throw new Error("Supabase admin não configurado para importar métricas.");
   }
 
-  const config = await getMetaAdsConfig();
-
-  if (!config.enabled || !config.accessToken || !config.adAccountId) {
-    throw new Error(
-      "Conecte a Meta Ads em Configurações, informe o Ad Account ID e ative a integração antes de importar métricas.",
-    );
-  }
-
   const [last30DaysInsights, todayHourlyInsights, yesterdayHourlyInsights] = await Promise.all([
     fetchMetaInsights({
-      adAccountId: config.adAccountId,
-      accessToken: config.accessToken,
+      adAccountId: account.adAccountId,
+      accessToken: account.accessToken,
       datePreset: "last_30d",
     }),
     fetchMetaInsights({
-      adAccountId: config.adAccountId,
-      accessToken: config.accessToken,
+      adAccountId: account.adAccountId,
+      accessToken: account.accessToken,
       datePreset: "today",
       breakdown: "hourly_stats_aggregated_by_advertiser_time_zone",
     }),
     fetchMetaInsights({
-      adAccountId: config.adAccountId,
-      accessToken: config.accessToken,
+      adAccountId: account.adAccountId,
+      accessToken: account.accessToken,
       datePreset: "yesterday",
       breakdown: "hourly_stats_aggregated_by_advertiser_time_zone",
     }),
   ]);
 
-  const { data: campaigns, error: campaignsError } = await adminClient
-    .from("campaigns")
-    .select("id, external_id");
+  // Mapeia só as campanhas DESTA conta (fallback: todas, quando não há vínculo).
+  let campaignQuery = adminClient.from("campaigns").select("id, external_id");
+  campaignQuery = account.id
+    ? campaignQuery.eq("meta_account_id", account.id)
+    : campaignQuery;
+
+  const { data: campaigns, error: campaignsError } = await campaignQuery;
 
   if (campaignsError || !campaigns) {
     throw new Error(
@@ -519,6 +514,18 @@ export async function importMetaInsights() {
   return uniqueRows.length;
 }
 
+function describeAccountError(error: unknown) {
+  if (error instanceof MetaTokenExpiredError) {
+    return "Token expirado ou revogado. Reconecte esta conta em Configurações.";
+  }
+
+  if (error instanceof MetaRateLimitError) {
+    return "A Meta limitou as requisições desta conta. Será retomada na próxima sincronização.";
+  }
+
+  return error instanceof Error ? error.message : "Falha inesperada ao sincronizar a conta.";
+}
+
 export async function runMetaSync() {
   const startedAt = new Date();
   const startedAtIso = startedAt.toISOString();
@@ -529,51 +536,12 @@ export async function runMetaSync() {
     message: "Sincronização automática da Meta Ads em andamento.",
   });
 
-  try {
-    const campaignCount = await importMetaCampaigns();
-    const metricCount = await importMetaInsights();
-    const finishedAt = new Date();
-    const finishedAtIso = finishedAt.toISOString();
-    const nextRunAt = getNextRunAt(finishedAt);
+  const accounts = await getSyncableMetaAccounts();
 
-    await persistSyncStatus({
-      status: "success",
-      last_attempt_at: startedAtIso,
-      last_success_at: finishedAtIso,
-      next_run_at: nextRunAt,
-      message: `Última sincronização concluída com ${campaignCount} campanha(s) e ${metricCount} registro(s) de métricas.`,
-    });
-
-    // Campanhas recém-importadas aparecem imediatamente nos formulários e
-    // listas (multi-select de edição do cliente inclusive).
-    // "max" = stale-while-revalidate; obrigatório aqui porque o cron route
-    // handler não pode chamar updateTag (restrito a Server Actions).
-    revalidateTag("campaigns", "max");
-    revalidateTag("metrics", "max");
-    revalidateTag("sync", "max");
-    revalidatePath("/admin");
-    revalidatePath("/admin/campanhas");
-    revalidatePath("/admin/clientes");
-    revalidatePath("/dashboard");
-
-    return {
-      campaignCount,
-      metricCount,
-      lastSuccessAt: finishedAtIso,
-      nextRunAt,
-    } satisfies MetaSyncResult;
-  } catch (error) {
+  if (accounts.length === 0) {
+    const message =
+      "Nenhuma conta de anúncio ativa. Cadastre ao menos uma conta em Configurações → Meta Ads.";
     const nextRunAt = getNextRunAt(new Date());
-    let message =
-      error instanceof Error ? error.message : "Falha inesperada ao sincronizar Meta Ads.";
-
-    if (error instanceof MetaTokenExpiredError) {
-      message =
-        "Token da Meta expirou ou foi revogado. Acesse Configurações e reconecte a Meta Ads para retomar a sincronização.";
-    } else if (error instanceof MetaRateLimitError) {
-      message =
-        "A Meta limitou as requisições temporariamente. A sincronização será retomada automaticamente na próxima execução.";
-    }
 
     await persistSyncStatus({
       status: "error",
@@ -581,11 +549,116 @@ export async function runMetaSync() {
       next_run_at: nextRunAt,
       message,
     });
-
     revalidateTag("sync", "max");
 
-    throw error;
+    throw new Error(message);
   }
+
+  let campaignCount = 0;
+  let metricCount = 0;
+  let okCount = 0;
+  const failures: string[] = [];
+
+  // Cada conta é sincronizada de forma isolada: um token expirado numa conta
+  // não impede as outras de sincronizarem.
+  for (const account of accounts) {
+    try {
+      campaignCount += await importMetaCampaigns(account);
+      metricCount += await importMetaInsights(account);
+      okCount += 1;
+
+      if (account.id) {
+        await setMetaAccountSyncStatus(account.id, "ok", null);
+      }
+    } catch (error) {
+      const detail = describeAccountError(error);
+      failures.push(`${account.label}: ${detail}`);
+
+      if (account.id) {
+        await setMetaAccountSyncStatus(account.id, "error", detail);
+      }
+    }
+  }
+
+  const finishedAt = new Date();
+  const finishedAtIso = finishedAt.toISOString();
+  const nextRunAt = getNextRunAt(finishedAt);
+  const allFailed = okCount === 0;
+
+  const summary = allFailed
+    ? `Falha ao sincronizar todas as contas. ${failures.join(" | ")}`
+    : failures.length > 0
+      ? `${okCount}/${accounts.length} conta(s) sincronizada(s): ${campaignCount} campanha(s) e ${metricCount} registro(s). Com erro: ${failures.join(" | ")}`
+      : `Sincronização concluída: ${okCount} conta(s), ${campaignCount} campanha(s) e ${metricCount} registro(s) de métricas.`;
+
+  await persistSyncStatus({
+    status: allFailed ? "error" : "success",
+    last_attempt_at: startedAtIso,
+    last_success_at: allFailed ? undefined : finishedAtIso,
+    next_run_at: nextRunAt,
+    message: summary,
+  });
+
+  // "max" = stale-while-revalidate; obrigatório aqui porque o cron route
+  // handler não pode chamar updateTag (restrito a Server Actions).
+  revalidateTag("campaigns", "max");
+  revalidateTag("metrics", "max");
+  revalidateTag("sync", "max");
+  revalidatePath("/admin");
+  revalidatePath("/admin/campanhas");
+  revalidatePath("/admin/clientes");
+  revalidatePath("/dashboard");
+
+  if (allFailed) {
+    throw new Error(summary);
+  }
+
+  return {
+    campaignCount,
+    metricCount,
+    lastSuccessAt: finishedAtIso,
+    nextRunAt,
+  } satisfies MetaSyncResult;
+}
+
+// Importa apenas as campanhas (sem métricas) de todas as contas ativas.
+// Usado pelo botão "Importar campanhas" da tela de Campanhas.
+export async function importAllMetaCampaigns() {
+  const accounts = await getSyncableMetaAccounts();
+
+  if (accounts.length === 0) {
+    throw new Error(
+      "Nenhuma conta de anúncio ativa. Cadastre ao menos uma conta em Configurações → Meta Ads.",
+    );
+  }
+
+  let count = 0;
+  const failures: string[] = [];
+
+  for (const account of accounts) {
+    try {
+      count += await importMetaCampaigns(account);
+
+      if (account.id) {
+        await setMetaAccountSyncStatus(account.id, "ok", null);
+      }
+    } catch (error) {
+      const detail = describeAccountError(error);
+      failures.push(`${account.label}: ${detail}`);
+
+      if (account.id) {
+        await setMetaAccountSyncStatus(account.id, "error", detail);
+      }
+    }
+  }
+
+  revalidateTag("campaigns", "max");
+
+  if (count === 0 && failures.length > 0) {
+    throw new Error(failures.join(" | "));
+  }
+
+  return count;
 }
 
 export async function getMetaSyncStatus(): Promise<SyncStatus> {

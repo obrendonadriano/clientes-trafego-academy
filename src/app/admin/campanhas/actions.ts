@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath, updateTag } from "next/cache";
-import { importMetaCampaigns, runMetaSync } from "@/lib/sync/meta-sync";
+import { importAllMetaCampaigns, runMetaSync } from "@/lib/sync/meta-sync";
 
 export type CampaignImportState = {
   success?: string;
@@ -16,7 +16,7 @@ export async function importMetaCampaignsAction(
   void formData;
 
   try {
-    const count = await importMetaCampaigns();
+    const count = await importAllMetaCampaigns();
     updateTag("campaigns");
     revalidatePath("/admin/campanhas");
     revalidatePath("/admin/clientes");
