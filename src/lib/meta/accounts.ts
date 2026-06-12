@@ -123,6 +123,42 @@ export async function getSyncableMetaAccounts(): Promise<ResolvedMetaAccount[]> 
   return accounts;
 }
 
+// Traz a conta legada (campo "Ad Account ID" antigo da config) para a lista de
+// contas, se ainda não estiver lá. Idempotente. Chamada ao abrir Configurações
+// para que a conta principal apareça e seja gerenciável junto com as demais.
+export async function ensureLegacyAccountMigrated() {
+  const shared = await getMetaAdsConfig();
+
+  if (!shared.adAccountId) {
+    return;
+  }
+
+  const adminClient = createSupabaseAdminClient();
+
+  if (!adminClient) {
+    return;
+  }
+
+  const bare = bareAdAccountId(shared.adAccountId);
+  const { data } = await adminClient.from("meta_ad_accounts").select("ad_account_id");
+  const exists = ((data as Array<{ ad_account_id: string }> | null) ?? []).some(
+    (row) => bareAdAccountId(row.ad_account_id) === bare,
+  );
+
+  if (exists) {
+    return;
+  }
+
+  // access_token nulo → a conta usa o token compartilhado da BM.
+  await adminClient.from("meta_ad_accounts").insert({
+    label: "Conta principal",
+    ad_account_id: `act_${bare}`,
+    access_token: null,
+    enabled: true,
+    status: "pending",
+  });
+}
+
 export async function createMetaAdAccount(input: {
   label: string;
   adAccountId: string;

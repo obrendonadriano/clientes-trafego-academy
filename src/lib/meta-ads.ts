@@ -284,7 +284,7 @@ export async function fetchMetaInsights(input: {
   const params = new URLSearchParams({
     level: "campaign",
     fields:
-      "campaign_id,campaign_name,date_start,spend,reach,impressions,clicks,ctr,cpc,cpm,frequency,actions,purchase_roas",
+      "campaign_id,campaign_name,date_start,spend,reach,impressions,clicks,ctr,cpc,cpm,frequency,actions,purchase_roas,account_currency",
     date_preset: input.datePreset ?? "last_30d",
     access_token: input.accessToken,
     limit: "500",
@@ -316,10 +316,48 @@ export async function fetchMetaInsights(input: {
       action_type: string;
       value: string;
     }>;
+    account_currency?: string;
     hourly_stats_aggregated_by_advertiser_time_zone?: string;
   }>(
     `https://graph.facebook.com/${META_GRAPH_VERSION}/${accountId}/insights?${params.toString()}`,
   );
 
   return { data };
+}
+
+// Cotação de uma moeda para BRL (cotação atual). Usado para converter os
+// valores de contas em moeda estrangeira (ex.: USD) ao sincronizar.
+// Fonte: AwesomeAPI (gratuita, sem chave). Cai para uma taxa fixa se falhar.
+export async function getCurrencyRateToBrl(currency: string): Promise<number> {
+  const code = (currency || "BRL").toUpperCase();
+
+  if (code === "BRL") {
+    return 1;
+  }
+
+  try {
+    const response = await fetch(
+      `https://economia.awesomeapi.com.br/last/${code}-BRL`,
+      { cache: "no-store", signal: AbortSignal.timeout(8000) },
+    );
+
+    if (response.ok) {
+      const data = (await response.json()) as Record<string, { bid?: string }>;
+      const bid = Number(data?.[`${code}BRL`]?.bid);
+
+      if (Number.isFinite(bid) && bid > 0) {
+        return bid;
+      }
+    }
+  } catch {
+    // Sem internet/timeout: usa o fallback abaixo.
+  }
+
+  // Fallback configurável por env (ex.: USD_BRL_FALLBACK_RATE=5.40).
+  const fallback = Number(process.env[`${code}_BRL_FALLBACK_RATE`]);
+  if (Number.isFinite(fallback) && fallback > 0) {
+    return fallback;
+  }
+
+  return code === "USD" ? 5.4 : 1;
 }

@@ -3,6 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   fetchMetaCampaigns,
   fetchMetaInsights,
+  getCurrencyRateToBrl,
   MetaPermissionError,
   MetaRateLimitError,
   MetaTokenExpiredError,
@@ -407,6 +408,15 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
       .map((campaign) => [campaign.external_id as string, campaign.id]),
   );
 
+  // Moeda da conta (a Meta informa por insight). Contas em moeda estrangeira
+  // (ex.: USD) têm os valores convertidos para BRL pela cotação atual, para
+  // que os clientes sempre vejam reais.
+  const accountCurrency =
+    last30DaysInsights.data.find((item) => item.account_currency)?.account_currency ??
+    todayHourlyInsights.data.find((item) => item.account_currency)?.account_currency ??
+    "BRL";
+  const currencyRate = await getCurrencyRateToBrl(accountCurrency);
+
   const rows = [
     ...last30DaysInsights.data.map((item) => ({
       ...item,
@@ -469,7 +479,9 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
           0,
         ) ?? 0;
 
-      const spend = Number(item.spend || 0);
+      // Valores monetários convertidos para BRL (currencyRate = 1 quando a
+      // conta já é em real). ROAS é uma razão e não muda com a moeda.
+      const spend = Number(item.spend || 0) * currencyRate;
 
       return {
         campaign_id: campaignId,
@@ -484,8 +496,8 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
         ctr: Number(item.ctr || 0),
         result_count: primaryResult.count,
         result_label: primaryResult.label,
-        cpc: Number(item.cpc || 0),
-        cpm: Number(item.cpm || 0),
+        cpc: Number(item.cpc || 0) * currencyRate,
+        cpm: Number(item.cpm || 0) * currencyRate,
         leads: normalizedLeads,
         cost_per_lead: normalizedLeads > 0 ? spend / normalizedLeads : 0,
         roi: 0,

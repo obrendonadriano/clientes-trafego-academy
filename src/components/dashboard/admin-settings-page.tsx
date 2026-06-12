@@ -113,15 +113,7 @@ function IntegrationCard({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="meta_ad_account_id">Ad Account ID</Label>
-                  <Input
-                    id="meta_ad_account_id"
-                    name="config_ad_account_id"
-                    defaultValue={integration.config.ad_account_id ?? ""}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="meta_access_token">Access Token</Label>
+                  <Label htmlFor="meta_access_token">Access Token compartilhado</Label>
                   <Input
                     id="meta_access_token"
                     name="config_access_token"
@@ -129,6 +121,21 @@ function IntegrationCard({
                   />
                 </div>
               </div>
+
+              {/* As contas de anúncio ficam na lista abaixo. O Ad Account ID
+                  antigo é preservado oculto para não perder dados ao salvar. */}
+              <input
+                type="hidden"
+                name="config_ad_account_id"
+                defaultValue={integration.config.ad_account_id ?? ""}
+              />
+
+              <p className="text-sm text-muted-foreground">
+                Informe aqui o App ID, App Secret e o Access Token compartilhado da
+                sua Business Manager. As contas de anúncio são cadastradas na lista
+                de <strong className="text-foreground">Contas de anúncio</strong> mais
+                abaixo.
+              </p>
 
               <div className="flex flex-wrap gap-3">
                 <a
