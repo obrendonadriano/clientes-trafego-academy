@@ -4,7 +4,13 @@ import { getMockSnapshot } from "@/lib/mock-data";
 import { isSupabaseAdminConfigured } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getMetaSyncStatus } from "@/lib/sync/meta-sync";
-import { formatMoney, resolveCurrency } from "@/lib/dashboard-metrics";
+import {
+  formatMoney,
+  getResultCategoryFromObjective,
+  getResultLabelForCategory,
+  resolveCurrency,
+  type ResultCategory,
+} from "@/lib/dashboard-metrics";
 import {
   clampMetricsWindowForRole,
   type MetricsWindow,
@@ -60,6 +66,7 @@ type DbCampaignRow = {
   status: string;
   plataforma: string;
   client_id: string | null;
+  objective: string | null;
   clients?: Array<{
     nome_empresa: string;
   }> | null;
@@ -131,6 +138,7 @@ export type CampaignBase = {
   platform: string;
   clientId: string | null;
   clientName?: string;
+  resultCategory: ResultCategory;
 };
 
 function formatReportPeriodLabel(periodStart: string | null, periodEnd: string | null) {
@@ -191,6 +199,7 @@ function mapCampaignBase(row: DbCampaignRow): CampaignBase {
     platform: row.plataforma,
     clientId: row.client_id,
     clientName: row.clients?.[0]?.nome_empresa,
+    resultCategory: getResultCategoryFromObjective(row.objective),
   };
 }
 
@@ -357,6 +366,8 @@ function toCampaignWithMetrics(
 ): CampaignWithMetrics {
   const currency = metric?.currency ?? "BRL";
   const isForeign = currency !== "BRL";
+  // Rótulo do resultado vem da categoria (objetivo da campanha).
+  const categoryLabel = getResultLabelForCategory(base.resultCategory);
 
   return {
     ...base,
@@ -367,7 +378,7 @@ function toCampaignWithMetrics(
       clicks: String(metric?.clicks ?? 0),
       ctr: `${(metric?.ctr ?? 0).toFixed(2)}%`,
       results: String(metric?.result_count ?? metric?.leads ?? 0),
-      resultLabel: metric?.result_label ?? "Leads no site",
+      resultLabel: metric?.result_label ?? categoryLabel,
       cpc: formatCurrency(metric?.cpc ?? 0),
       cpm: formatCurrency(metric?.cpm ?? 0),
       leads: String(metric?.leads ?? 0),
@@ -459,7 +470,7 @@ const fetchCampaignBasesCached = unstable_cache(
   async () => {
     const { data, error } = await requireAdminClient()
       .from("campaigns")
-      .select("id, nome, status, plataforma, client_id, clients(nome_empresa)")
+      .select("id, nome, status, plataforma, client_id, objective, clients(nome_empresa)")
       .order("created_at", { ascending: true });
 
     if (error) {

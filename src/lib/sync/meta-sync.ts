@@ -13,6 +13,12 @@ import {
   setMetaAccountSyncStatus,
   type ResolvedMetaAccount,
 } from "@/lib/meta/accounts";
+import {
+  getResultActionTypesForCategory,
+  getResultCategoryFromObjective,
+  getResultLabelForCategory,
+  type ResultCategory,
+} from "@/lib/dashboard-metrics";
 import { IntegrationProvider, SyncStatus } from "@/lib/types";
 
 const META_SYNC_INTERVAL_MINUTES = 15;
@@ -26,6 +32,8 @@ type CampaignImportRow = {
   plataforma: string;
   external_id: string;
   source: string;
+  // Objetivo da campanha (ex.: OUTCOME_SALES) — define o resultado principal.
+  objective: string | null;
   // Origem da campanha (null para a conta única antiga via fallback).
   meta_account_id: string | null;
 };
@@ -63,6 +71,7 @@ type SyncStatusRow = {
 type CampaignLookupRow = {
   id: string;
   external_id: string | null;
+  objective: string | null;
 };
 
 type SyncStatusPayload = {
@@ -119,115 +128,55 @@ function parseMetaHourBreakdown(value?: string) {
   };
 }
 
+// Soma o valor de TODAS as ações de uma lista de tipos (não para na primeira).
+function sumActionValues(
+  actions: Array<{ action_type: string; value: string }> | undefined,
+  types: string[],
+) {
+  if (!actions) {
+    return 0;
+  }
+
+  return actions.reduce((sum, item) => {
+    return types.includes(item.action_type) ? sum + Number(item.value || 0) : sum;
+  }, 0);
+}
+
+// Resultado principal definido pelo OBJETIVO da campanha (categoria). Para uma
+// categoria conhecida (compra/lead/mensagem/tráfego), devolve a contagem dessa
+// categoria mesmo que seja 0 — assim uma campanha de venda sem vendas mostra
+// "Compras no site: 0", e não outra ação. Sem categoria → fallback: a ação de
+// maior contagem.
 function getPrimaryResult(
   actions: Array<{ action_type: string; value: string }> | undefined,
-  campaignName?: string,
+  category: ResultCategory,
 ) {
+  const actionTypes = getResultActionTypesForCategory(category);
+
+  if (actionTypes.length > 0) {
+    return {
+      count: sumActionValues(actions, actionTypes),
+      label: getResultLabelForCategory(category),
+    };
+  }
+
+  // Categoria sem ação específica (awareness/other) ou desconhecida: usa a ação
+  // de maior contagem como aproximação.
   if (!actions || actions.length === 0) {
-    return {
-      count: 0,
-      label: "Sem resultado",
-    };
+    return { count: 0, label: getResultLabelForCategory(category) };
   }
 
-  const normalizedCampaignName = (campaignName ?? "").trim().toLowerCase();
+  const topAction = actions
+    .map((item) => ({ type: item.action_type, value: Number(item.value || 0) }))
+    .sort((a, b) => b.value - a.value)[0];
 
-  const purchasePriority = {
-    types: ["purchase", "omni_purchase", "offsite_conversion.fb_pixel_purchase"],
-    label: "Compras no site",
-  };
-
-  const leadPriority = {
-    types: ["lead", "onsite_conversion.lead_grouped", "offsite_conversion.fb_pixel_lead"],
-    label: "Leads no site",
-  };
-
-  const messagingPriority = {
-    types: [
-      "onsite_conversion.messaging_conversation_started_7d",
-      "onsite_conversion.total_messaging_connection",
-      "onsite_conversion.total_messaging_connection_7d",
-      "onsite_conversion.messaging_first_reply",
-    ],
-    label: "Conversas por mensagens iniciadas",
-  };
-
-  const registrationPriority = {
-    types: ["complete_registration", "onsite_conversion.complete_registration"],
-    label: "Cadastros",
-  };
-
-  const landingPagePriority = {
-    types: ["landing_page_view"],
-    label: "Visualizações da página",
-  };
-
-  let priorities: Array<{
-    types: string[];
-    label: string;
-  }>;
-
-  if (normalizedCampaignName.includes("carros")) {
-    priorities = [
-      messagingPriority,
-      leadPriority,
-      purchasePriority,
-      registrationPriority,
-      landingPagePriority,
-    ];
-  } else if (
-    normalizedCampaignName.includes("funk in") ||
-    normalizedCampaignName.includes("tardezinha") ||
-    normalizedCampaignName.includes("melhor eu ir")
-  ) {
-    priorities = [
-      purchasePriority,
-      leadPriority,
-      messagingPriority,
-      registrationPriority,
-      landingPagePriority,
-    ];
-  } else if (normalizedCampaignName.includes("dilson stein")) {
-    priorities = [
-      leadPriority,
-      purchasePriority,
-      messagingPriority,
-      registrationPriority,
-      landingPagePriority,
-    ];
-  } else {
-    priorities = [
-      purchasePriority,
-      leadPriority,
-      messagingPriority,
-      registrationPriority,
-      landingPagePriority,
-    ];
-  }
-
-  for (const priority of priorities) {
-    const count = getPrioritizedActionValue(actions, priority.types);
-
-    if (count > 0) {
-      return {
-        count,
-        label: priority.label,
-      };
-    }
-  }
-
-  const firstAction = actions.find((item) => Number(item.value || 0) > 0);
-
-  if (!firstAction) {
-    return {
-      count: 0,
-      label: "Sem resultado",
-    };
+  if (!topAction || topAction.value <= 0) {
+    return { count: 0, label: getResultLabelForCategory(category) };
   }
 
   return {
-    count: Number(firstAction.value || 0),
-    label: firstAction.action_type.replaceAll("_", " "),
+    count: topAction.value,
+    label: topAction.type.replaceAll("_", " "),
   };
 }
 
@@ -356,6 +305,7 @@ export async function importMetaCampaigns(account: ResolvedMetaAccount) {
     plataforma: "Meta Ads",
     external_id: campaign.id,
     source: "meta_ads",
+    objective: campaign.objective ?? null,
     meta_account_id: account.id,
   }));
 
@@ -405,7 +355,9 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
   ]);
 
   // Mapeia só as campanhas DESTA conta (fallback: todas, quando não há vínculo).
-  let campaignQuery = adminClient.from("campaigns").select("id, external_id");
+  let campaignQuery = adminClient
+    .from("campaigns")
+    .select("id, external_id, objective");
   campaignQuery = account.id
     ? campaignQuery.eq("meta_account_id", account.id)
     : campaignQuery;
@@ -422,6 +374,15 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
     (campaigns as CampaignLookupRow[])
       .filter((campaign) => campaign.external_id)
       .map((campaign) => [campaign.external_id as string, campaign.id]),
+  );
+  // Categoria de resultado por external_id (derivada do objetivo da campanha).
+  const categoryByExternalId = new Map(
+    (campaigns as CampaignLookupRow[])
+      .filter((campaign) => campaign.external_id)
+      .map((campaign) => [
+        campaign.external_id as string,
+        getResultCategoryFromObjective(campaign.objective),
+      ]),
   );
 
   // Moeda da conta (a Meta informa por insight). Contas em moeda estrangeira
@@ -491,7 +452,9 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
         "onsite_conversion.total_messaging_connection_7d",
         "onsite_conversion.messaging_first_reply",
       ]);
-      const primaryResult = getPrimaryResult(item.actions, item.campaign_name);
+      const category: ResultCategory =
+        categoryByExternalId.get(item.campaign_id) ?? "other";
+      const primaryResult = getPrimaryResult(item.actions, category);
       const normalizedLeads =
         leads > 0 ||
         !["Leads no site", "Leads", "Cadastros"].includes(primaryResult.label)

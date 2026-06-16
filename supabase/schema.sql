@@ -134,6 +134,7 @@ alter table public.campaigns
   add column if not exists client_id uuid,
   add column if not exists external_id text,
   add column if not exists source text not null default 'manual',
+  add column if not exists objective text,
   add column if not exists created_at timestamptz not null default now();
 
 alter table public.campaigns

@@ -16,11 +16,9 @@ import {
   formatPeriodLabel,
   getDateRangeForPeriod,
   getDefaultCustomRange,
-  getPreferredLeadCount,
-  getPreferredResultCount,
-  getPreferredResultLabelForCampaignName,
   getReferenceNowForPeriod,
   getPreviousDateRange,
+  sumResults,
   summarizeMetrics,
 } from "@/lib/dashboard-metrics";
 import {
@@ -133,11 +131,10 @@ export function ClientDashboard({
       .map((campaign) => {
         const rows = metricsByCampaign.get(campaign.id) ?? [];
         const summary = summarizeMetrics(rows);
-        const preferredResultLabel =
-          getPreferredResultLabelForCampaignName(campaign.name) ??
-          summary.resultLabel;
-        const preferredResultCount = getPreferredResultCount(rows, campaign.name);
-        const preferredLeadCount = getPreferredLeadCount(rows, campaign.name);
+        // Resultado vem do que o sync gravou (definido pelo objetivo); o rótulo
+        // vem da categoria da campanha ou do label agregado já calculado.
+        const resultCount = sumResults(rows);
+        const resultLabel = campaign.metrics.resultLabel;
 
         return {
           ...campaign,
@@ -146,11 +143,11 @@ export function ClientDashboard({
             amountSpent: formatCurrency(summary.amountSpent),
             clicks: String(Math.round(summary.clicks)),
             ctr: formatPercent(summary.ctr),
-            results: String(Math.round(preferredResultCount)),
-            resultLabel: preferredResultLabel,
-            leads: String(Math.round(preferredLeadCount)),
+            results: String(Math.round(resultCount)),
+            resultLabel,
+            leads: String(Math.round(resultCount)),
             costPerLead: formatCurrency(
-              preferredResultCount > 0 ? summary.amountSpent / preferredResultCount : 0,
+              resultCount > 0 ? summary.amountSpent / resultCount : 0,
             ),
             roas: `${summary.roas.toFixed(2).replace(".", ",")}x`,
             periodLabel: formatPeriodLabel(period, customRange, referenceDate),
@@ -167,7 +164,7 @@ export function ClientDashboard({
       periodLabel: formatPeriodLabel(period, customRange, referenceDate),
       chartData: buildPerformanceSeries(metricRows, period, customRange, referenceDate),
       campaigns: filteredCampaigns,
-      leadsChange: calculateChange(totals.leads, previousTotals.leads),
+      resultsChange: calculateChange(totals.results, previousTotals.results),
       ctrChange: calculateChange(totals.ctr, previousTotals.ctr),
       cplChange: calculateChange(
         totals.costPerLead,
@@ -199,10 +196,10 @@ export function ClientDashboard({
             change={selected.hasData ? "dados reais do período" : "aguardando métricas"}
           />
           <MetricCard
-            label="Leads"
-            value={String(Math.round(selected.totals.leads))}
-            change={comparePrevious ? formatChange(selected.leadsChange) : "período atual"}
-            positive={selected.leadsChange >= 0}
+            label="Resultados"
+            value={String(Math.round(selected.totals.results))}
+            change={comparePrevious ? formatChange(selected.resultsChange) : "período atual"}
+            positive={selected.resultsChange >= 0}
           />
           <MetricCard
             label="CTR médio"

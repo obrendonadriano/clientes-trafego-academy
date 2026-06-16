@@ -54,6 +54,8 @@ export type CampaignWithMetrics = {
   platform: string;
   clientId?: string | null;
   clientName?: string;
+  // Categoria do resultado principal (derivada do objetivo da Meta).
+  resultCategory?: string;
   metrics: CampaignMetric;
 };
 

@@ -255,7 +255,7 @@ export async function fetchMetaCampaigns(input: {
     : `act_${input.adAccountId}`;
 
   const params = new URLSearchParams({
-    fields: "id,name,status",
+    fields: "id,name,status,objective",
     limit: "100",
     access_token: input.accessToken,
   });
@@ -264,6 +264,7 @@ export async function fetchMetaCampaigns(input: {
     id: string;
     name: string;
     status: string;
+    objective?: string;
   }>(
     `https://graph.facebook.com/${META_GRAPH_VERSION}/${accountId}/campaigns?${params.toString()}`,
   );

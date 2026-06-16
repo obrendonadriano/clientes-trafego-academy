@@ -34,10 +34,8 @@ import {
   formatMoney,
   getDateRangeForPeriod,
   getDefaultCustomRange,
-  getPreferredLeadCount,
-  getPreferredResultCount,
-  getPreferredResultLabelForCampaignName,
   getReferenceNowForPeriod,
+  sumResults,
   summarizeMetrics,
 } from "@/lib/dashboard-metrics";
 import type { CampaignWithMetrics, RawCampaignMetric } from "@/lib/types";
@@ -107,11 +105,8 @@ export function AdminCampaignsPage({
       .map((campaign) => {
         const rows = metricMap.get(campaign.id) ?? [];
         const summary = summarizeMetrics(rows);
-        const preferredResultLabel =
-          getPreferredResultLabelForCampaignName(campaign.name) ??
-          summary.resultLabel;
-        const preferredResultCount = getPreferredResultCount(rows, campaign.name);
-        const preferredLeadCount = getPreferredLeadCount(rows, campaign.name);
+        const resultCount = sumResults(rows);
+        const resultLabel = campaign.metrics.resultLabel;
         const isForeign = summary.currency !== "BRL";
 
         return {
@@ -124,15 +119,15 @@ export function AdminCampaignsPage({
               : undefined,
             clicks: String(Math.round(summary.clicks)),
             ctr: formatPercent(summary.ctr),
-            results: String(Math.round(preferredResultCount)),
-            resultLabel: preferredResultLabel,
-            leads: String(Math.round(preferredLeadCount)),
+            results: String(Math.round(resultCount)),
+            resultLabel,
+            leads: String(Math.round(resultCount)),
             costPerLead: formatCurrency(
-              preferredResultCount > 0 ? summary.amountSpent / preferredResultCount : 0,
+              resultCount > 0 ? summary.amountSpent / resultCount : 0,
             ),
             costPerLeadOriginal:
-              isForeign && preferredResultCount > 0
-                ? formatMoney(summary.amountSpentOriginal / preferredResultCount, summary.currency)
+              isForeign && resultCount > 0
+                ? formatMoney(summary.amountSpentOriginal / resultCount, summary.currency)
                 : undefined,
             roas: formatMultiplier(summary.roas),
             periodLabel: period,

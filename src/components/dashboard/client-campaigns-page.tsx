@@ -12,10 +12,8 @@ import {
   formatPeriodLabel,
   getDateRangeForPeriod,
   getDefaultCustomRange,
-  getPreferredLeadCount,
   resolveCurrency,
-  getPreferredResultCount,
-  getPreferredResultLabelForCampaignName,
+  sumResults,
   getReferenceNowForPeriod,
 } from "@/lib/dashboard-metrics";
 import type {
@@ -93,11 +91,8 @@ export function ClientCampaignsPage({
             roas: 0,
           },
         );
-        const preferredResultLabel =
-          getPreferredResultLabelForCampaignName(campaign.name) ??
-          "Sem resultado";
-        const preferredResultCount = getPreferredResultCount(rows, campaign.name);
-        const preferredLeadCount = getPreferredLeadCount(rows, campaign.name);
+        const resultCount = sumResults(rows);
+        const resultLabel = campaign.metrics.resultLabel;
         const currency = resolveCurrency(rows);
         const isForeign = currency !== "BRL";
 
@@ -113,15 +108,15 @@ export function ClientCampaignsPage({
             ctr: formatPercent(
               totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0,
             ),
-            results: String(Math.round(preferredResultCount)),
-            resultLabel: preferredResultLabel,
-            leads: String(Math.round(preferredLeadCount)),
+            results: String(Math.round(resultCount)),
+            resultLabel,
+            leads: String(Math.round(resultCount)),
             costPerLead: formatCurrency(
-              preferredResultCount > 0 ? totals.amountSpent / preferredResultCount : 0,
+              resultCount > 0 ? totals.amountSpent / resultCount : 0,
             ),
             costPerLeadOriginal:
-              isForeign && preferredResultCount > 0
-                ? formatMoney(totals.amountSpentOriginal / preferredResultCount, currency)
+              isForeign && resultCount > 0
+                ? formatMoney(totals.amountSpentOriginal / resultCount, currency)
                 : undefined,
             roas: `${(totals.roas / rows.length).toFixed(2).replace(".", ",")}x`,
             periodLabel,

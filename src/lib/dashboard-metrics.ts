@@ -90,12 +90,89 @@ export function resolveCurrency(rows: Pick<RawCampaignMetric, "currency">[]) {
   return foreign.size === 1 ? [...foreign][0] : "BRL";
 }
 
-export type PreferredResultCategory =
+// Categoria do resultado principal, derivada do OBJETIVO da campanha (Meta),
+// e não mais do nome dela.
+export type ResultCategory =
   | "purchase"
   | "lead"
-  | "message"
-  | "registration"
+  | "messaging"
+  | "traffic"
+  | "awareness"
   | "other";
+
+// Mapeia o objective da Meta (ex.: OUTCOME_SALES) para a categoria de resultado.
+export function getResultCategoryFromObjective(
+  objective?: string | null,
+): ResultCategory {
+  const value = (objective ?? "").toUpperCase();
+
+  if (!value) {
+    return "other";
+  }
+
+  if (value.includes("SALES") || value.includes("CONVERSION") || value.includes("CATALOG")) {
+    return "purchase";
+  }
+  if (value.includes("LEAD")) {
+    return "lead";
+  }
+  if (value.includes("ENGAGEMENT") || value.includes("MESSAGE")) {
+    return "messaging";
+  }
+  if (value.includes("TRAFFIC") || value.includes("LINK_CLICK")) {
+    return "traffic";
+  }
+  if (value.includes("AWARENESS") || value.includes("REACH") || value.includes("VIDEO_VIEW")) {
+    return "awareness";
+  }
+
+  return "other";
+}
+
+// Rótulo amigável exibido para cada categoria de resultado.
+export function getResultLabelForCategory(category: ResultCategory): string {
+  switch (category) {
+    case "purchase":
+      return "Compras no site";
+    case "lead":
+      return "Leads no site";
+    case "messaging":
+      return "Conversas por mensagens iniciadas";
+    case "traffic":
+      return "Cliques no link";
+    case "awareness":
+      return "Alcance";
+    default:
+      return "Resultados";
+  }
+}
+
+// action_types da Meta que contam como resultado de cada categoria. Vazio =
+// categoria sem ação específica (usa o resultado genérico no sync).
+export function getResultActionTypesForCategory(category: ResultCategory): string[] {
+  switch (category) {
+    case "purchase":
+      return ["purchase", "omni_purchase", "offsite_conversion.fb_pixel_purchase"];
+    case "lead":
+      return [
+        "lead",
+        "onsite_conversion.lead_grouped",
+        "offsite_conversion.fb_pixel_lead",
+        "onsite_web_lead",
+      ];
+    case "messaging":
+      return [
+        "onsite_conversion.messaging_conversation_started_7d",
+        "onsite_conversion.total_messaging_connection",
+        "onsite_conversion.total_messaging_connection_7d",
+        "onsite_conversion.messaging_first_reply",
+      ];
+    case "traffic":
+      return ["landing_page_view", "link_click"];
+    default:
+      return [];
+  }
+}
 
 export function getLeadEquivalent(row: Pick<RawCampaignMetric, "leads" | "results" | "resultLabel">) {
   if (row.leads > 0) {
@@ -124,110 +201,10 @@ export function getLeadEquivalent(row: Pick<RawCampaignMetric, "leads" | "result
   return 0;
 }
 
-export function getPreferredResultLabelForCampaignName(campaignName: string) {
-  const normalizedCampaignName = campaignName.trim().toLowerCase();
-
-  if (normalizedCampaignName.includes("carros")) {
-    return "Conversas por mensagens iniciadas";
-  }
-
-  if (
-    normalizedCampaignName.includes("funk in") ||
-    normalizedCampaignName.includes("tardezinha") ||
-    normalizedCampaignName.includes("melhor eu ir")
-  ) {
-    return "Compras no site";
-  }
-
-  if (normalizedCampaignName.includes("dilson stein")) {
-    return "Leads no site";
-  }
-
-  return null;
-}
-
-export function getPreferredResultCategoryForCampaignName(
-  campaignName: string,
-): PreferredResultCategory {
-  const normalizedCampaignName = campaignName.trim().toLowerCase();
-
-  if (normalizedCampaignName.includes("carros")) {
-    return "message";
-  }
-
-  if (
-    normalizedCampaignName.includes("funk in") ||
-    normalizedCampaignName.includes("tardezinha") ||
-    normalizedCampaignName.includes("melhor eu ir")
-  ) {
-    return "purchase";
-  }
-
-  if (normalizedCampaignName.includes("dilson stein")) {
-    return "lead";
-  }
-
-  return "other";
-}
-
-export function getResultCategoryFromLabel(label: string): PreferredResultCategory {
-  const normalizedLabel = label.trim().toLowerCase();
-
-  if (
-    normalizedLabel.includes("compra") ||
-    normalizedLabel.includes("purchase")
-  ) {
-    return "purchase";
-  }
-
-  if (
-    normalizedLabel.includes("mensagen") ||
-    normalizedLabel.includes("messaging") ||
-    normalizedLabel.includes("message") ||
-    normalizedLabel.includes("conversation") ||
-    normalizedLabel.includes("conversa")
-  ) {
-    return "message";
-  }
-
-  if (normalizedLabel.includes("lead")) {
-    return "lead";
-  }
-
-  if (normalizedLabel.includes("cadastro") || normalizedLabel.includes("registration")) {
-    return "registration";
-  }
-
-  return "other";
-}
-
-export function getPreferredResultCount(
-  rows: RawCampaignMetric[],
-  campaignName: string,
-) {
-  const preferredCategory = getPreferredResultCategoryForCampaignName(campaignName);
-
-  if (preferredCategory === "other") {
-    return rows.reduce((sum, row) => sum + row.results, 0);
-  }
-
-  return rows.reduce((sum, row) => {
-    return sum +
-      (getResultCategoryFromLabel(row.resultLabel) === preferredCategory
-        ? row.results
-        : 0);
-  }, 0);
-}
-
-export function getPreferredLeadCount(
-  rows: RawCampaignMetric[],
-  campaignName: string,
-) {
-  if (getPreferredResultCategoryForCampaignName(campaignName) !== "lead") {
-    return 0;
-  }
-
-  return rows.reduce((sum, row) => sum + getLeadEquivalent(row), 0);
+// Soma de resultados de um conjunto de linhas (o sync já grava a contagem da
+// categoria correta — definida pelo objetivo da campanha).
+export function sumResults(rows: Pick<RawCampaignMetric, "results">[]) {
+  return rows.reduce((sum, row) => sum + row.results, 0);
 }
 
 function isSingleDayRange(range: DateRange) {
