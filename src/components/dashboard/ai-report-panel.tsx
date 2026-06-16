@@ -2,7 +2,7 @@
 
 import { useActionState, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { Copy, MessageCircleMore, Sparkles } from "lucide-react";
+import { Check, Copy, MessageCircleMore, Sparkles } from "lucide-react";
 import {
   generateAiReportAction,
   type GenerateReportState,
@@ -84,6 +84,31 @@ export function AiReportPanel({
   const [period, setPeriod] = useState<PeriodFilterValue>("Últimos 30 dias");
   const [comparePrevious, setComparePrevious] = useState(false);
   const [customRange, setCustomRange] = useState(() => getDefaultCustomRange());
+  const [copied, setCopied] = useState(false);
+
+  // Copia com feedback visual. Tem fallback para contextos sem a Clipboard API
+  // (ex.: navegador antigo ou conexão não-segura).
+  async function copyMessage(value: string) {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const area = document.createElement("textarea");
+        area.value = value;
+        area.style.position = "fixed";
+        area.style.opacity = "0";
+        document.body.appendChild(area);
+        area.focus();
+        area.select();
+        document.execCommand("copy");
+        document.body.removeChild(area);
+      }
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   const availableCampaigns = useMemo(() => {
     if (!selectedClientId) {
@@ -255,10 +280,19 @@ export function AiReportPanel({
               type="button"
               variant="outline"
               className="gap-2 rounded-full"
-              onClick={() => navigator.clipboard.writeText(text)}
+              onClick={() => copyMessage(text)}
             >
-              <Copy className="size-4" />
-              Copiar mensagem
+              {copied ? (
+                <>
+                  <Check className="size-4" />
+                  Copiado!
+                </>
+              ) : (
+                <>
+                  <Copy className="size-4" />
+                  Copiar mensagem
+                </>
+              )}
             </Button>
             <a
               className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
