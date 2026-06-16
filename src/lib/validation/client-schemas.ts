@@ -35,12 +35,14 @@ export const updateClientWorkspaceSchema = z.object({
   contactName: z.string().min(2, "Informe o responsável."),
   whatsapp: whatsappField,
   notes: z.string().optional(),
-  clientActive: z.string().optional(),
+  // Checkbox/switch desmarcado não é enviado → vem null. nullish aceita
+  // null/undefined; "on" quando marcado.
+  clientActive: z.string().nullish(),
   accountName: z.string().min(2, "Informe o nome do acesso."),
   username: usernameField,
   email: z.string().email("Informe um email válido."),
   password: z.string().optional(),
-  accessActive: z.string().optional(),
+  accessActive: z.string().nullish(),
 });
 
 export type ClientWorkspaceInput = z.infer<typeof clientWorkspaceSchema>;

@@ -284,7 +284,7 @@ export function AiReportPanel({
             >
               {copied ? (
                 <>
-                  <Check className="size-4" />
+                  <Check className="size-4 text-emerald-500" />
                   Copiado!
                 </>
               ) : (

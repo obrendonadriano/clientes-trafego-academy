@@ -122,8 +122,9 @@ export function DashboardShell({
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 min-[1280px]:grid-cols-2">
-            <div className="min-w-0">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3 rounded-full border border-border/70 bg-background/[0.55] px-4 py-2 dark:border-white/10 dark:bg-white/[0.04]">
+              <span className="text-sm font-medium text-foreground">Tema</span>
               <ThemeToggle />
             </div>
             <form action={logoutAction} className="min-w-0">

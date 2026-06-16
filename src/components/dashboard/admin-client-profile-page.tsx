@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { FormPendingButton } from "@/components/ui/form-pending-button";
 import { summarizeMetrics } from "@/lib/dashboard-metrics";
@@ -155,15 +156,10 @@ export function AdminClientProfilePage({
                     <Label htmlFor="whatsapp">WhatsApp</Label>
                     <Input id="whatsapp" name="whatsapp" defaultValue={client.whatsapp} required />
                   </div>
-                  <label className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card/60 px-4 py-3 text-sm text-foreground">
-                    <input
-                      type="checkbox"
-                      name="clientActive"
-                      defaultChecked={client.active}
-                      className="size-4 rounded border-border"
-                    />
-                    Cliente ativo
-                  </label>
+                  <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card/60 px-4 py-3 text-sm text-foreground">
+                    <span className="font-medium">Cliente ativo</span>
+                    <Switch name="clientActive" defaultChecked={client.active} />
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -229,15 +225,10 @@ export function AdminClientProfilePage({
                   </div>
                 </div>
 
-                <label className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card/60 px-4 py-3 text-sm text-foreground">
-                  <input
-                    type="checkbox"
-                    name="accessActive"
-                    defaultChecked={linkedUser?.active ?? true}
-                    className="size-4 rounded border-border"
-                  />
-                  Login ativo para o cliente
-                </label>
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card/60 px-4 py-3 text-sm text-foreground">
+                  <span className="font-medium">Login ativo para o cliente</span>
+                  <Switch name="accessActive" defaultChecked={linkedUser?.active ?? true} />
+                </div>
               </div>
 
               <div className="space-y-3">

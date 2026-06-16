@@ -1,26 +1,47 @@
 "use client";
 
-import { MoonStar, SunMedium } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-export function ThemeToggle() {
+type ThemeToggleProps = {
+  className?: string;
+};
+
+// Interruptor deslizante de tema (claro/escuro) ligado ao ThemeProvider.
+export function ThemeToggle({ className }: ThemeToggleProps) {
   const { resolvedTheme, setTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
-  const nextTheme = isDark ? "light" : "dark";
-  const label = nextTheme === "light" ? "Tema claro" : "Tema escuro";
-  const shortLabel = nextTheme === "light" ? "Claro" : "Escuro";
 
   return (
-    <Button
+    <button
       type="button"
-      variant="outline"
-      className="w-full min-w-0 gap-2 rounded-full px-4 lg:w-full"
-      onClick={() => setTheme(nextTheme)}
-      aria-label={label}
+      role="switch"
+      aria-checked={isDark}
+      aria-label={isDark ? "Ativar tema claro" : "Ativar tema escuro"}
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      className={cn(
+        "flex h-9 w-16 shrink-0 items-center rounded-full border p-1 transition-colors",
+        isDark
+          ? "border-white/10 bg-white/[0.08]"
+          : "border-border bg-muted",
+        className,
+      )}
     >
-      {isDark ? <SunMedium className="size-4 shrink-0" /> : <MoonStar className="size-4 shrink-0" />}
-      <span className="truncate">{shortLabel}</span>
-    </Button>
+      <span
+        className={cn(
+          "flex size-7 items-center justify-center rounded-full shadow-sm transition-transform duration-300",
+          isDark
+            ? "translate-x-0 bg-primary text-white"
+            : "translate-x-7 bg-white text-amber-500",
+        )}
+      >
+        {isDark ? (
+          <Moon className="size-4" strokeWidth={1.75} />
+        ) : (
+          <Sun className="size-4" strokeWidth={1.75} />
+        )}
+      </span>
+    </button>
   );
 }
