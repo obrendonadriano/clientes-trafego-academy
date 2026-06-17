@@ -128,20 +128,6 @@ function parseMetaHourBreakdown(value?: string) {
   };
 }
 
-// Soma o valor de TODAS as ações de uma lista de tipos (não para na primeira).
-function sumActionValues(
-  actions: Array<{ action_type: string; value: string }> | undefined,
-  types: string[],
-) {
-  if (!actions) {
-    return 0;
-  }
-
-  return actions.reduce((sum, item) => {
-    return types.includes(item.action_type) ? sum + Number(item.value || 0) : sum;
-  }, 0);
-}
-
 // Resultado principal definido pelo OBJETIVO da campanha (categoria). Para uma
 // categoria conhecida (compra/lead/mensagem/tráfego), devolve a contagem dessa
 // categoria mesmo que seja 0 — assim uma campanha de venda sem vendas mostra
@@ -154,8 +140,12 @@ function getPrimaryResult(
   const actionTypes = getResultActionTypesForCategory(category);
 
   if (actionTypes.length > 0) {
+    // IMPORTANTE: NÃO somar os tipos — a Meta reporta a MESMA conversão em
+    // vários action_types (purchase / omni_purchase / fb_pixel_purchase).
+    // Pega o primeiro tipo com valor (o mais abrangente vem primeiro na lista),
+    // evitando contar a mesma venda várias vezes.
     return {
-      count: sumActionValues(actions, actionTypes),
+      count: getPrioritizedActionValue(actions, actionTypes),
       label: getResultLabelForCategory(category),
     };
   }
