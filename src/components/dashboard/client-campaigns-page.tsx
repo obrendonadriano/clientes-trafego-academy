@@ -80,7 +80,7 @@ export function ClientCampaignsPage({
                 : row.amountSpent;
             acc.clicks += row.clicks;
             acc.impressions += row.impressions;
-            acc.roas += row.roas;
+            acc.revenue += row.roas * row.amountSpent;
             return acc;
           },
           {
@@ -88,7 +88,7 @@ export function ClientCampaignsPage({
             amountSpentOriginal: 0,
             clicks: 0,
             impressions: 0,
-            roas: 0,
+            revenue: 0,
           },
         );
         const resultCount = sumResults(rows);
@@ -118,7 +118,7 @@ export function ClientCampaignsPage({
               isForeign && resultCount > 0
                 ? formatMoney(totals.amountSpentOriginal / resultCount, currency)
                 : undefined,
-            roas: `${(totals.roas / rows.length).toFixed(2).replace(".", ",")}x`,
+            roas: `${(totals.amountSpent > 0 ? totals.revenue / totals.amountSpent : 0).toFixed(2).replace(".", ",")}x`,
             periodLabel,
             currency,
           },

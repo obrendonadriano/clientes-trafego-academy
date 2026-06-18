@@ -451,9 +451,11 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
           ? leads
           : primaryResult.count;
 
+      // ROAS: a Meta repete o valor em vários action_types (mesma conversão);
+      // pega o maior, não soma, para não inflar.
       const roas =
         item.purchase_roas?.reduce(
-          (sum, current) => sum + Number(current.value || 0),
+          (max, current) => Math.max(max, Number(current.value || 0)),
           0,
         ) ?? 0;
 

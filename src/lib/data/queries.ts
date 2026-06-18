@@ -304,9 +304,9 @@ function aggregateMetrics(rows: RawCampaignMetric[]): AggregatedMetric | undefin
       acc.clicks += row.clicks;
       acc.results += row.results;
       acc.leads += row.leads;
+      acc.revenue += row.roas * row.amountSpent;
       acc.resultLabels.push(row.resultLabel);
       acc.roi.push(row.roi);
-      acc.roas.push(row.roas);
       acc.frequency.push(row.frequency);
       return acc;
     },
@@ -318,9 +318,9 @@ function aggregateMetrics(rows: RawCampaignMetric[]): AggregatedMetric | undefin
       clicks: 0,
       results: 0,
       leads: 0,
+      revenue: 0,
       resultLabels: [] as string[],
       roi: [] as number[],
-      roas: [] as number[],
       frequency: [] as number[],
     },
   );
@@ -346,7 +346,8 @@ function aggregateMetrics(rows: RawCampaignMetric[]): AggregatedMetric | undefin
     cost_per_lead:
       totals.results > 0 ? totals.amount_spent / totals.results : 0,
     roi: average(totals.roi),
-    roas: average(totals.roas),
+    // ROAS ponderado pelo gasto (receita / investimento), como a Meta calcula.
+    roas: totals.amount_spent > 0 ? totals.revenue / totals.amount_spent : 0,
     frequency: average(totals.frequency),
     currency: resolveCurrency(normalizedRows),
     amount_spent_original: totals.amount_spent_original,

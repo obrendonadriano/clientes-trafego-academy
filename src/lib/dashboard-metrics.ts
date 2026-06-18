@@ -369,8 +369,9 @@ export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
       acc.leads += leadEquivalent;
       acc.resultLabels.push(row.resultLabel);
       acc.roi.push(row.roi);
-      acc.roas.push(row.roas);
       acc.frequency.push(row.frequency);
+      // Receita estimada da linha (ROAS × gasto) para o ROAS ponderado.
+      acc.revenue += row.roas * row.amountSpent;
       // Gasto reconstruído na moeda original (BRL / taxa). Para BRL, taxa = 1.
       acc.amountSpentOriginal +=
         row.exchangeRate && row.exchangeRate > 0
@@ -386,9 +387,9 @@ export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
       clicks: 0,
       results: 0,
       leads: 0,
+      revenue: 0,
       resultLabels: [] as string[],
       roi: [] as number[],
-      roas: [] as number[],
       frequency: [] as number[],
     },
   );
@@ -425,7 +426,9 @@ export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
     costPerLead:
       totals.results > 0 ? totals.amountSpent / totals.results : 0,
     roi: average(totals.roi),
-    roas: average(totals.roas),
+    // ROAS ponderado pelo gasto (receita total / investimento total) — é assim
+    // que a Meta calcula, e não a média simples dos ROAS diários.
+    roas: totals.amountSpent > 0 ? totals.revenue / totals.amountSpent : 0,
     frequency: average(totals.frequency),
     currency,
     amountSpentOriginal: totals.amountSpentOriginal,
