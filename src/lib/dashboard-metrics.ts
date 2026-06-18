@@ -116,7 +116,10 @@ export function getResultCategoryFromObjective(
   if (value.includes("LEAD")) {
     return "lead";
   }
-  if (value.includes("ENGAGEMENT") || value.includes("MESSAGE")) {
+  // MESSAGES (objetivo legado de mensagens). ENGAGEMENT NÃO entra aqui de
+  // propósito: pode ser mensagem ou engajamento de post, então é tratado como
+  // genérico (a conversão real é detectada pelas ações no sync).
+  if (value.includes("MESSAGE")) {
     return "messaging";
   }
   if (value.includes("TRAFFIC") || value.includes("LINK_CLICK")) {
@@ -127,6 +130,13 @@ export function getResultCategoryFromObjective(
   }
 
   return "other";
+}
+
+// Objetivos "fortes" definem o resultado mesmo quando a contagem é 0 (ex.:
+// campanha de venda sem vendas → "Compras no site: 0"). Os demais (tráfego/
+// engajamento/etc.) deixam a conversão real ser detectada pelas ações.
+export function isStrongResultCategory(category: ResultCategory) {
+  return category === "purchase" || category === "lead" || category === "messaging";
 }
 
 // Rótulo amigável exibido para cada categoria de resultado.

@@ -17,6 +17,7 @@ import {
   getResultActionTypesForCategory,
   getResultCategoryFromObjective,
   getResultLabelForCategory,
+  isStrongResultCategory,
   type ResultCategory,
 } from "@/lib/dashboard-metrics";
 import { IntegrationProvider, SyncStatus } from "@/lib/types";
@@ -128,46 +129,45 @@ function parseMetaHourBreakdown(value?: string) {
   };
 }
 
-// Resultado principal definido pelo OBJETIVO da campanha (categoria). Para uma
-// categoria conhecida (compra/lead/mensagem/tráfego), devolve a contagem dessa
-// categoria mesmo que seja 0 — assim uma campanha de venda sem vendas mostra
-// "Compras no site: 0", e não outra ação. Sem categoria → fallback: a ação de
-// maior contagem.
+// Conversões "detectáveis" pelas ações, em ordem de relevância de negócio.
+const DYNAMIC_RESULT_CATEGORIES: ResultCategory[] = [
+  "purchase",
+  "lead",
+  "messaging",
+  "traffic",
+];
+
+// Resultado principal da campanha.
+// - Objetivo FORTE (compra/lead/mensagem): devolve a contagem dessa categoria
+//   mesmo que seja 0 (campanha de venda sem vendas → "Compras no site: 0").
+// - Objetivo GENÉRICO (tráfego/engajamento/etc.): detecta a conversão REAL que
+//   a campanha gera. Ex.: tráfego para WhatsApp gera "Conversas por mensagens",
+//   não "Cliques no link".
+// Nunca soma action_types (a Meta repete a mesma conversão em vários tipos).
 function getPrimaryResult(
   actions: Array<{ action_type: string; value: string }> | undefined,
   category: ResultCategory,
 ) {
-  const actionTypes = getResultActionTypesForCategory(category);
-
-  if (actionTypes.length > 0) {
-    // IMPORTANTE: NÃO somar os tipos — a Meta reporta a MESMA conversão em
-    // vários action_types (purchase / omni_purchase / fb_pixel_purchase).
-    // Pega o primeiro tipo com valor (o mais abrangente vem primeiro na lista),
-    // evitando contar a mesma venda várias vezes.
+  if (isStrongResultCategory(category)) {
     return {
-      count: getPrioritizedActionValue(actions, actionTypes),
+      count: getPrioritizedActionValue(actions, getResultActionTypesForCategory(category)),
       label: getResultLabelForCategory(category),
     };
   }
 
-  // Categoria sem ação específica (awareness/other) ou desconhecida: usa a ação
-  // de maior contagem como aproximação.
-  if (!actions || actions.length === 0) {
-    return { count: 0, label: getResultLabelForCategory(category) };
+  for (const dynamic of DYNAMIC_RESULT_CATEGORIES) {
+    const count = getPrioritizedActionValue(
+      actions,
+      getResultActionTypesForCategory(dynamic),
+    );
+
+    if (count > 0) {
+      return { count, label: getResultLabelForCategory(dynamic) };
+    }
   }
 
-  const topAction = actions
-    .map((item) => ({ type: item.action_type, value: Number(item.value || 0) }))
-    .sort((a, b) => b.value - a.value)[0];
-
-  if (!topAction || topAction.value <= 0) {
-    return { count: 0, label: getResultLabelForCategory(category) };
-  }
-
-  return {
-    count: topAction.value,
-    label: topAction.type.replaceAll("_", " "),
-  };
+  // Sem conversão detectável: mantém o rótulo da categoria do objetivo com 0.
+  return { count: 0, label: getResultLabelForCategory(category) };
 }
 
 function getNextRunAt(baseDate = new Date()) {
