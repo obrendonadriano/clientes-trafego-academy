@@ -1,15 +1,173 @@
 "use client";
 
 import * as React from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, LoaderCircle, Pencil, X } from "lucide-react";
+import {
+  renameCampaignAction,
+  toggleCampaignStatusAction,
+} from "@/app/admin/campanhas/actions";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { CampaignWithMetrics } from "@/lib/types";
 
 type CampaignsTableProps = {
   campaigns: CampaignWithMetrics[];
+  // No admin, permite editar o nome e ligar/desligar o status direto na tabela
+  // (espelhando na Meta). No portal do cliente fica falso: só leitura.
+  editable?: boolean;
 };
+
+// Nome da campanha: editável inline quando `editable` (admin).
+function CampaignName({
+  campaign,
+  editable,
+}: {
+  campaign: CampaignWithMetrics;
+  editable: boolean;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [name, setName] = React.useState(campaign.name);
+  const [error, setError] = React.useState<string | null>(null);
+  const [pending, startTransition] = React.useTransition();
+
+  function cancel() {
+    setEditing(false);
+    setName(campaign.name);
+    setError(null);
+  }
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      const result = await renameCampaignAction(campaign.id, name);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setEditing(false);
+      }
+    });
+  }
+
+  if (!editable) {
+    return (
+      <div>
+        <p className="font-medium leading-snug text-foreground">{campaign.name}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{campaign.platform}</p>
+      </div>
+    );
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <Input
+          value={name}
+          autoFocus
+          disabled={pending}
+          onChange={(event) => setName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") save();
+            if (event.key === "Escape") cancel();
+          }}
+          className="h-9 min-w-0"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          onClick={save}
+          disabled={pending}
+          className="size-9 shrink-0 rounded-full p-0"
+          aria-label="Salvar nome"
+        >
+          {pending ? (
+            <LoaderCircle className="size-4 animate-spin" />
+          ) : (
+            <Check className="size-4" />
+          )}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={cancel}
+          disabled={pending}
+          className="size-9 shrink-0 rounded-full p-0"
+          aria-label="Cancelar"
+        >
+          <X className="size-4" />
+        </Button>
+        {error ? (
+          <span className="ml-1 max-w-[200px] text-xs text-destructive">{error}</span>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="group flex items-center gap-2 text-left"
+      >
+        <span className="font-medium leading-snug text-foreground">{campaign.name}</span>
+        <Pencil className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-70" />
+      </button>
+      <p className="mt-0.5 text-xs text-muted-foreground">{campaign.platform}</p>
+    </div>
+  );
+}
+
+// Status da campanha: interruptor quando `editable` (admin), senão badge.
+function CampaignStatus({
+  campaign,
+  editable,
+}: {
+  campaign: CampaignWithMetrics;
+  editable: boolean;
+}) {
+  const [active, setActive] = React.useState(campaign.status === "Ativa");
+  const [pending, startTransition] = React.useTransition();
+
+  if (!editable) {
+    return (
+      <Badge variant={campaign.status === "Ativa" ? "success" : "secondary"}>
+        {campaign.status}
+      </Badge>
+    );
+  }
+
+  function toggle(next: boolean) {
+    setActive(next);
+    startTransition(async () => {
+      const result = await toggleCampaignStatusAction(campaign.id, next);
+      if (result.error) {
+        setActive(!next); // reverte em caso de erro
+      }
+    });
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <Switch
+        checked={active}
+        disabled={pending}
+        onChange={(event) => toggle(event.target.checked)}
+        aria-label={active ? "Desativar campanha" : "Ativar campanha"}
+      />
+      {pending ? (
+        <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+      ) : (
+        <span className="text-xs text-muted-foreground">
+          {active ? "Ativa" : "Pausada"}
+        </span>
+      )}
+    </div>
+  );
+}
 
 type SortKey =
   | "name"
@@ -124,7 +282,7 @@ function SortIcon({
   );
 }
 
-export function CampaignsTable({ campaigns }: CampaignsTableProps) {
+export function CampaignsTable({ campaigns, editable = false }: CampaignsTableProps) {
   const [sortKey, setSortKey] = React.useState<SortKey>("amountSpent");
   const [sortDirection, setSortDirection] = React.useState<SortDirection>("desc");
 
@@ -230,14 +388,9 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="break-words font-medium leading-snug">{campaign.name}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {campaign.platform}
-                </p>
+                <CampaignName campaign={campaign} editable={editable} />
               </div>
-              <Badge variant={campaign.status === "Ativa" ? "success" : "secondary"}>
-                {campaign.status}
-              </Badge>
+              <CampaignStatus campaign={campaign} editable={editable} />
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
               <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
@@ -348,15 +501,10 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
             {sortedCampaigns.map((campaign) => (
               <tr key={campaign.id} className="border-b border-border/60 dark:border-white/10 last:border-b-0">
                 <td className="min-w-[260px] border-b border-border/60 dark:border-white/10 px-4 py-3 align-middle">
-                  <div>
-                    <p className="font-medium leading-snug text-foreground">{campaign.name}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{campaign.platform}</p>
-                  </div>
+                  <CampaignName campaign={campaign} editable={editable} />
                 </td>
                 <td className="min-w-[120px] border-b border-border/60 dark:border-white/10 px-4 py-3 align-middle">
-                  <Badge variant={campaign.status === "Ativa" ? "success" : "secondary"}>
-                    {campaign.status}
-                  </Badge>
+                  <CampaignStatus campaign={campaign} editable={editable} />
                 </td>
                 <td className="min-w-[116px] border-b border-border/60 dark:border-white/10 px-4 py-3 align-middle">
                   {campaign.metrics.amountSpent}
