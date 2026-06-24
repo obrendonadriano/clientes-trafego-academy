@@ -7,6 +7,7 @@ import {
   importMetaCampaignsAction,
   importMetaInsightsAction,
 } from "@/app/admin/campanhas/actions";
+import { CampaignManager } from "@/components/admin/campaign-manager";
 import { CampaignsTable } from "@/components/dashboard/campaigns-table";
 import { MetricCard } from "@/components/dashboard/metric-card";
 
@@ -252,6 +253,8 @@ export function AdminCampaignsPage({
           </p>
         ) : null}
       </div>
+
+      <CampaignManager campaigns={campaigns} />
 
       <CampaignBreakdownChart
         data={selected.campaigns.map((campaign) => ({

@@ -159,6 +159,33 @@ export async function ensureLegacyAccountMigrated() {
   });
 }
 
+// Token de acesso para operar uma campanha: o próprio da conta dela (se houver)
+// ou o token compartilhado da Business Manager.
+export async function getAccessTokenForMetaAccount(
+  metaAccountId: string | null,
+): Promise<string | null> {
+  const shared = await getMetaAdsConfig();
+  const sharedToken = shared.accessToken || null;
+
+  if (!metaAccountId) {
+    return sharedToken;
+  }
+
+  const adminClient = createSupabaseAdminClient();
+
+  if (!adminClient) {
+    return sharedToken;
+  }
+
+  const { data } = await adminClient
+    .from("meta_ad_accounts")
+    .select("access_token")
+    .eq("id", metaAccountId)
+    .maybeSingle<{ access_token: string | null }>();
+
+  return (data?.access_token || sharedToken) || null;
+}
+
 export async function createMetaAdAccount(input: {
   label: string;
   adAccountId: string;

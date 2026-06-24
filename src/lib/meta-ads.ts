@@ -272,6 +272,42 @@ export async function fetchMetaCampaigns(input: {
   return { data };
 }
 
+// Escreve na Meta: atualiza nome e/ou status (ACTIVE/PAUSED) de uma campanha.
+// Exige token com permissão ads_management.
+export async function updateMetaCampaign(
+  campaignExternalId: string,
+  fields: { name?: string; status?: "ACTIVE" | "PAUSED" },
+  accessToken: string,
+) {
+  const params = new URLSearchParams({ access_token: accessToken });
+
+  if (fields.name !== undefined) {
+    params.set("name", fields.name);
+  }
+  if (fields.status !== undefined) {
+    params.set("status", fields.status);
+  }
+
+  const response = await fetch(
+    `https://graph.facebook.com/${META_GRAPH_VERSION}/${campaignExternalId}`,
+    { method: "POST", body: params, cache: "no-store" },
+  );
+
+  if (!response.ok) {
+    let body: MetaGraphError = {};
+
+    try {
+      body = (await response.json()) as MetaGraphError;
+    } catch {
+      // corpo não-JSON → erro genérico abaixo
+    }
+
+    throwForMetaError(response.status, body);
+  }
+
+  return (await response.json()) as { success?: boolean; id?: string };
+}
+
 // Conjuntos de anúncios: o destino (WhatsApp/Messenger) e a meta de otimização
 // dizem o resultado REAL melhor do que o objetivo amplo da campanha.
 export async function fetchMetaAdSets(input: {
