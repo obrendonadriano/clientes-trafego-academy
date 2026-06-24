@@ -272,6 +272,33 @@ export async function fetchMetaCampaigns(input: {
   return { data };
 }
 
+// Conjuntos de anúncios: o destino (WhatsApp/Messenger) e a meta de otimização
+// dizem o resultado REAL melhor do que o objetivo amplo da campanha.
+export async function fetchMetaAdSets(input: {
+  adAccountId: string;
+  accessToken: string;
+}) {
+  const accountId = input.adAccountId.startsWith("act_")
+    ? input.adAccountId
+    : `act_${input.adAccountId}`;
+
+  const params = new URLSearchParams({
+    fields: "campaign_id,optimization_goal,destination_type",
+    limit: "200",
+    access_token: input.accessToken,
+  });
+
+  const data = await fetchMetaPaginated<{
+    campaign_id: string;
+    optimization_goal?: string;
+    destination_type?: string;
+  }>(
+    `https://graph.facebook.com/${META_GRAPH_VERSION}/${accountId}/adsets?${params.toString()}`,
+  );
+
+  return { data };
+}
+
 export async function fetchMetaInsights(input: {
   adAccountId: string;
   accessToken: string;

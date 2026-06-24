@@ -139,6 +139,40 @@ export function isStrongResultCategory(category: ResultCategory) {
   return category === "purchase" || category === "lead" || category === "messaging";
 }
 
+// Categoria derivada do CONJUNTO DE ANÚNCIOS (destino + meta de otimização).
+// Mais preciso que o objetivo: distingue lead-no-site de lead-via-WhatsApp.
+// Retorna null quando não dá para decidir (cai no objetivo da campanha).
+export function getResultCategoryFromAdSet(
+  optimizationGoal?: string | null,
+  destinationType?: string | null,
+): ResultCategory | null {
+  const dest = (destinationType ?? "").toUpperCase();
+  if (
+    dest.includes("WHATSAPP") ||
+    dest.includes("MESSENGER") ||
+    dest.includes("INSTAGRAM_DIRECT") ||
+    dest.includes("MESSAGING")
+  ) {
+    return "messaging";
+  }
+
+  const goal = (optimizationGoal ?? "").toUpperCase();
+  if (goal.includes("CONVERSATION") || goal.includes("REPL") || goal.includes("MESSAG")) {
+    return "messaging";
+  }
+  if (goal.includes("LEAD")) {
+    return "lead";
+  }
+  if (goal.includes("LANDING_PAGE") || goal.includes("LINK_CLICK")) {
+    return "traffic";
+  }
+  if (goal.includes("REACH") || goal.includes("IMPRESSION") || goal.includes("AD_RECALL")) {
+    return "awareness";
+  }
+
+  return null;
+}
+
 // Rótulo amigável exibido para cada categoria de resultado.
 export function getResultLabelForCategory(category: ResultCategory): string {
   switch (category) {
@@ -176,6 +210,9 @@ export function getResultActionTypesForCategory(category: ResultCategory): strin
         "onsite_conversion.total_messaging_connection",
         "onsite_conversion.total_messaging_connection_7d",
         "onsite_conversion.messaging_first_reply",
+        // Lead captado via WhatsApp é contado pela Meta como conversa.
+        "onsite_conversion.lead_grouped",
+        "lead",
       ];
     case "traffic":
       return ["landing_page_view", "link_click"];

@@ -1,6 +1,7 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
+  fetchMetaAdSets,
   fetchMetaCampaigns,
   fetchMetaInsights,
   getCurrencyRateToBrl,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/meta/accounts";
 import {
   getResultActionTypesForCategory,
+  getResultCategoryFromAdSet,
   getResultCategoryFromObjective,
   getResultLabelForCategory,
   isStrongResultCategory,
@@ -366,7 +368,7 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
       .map((campaign) => [campaign.external_id as string, campaign.id]),
   );
   // Categoria de resultado por external_id (derivada do objetivo da campanha).
-  const categoryByExternalId = new Map(
+  const categoryByExternalId = new Map<string, ResultCategory>(
     (campaigns as CampaignLookupRow[])
       .filter((campaign) => campaign.external_id)
       .map((campaign) => [
@@ -374,6 +376,40 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
         getResultCategoryFromObjective(campaign.objective),
       ]),
   );
+
+  // Refina a categoria com o destino/meta de otimização dos conjuntos de
+  // anúncios (ex.: destino WhatsApp → mensagens, mesmo que o objetivo seja
+  // "Leads"). Se a busca falhar (permissão), mantém a categoria do objetivo.
+  try {
+    const adSets = await fetchMetaAdSets({
+      adAccountId: account.adAccountId,
+      accessToken: account.accessToken,
+    });
+
+    for (const adSet of adSets.data) {
+      if (!adSet.campaign_id) {
+        continue;
+      }
+
+      const refined = getResultCategoryFromAdSet(
+        adSet.optimization_goal,
+        adSet.destination_type,
+      );
+
+      if (!refined) {
+        continue;
+      }
+
+      // Mensagens tem prioridade (WhatsApp); senão, define se ainda não havia
+      // refinamento melhor que o objetivo.
+      const current = categoryByExternalId.get(adSet.campaign_id);
+      if (refined === "messaging" || current === undefined || !isStrongResultCategory(current)) {
+        categoryByExternalId.set(adSet.campaign_id, refined);
+      }
+    }
+  } catch {
+    // Sem acesso aos conjuntos de anúncios: segue com a categoria do objetivo.
+  }
 
   // Moeda da conta (a Meta informa por insight). Contas em moeda estrangeira
   // (ex.: USD) têm os valores convertidos para BRL pela cotação atual, para
