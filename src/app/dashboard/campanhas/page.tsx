@@ -22,7 +22,11 @@ async function CampaignsSection({
   const data = await getClientPortalData(user, window);
 
   return (
-    <ClientCampaignsPage campaigns={data.campaigns} metricRows={data.metricRows} />
+    <ClientCampaignsPage
+      campaigns={data.campaigns}
+      metricRows={data.metricRows}
+      syncStatus={data.syncStatus}
+    />
   );
 }
 

@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
+import { refreshClientMetricsAction } from "@/app/dashboard/actions";
 import { CampaignsTable } from "@/components/dashboard/campaigns-table";
 import {
   PeriodFilter,
   type PeriodFilterValue,
 } from "@/components/dashboard/period-filter";
+import { FormPendingButton } from "@/components/ui/form-pending-button";
 import {
   filterMetricsByRange,
   formatMoney,
@@ -19,12 +21,26 @@ import {
 import type {
   CampaignWithMetrics,
   RawCampaignMetric,
+  SyncStatus,
 } from "@/lib/types";
 
 type ClientCampaignsPageProps = {
   campaigns: CampaignWithMetrics[];
   metricRows: RawCampaignMetric[];
+  syncStatus: SyncStatus | null;
 };
+
+function formatDateTime(value?: string | null) {
+  if (!value) {
+    return "Aguardando primeira atualização";
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "America/Sao_Paulo",
+  }).format(new Date(value));
+}
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -41,10 +57,15 @@ function formatPercent(value: number) {
 export function ClientCampaignsPage({
   campaigns,
   metricRows,
+  syncStatus,
 }: ClientCampaignsPageProps) {
   const [period, setPeriod] = useState<PeriodFilterValue>("Últimos 30 dias");
   const [comparePrevious, setComparePrevious] = useState(false);
   const [customRange, setCustomRange] = useState(() => getDefaultCustomRange());
+  const [refreshState, refreshAction] = useActionState(
+    refreshClientMetricsAction,
+    {},
+  );
 
   const filteredCampaigns = useMemo(() => {
     const referenceDate = getReferenceNowForPeriod(metricRows, period, customRange);
@@ -130,6 +151,47 @@ export function ClientCampaignsPage({
 
   return (
     <div className="space-y-6">
+      <div className="dashboard-card rounded-[1.5rem] border p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">Meta Ads</p>
+            <h4 className="mt-1 font-display text-2xl font-semibold text-foreground">
+              Atualizar métricas
+            </h4>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Puxa os dados mais recentes das suas campanhas direto da Meta Ads.
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Última atualização:{" "}
+              <strong className="text-foreground">
+                {formatDateTime(syncStatus?.lastSuccessAt)}
+              </strong>
+            </p>
+          </div>
+          <form action={refreshAction}>
+            <FormPendingButton
+              size="lg"
+              idleLabel="Atualizar métricas"
+              pendingLabel="Atualizando métricas..."
+            >
+              Atualizar métricas
+            </FormPendingButton>
+          </form>
+        </div>
+
+        {refreshState.error ? (
+          <p className="mt-4 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {refreshState.error}
+          </p>
+        ) : null}
+
+        {refreshState.success ? (
+          <p className="mt-4 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary">
+            {refreshState.success}
+          </p>
+        ) : null}
+      </div>
+
       <PeriodFilter
         active={period}
         onChange={setPeriod}
