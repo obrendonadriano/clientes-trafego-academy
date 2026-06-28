@@ -30,7 +30,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   return (
     <DashboardShell
       user={user}
-      title={`Resultados de ${user.clientName}`}
+      title={`Resultados de ${user.clientName ?? user.name}`}
       subtitle="Visualização simples, profissional e restrita às campanhas liberadas para este cliente."
     >
       <Suspense fallback={<PageSectionSkeleton />}>

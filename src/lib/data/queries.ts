@@ -3,6 +3,7 @@ import { format, parseISO } from "date-fns";
 import { getMockSnapshot } from "@/lib/mock-data";
 import { isSupabaseAdminConfigured } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { type Embedded, firstEmbedded } from "@/lib/supabase/embedded";
 import { getMetaSyncStatus } from "@/lib/sync/meta-sync";
 import {
   formatMoney,
@@ -46,9 +47,9 @@ type DbUserRow = {
   whatsapp: string | null;
   ativo: boolean;
   client_id: string | null;
-  clients?: Array<{
+  clients?: Embedded<{
     nome_empresa: string;
-  }> | null;
+  }>;
 };
 
 type DbClientRow = {
@@ -67,9 +68,9 @@ type DbCampaignRow = {
   plataforma: string;
   client_id: string | null;
   objective: string | null;
-  clients?: Array<{
+  clients?: Embedded<{
     nome_empresa: string;
-  }> | null;
+  }>;
 };
 
 type DbPermissionRow = {
@@ -114,10 +115,10 @@ type DbReportRow = {
   period_end: string | null;
   generated_text: string;
   created_at: string;
-  clients?: Array<{
+  clients?: Embedded<{
     nome_empresa: string;
     whatsapp: string | null;
-  }> | null;
+  }>;
 };
 
 type DbSyncStatusRow = {
@@ -176,7 +177,7 @@ function mapUser(row: DbUserRow): User {
     whatsapp: row.whatsapp ?? "",
     active: row.ativo,
     clientId: row.client_id,
-    clientName: row.clients?.[0]?.nome_empresa,
+    clientName: firstEmbedded(row.clients)?.nome_empresa,
   };
 }
 
@@ -198,7 +199,7 @@ function mapCampaignBase(row: DbCampaignRow): CampaignBase {
     status: row.status === "Ativa" ? "Ativa" : "Pausada",
     platform: row.plataforma,
     clientId: row.client_id,
-    clientName: row.clients?.[0]?.nome_empresa,
+    clientName: firstEmbedded(row.clients)?.nome_empresa,
     resultCategory: getResultCategoryFromObjective(row.objective),
   };
 }
@@ -207,8 +208,8 @@ function mapReport(row: DbReportRow): ReportHistoryItem {
   return {
     id: row.id,
     clientId: row.client_id ?? undefined,
-    clientName: row.clients?.[0]?.nome_empresa ?? "Cliente removido",
-    whatsapp: row.clients?.[0]?.whatsapp ?? "",
+    clientName: firstEmbedded(row.clients)?.nome_empresa ?? "Cliente removido",
+    whatsapp: firstEmbedded(row.clients)?.whatsapp ?? "",
     periodLabel: formatReportPeriodLabel(row.period_start, row.period_end),
     preview:
       row.generated_text.length > 160

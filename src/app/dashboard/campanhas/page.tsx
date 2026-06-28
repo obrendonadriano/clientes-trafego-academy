@@ -38,7 +38,7 @@ export default async function DashboardCampaignsPage({
   return (
     <DashboardShell
       user={user}
-      title={`Campanhas de ${user.clientName}`}
+      title={`Campanhas de ${user.clientName ?? user.name}`}
       subtitle="Tabela dedicada para acompanhar somente as campanhas liberadas para esta conta."
     >
       <Suspense

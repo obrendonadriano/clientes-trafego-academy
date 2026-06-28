@@ -1,4 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { type Embedded, firstEmbedded } from "@/lib/supabase/embedded";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { User } from "@/lib/types";
 
@@ -12,9 +13,9 @@ type ProfileRow = {
   whatsapp: string | null;
   ativo: boolean;
   client_id: string | null;
-  clients?: Array<{
+  clients?: Embedded<{
     nome_empresa: string;
-  }> | null;
+  }>;
 };
 
 function mapProfile(row: ProfileRow): User {
@@ -28,7 +29,7 @@ function mapProfile(row: ProfileRow): User {
     whatsapp: row.whatsapp ?? "",
     active: row.ativo,
     clientId: row.client_id,
-    clientName: row.clients?.[0]?.nome_empresa,
+    clientName: firstEmbedded(row.clients)?.nome_empresa,
   };
 }
 
