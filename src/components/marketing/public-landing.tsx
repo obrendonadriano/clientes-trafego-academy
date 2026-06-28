@@ -10,9 +10,8 @@ import {
 } from "@/components/auth/login-form";
 import { ThemeToggle } from "@/components/theme-toggle";
 
-// Destino do CTA "Quero ser cliente" (capta novos clientes pelo Instagram).
-// Troque por um link de WhatsApp/landing de vendas se preferir.
-const BECOME_CLIENT_HREF = "https://www.instagram.com/otrafegoacademy";
+// Destino do CTA "Quero ser cliente" (site de captação da Tráfego Academy).
+const BECOME_CLIENT_HREF = "https://site-trafego-academy.vercel.app/";
 
 type PublicLandingProps = {
   title?: string;
