@@ -163,7 +163,7 @@ export function PublicLanding({
               <div className="h-10 w-10 sm:h-12 sm:w-12" />
             </div>
 
-            <div className="mx-auto flex w-full max-w-[780px] flex-1 flex-col pt-1 sm:pt-8 lg:pt-6">
+            <div className="mx-auto flex w-full max-w-[780px] flex-1 flex-col pt-8 sm:pt-8 lg:pt-6">
               <LoginForm />
 
               <div className="mt-3 pt-2 text-center sm:mt-8 sm:pt-4 lg:mt-auto lg:pt-6">

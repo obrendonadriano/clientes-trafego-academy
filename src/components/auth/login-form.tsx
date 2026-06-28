@@ -159,21 +159,10 @@ export function LoginForm() {
         </LoginFieldset>
       </form>
 
-      <div className="mt-3 overflow-hidden rounded-[22px] border border-[#e7e7e7] bg-white shadow-[0_10px_28px_rgba(0,0,0,0.08)] max-lg:dark:border-white/10 max-lg:dark:bg-white/[0.04] max-lg:dark:shadow-none sm:hidden">
-        <div className="px-4 py-3">
-          <div className="mb-1 text-center text-[1.25rem] font-black leading-none text-[#7a64ff]">
-            &ldquo;
-          </div>
-          <p className="text-[0.76rem] leading-5 text-[#99a1af]">
-            Tenha em um só lugar a leitura do desempenho das campanhas, evolução
-            dos resultados e o acompanhamento contínuo da operação.
-          </p>
-        </div>
-        <div className="flex items-center gap-2.5 bg-[#eee7ff] px-4 py-2 text-[0.72rem] leading-5 text-[#7d68f5] max-lg:dark:bg-white/[0.06] max-lg:dark:text-[#b3a4ff]">
-          <ShieldCheck className="size-4 shrink-0" />
-          <p>Ambiente privado com acessos definidos pela equipe Tráfego Academy.</p>
-        </div>
-      </div>
+      <p className="mt-5 flex items-center justify-center gap-2 text-center text-[0.72rem] leading-5 text-[#8f96a3] sm:hidden">
+        <ShieldCheck className="size-3.5 shrink-0 text-[#7d68f5]" />
+        Ambiente privado com acessos definidos pela equipe Tráfego Academy.
+      </p>
     </div>
   );
 }
