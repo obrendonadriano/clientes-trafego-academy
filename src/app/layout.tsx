@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Manrope, Space_Grotesk } from "next/font/google";
 import "./globals.css";
+import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { ThemeMetaSync } from "@/components/theme-meta-sync";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -14,9 +15,10 @@ const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
 });
 
-// Aplica o tema (sistema/claro/escuro) antes da página pintar, evitando o
-// "flash" de tema errado. Espelha a lógica do ThemeProvider.
-const themeInitScript = `(function(){try{var s=localStorage.getItem("ta-theme");var d=window.matchMedia("(prefers-color-scheme: dark)").matches;var dark=s==="dark"||(s!=="light"&&d);var e=document.documentElement;e.classList.toggle("dark",dark);e.style.colorScheme=dark?"dark":"light";}catch(e){}})();`;
+// Aplica o tema antes da página pintar, evitando o "flash" de tema errado.
+// Padrão por área (espelha o ThemeProvider): app (admin/dashboard) abre escuro,
+// login/público abre claro; a escolha salva por área tem prioridade.
+const themeInitScript = `(function(){try{var p=location.pathname;var app=p.indexOf("/admin")===0||p.indexOf("/dashboard")===0;var s=localStorage.getItem(app?"ta-theme-app":"ta-theme-public");var dark=s?s==="dark":app;var e=document.documentElement;e.classList.toggle("dark",dark);e.style.colorScheme=dark?"dark":"light";}catch(e){}})();`;
 
 export const metadata: Metadata = {
   title: "Tráfego Academy Dashboard",
@@ -64,7 +66,8 @@ export default function RootLayout({
         className="min-h-screen bg-background font-sans text-foreground antialiased"
       >
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-        <ThemeProvider defaultTheme="system">
+        <ThemeProvider>
+          <ServiceWorkerRegister />
           <ThemeMetaSync />
           {children}
         </ThemeProvider>
