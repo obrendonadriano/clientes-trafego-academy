@@ -14,6 +14,10 @@ const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
 });
 
+// Aplica o tema (sistema/claro/escuro) antes da página pintar, evitando o
+// "flash" de tema errado. Espelha a lógica do ThemeProvider.
+const themeInitScript = `(function(){try{var s=localStorage.getItem("ta-theme");var d=window.matchMedia("(prefers-color-scheme: dark)").matches;var dark=s==="dark"||(s!=="light"&&d);var e=document.documentElement;e.classList.toggle("dark",dark);e.style.colorScheme=dark?"dark":"light";}catch(e){}})();`;
+
 export const metadata: Metadata = {
   title: "Tráfego Academy Dashboard",
   description:
@@ -59,9 +63,8 @@ export default function RootLayout({
         suppressHydrationWarning
         className="min-h-screen bg-background font-sans text-foreground antialiased"
       >
-        <ThemeProvider
-          defaultTheme="dark"
-        >
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <ThemeProvider defaultTheme="system">
           <ThemeMetaSync />
           {children}
         </ThemeProvider>
