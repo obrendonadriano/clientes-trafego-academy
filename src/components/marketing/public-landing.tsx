@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { ArrowRight } from "lucide-react";
 import {
   BrandBIcon,
   InstagramIcon,
@@ -7,6 +8,11 @@ import {
   TikTokIcon,
   YoutubeIcon,
 } from "@/components/auth/login-form";
+import { ThemeToggle } from "@/components/theme-toggle";
+
+// Destino do CTA "Quero ser cliente" (capta novos clientes pelo Instagram).
+// Troque por um link de WhatsApp/landing de vendas se preferir.
+const BECOME_CLIENT_HREF = "https://www.instagram.com/otrafegoacademy";
 
 type PublicLandingProps = {
   title?: string;
@@ -35,7 +41,7 @@ export function PublicLanding({
   ];
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-white text-black lg:bg-[#080507]">
+    <main className="min-h-screen overflow-x-hidden bg-white text-black max-lg:dark:bg-[#070611] max-lg:dark:text-white lg:bg-[#080507]">
       <div className="mx-auto flex min-h-screen max-w-[1920px] flex-col overflow-x-hidden lg:h-screen lg:max-h-screen lg:flex-row lg:overflow-hidden">
         <section className="relative hidden overflow-hidden bg-[#06060d] text-white lg:flex lg:h-screen lg:w-[44%] lg:flex-col lg:justify-between">
           <Image
@@ -91,9 +97,46 @@ export function PublicLanding({
           </div>
         </section>
 
-        <section className="relative flex min-h-[100dvh] flex-1 flex-col overflow-x-hidden bg-white px-4 pb-1 pt-2 sm:px-8 sm:pb-6 lg:h-screen lg:rounded-l-[32px] lg:px-10 lg:pb-4 lg:pt-5">
+        <section className="relative flex min-h-[100dvh] flex-1 flex-col overflow-x-hidden bg-white px-4 pb-1 pt-2 max-lg:dark:bg-[#070611] sm:px-8 sm:pb-6 lg:h-screen lg:rounded-l-[32px] lg:px-10 lg:pb-4 lg:pt-5">
           <div className="mx-auto flex w-full max-w-[860px] flex-1 flex-col">
-            <div className="flex items-center justify-between">
+            {/* Barra superior do MOBILE: logo + nome num canto, CTA no outro. */}
+            <div className="flex items-center justify-between gap-2 rounded-[1.25rem] border border-black/5 bg-white/70 px-2.5 py-2 shadow-sm backdrop-blur max-lg:dark:border-white/10 max-lg:dark:bg-white/[0.04] lg:hidden">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-2xl border border-white/10 bg-[#0c0a16] p-1.5">
+                  <Image
+                    src="/icon-192.png"
+                    alt="Tráfego Academy"
+                    width={40}
+                    height={40}
+                    className="h-full w-full object-contain"
+                  />
+                </span>
+                <span className="truncate font-display text-sm font-semibold text-[#131313] max-lg:dark:text-white">
+                  Tráfego Academy
+                </span>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2">
+                <ThemeToggle compact />
+                <div className="flex flex-col items-end leading-none">
+                  <span className="hidden text-[0.62rem] text-[#8f96a3] min-[400px]:block">
+                    Você ainda não é cliente?
+                  </span>
+                  <a
+                    href={BECOME_CLIENT_HREF}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-[linear-gradient(135deg,#4d7cff_0%,#815cff_100%)] px-3 py-1.5 text-[0.72rem] font-semibold text-white shadow-sm transition hover:brightness-105"
+                  >
+                    Quero ser cliente
+                    <ArrowRight className="size-3.5" />
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Barra superior do DESKTOP (mantida): voltar + logo central. */}
+            <div className="hidden items-center justify-between lg:flex">
               <div className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#989898] sm:h-12 sm:w-12">
                 <svg
                   aria-hidden="true"

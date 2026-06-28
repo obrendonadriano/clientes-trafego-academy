@@ -99,11 +99,11 @@ export function LoginForm() {
         <p className="text-[0.78rem] font-semibold text-[#a4a8b0] sm:text-base">
           Seja bem-vindo ao portal
         </p>
-        <h2 className="mt-1 font-display text-[2rem] leading-[0.92] tracking-[-0.07em] text-[#090909] sm:mt-3 sm:max-w-[13ch] sm:text-[3.2rem]">
+        <h2 className="mt-1 font-display text-[2rem] leading-[0.92] tracking-[-0.07em] text-[#090909] max-lg:dark:text-white sm:mt-3 sm:max-w-[13ch] sm:text-[3.2rem]">
           <span className="block whitespace-nowrap">Faça login para acompanhar</span>
           <span className="block">suas campanhas</span>
         </h2>
-        <p className="mt-2 max-w-2xl text-[0.84rem] leading-5 text-[#7f8794] sm:mt-4 sm:text-base sm:leading-7">
+        <p className="mt-2 max-w-2xl text-[0.84rem] leading-5 text-[#7f8794] max-lg:dark:text-slate-400 sm:mt-4 sm:text-base sm:leading-7">
           Use o acesso liberado manualmente pela equipe da Tráfego Academy para
           entrar no seu dashboard de métricas.
         </p>
@@ -112,7 +112,10 @@ export function LoginForm() {
       <form action={formAction} className="mt-3 sm:mt-8">
         <LoginFieldset>
         <div className="space-y-2">
-          <Label htmlFor="username" className="text-sm font-semibold text-[#636b78]">
+          <Label
+            htmlFor="username"
+            className="text-sm font-semibold text-[#636b78] max-lg:dark:text-slate-300"
+          >
             Usuário
           </Label>
           <Input
@@ -121,11 +124,14 @@ export function LoginForm() {
             placeholder="Digite seu usuário"
             autoComplete="username"
             required
-            className="h-[50px] rounded-[18px] border border-[#e4e8f2] bg-white/95 px-4 text-base text-[#131313] shadow-[0_12px_28px_rgba(31,28,64,0.05),inset_0_1px_0_rgba(255,255,255,0.95)] placeholder:text-[#9aa4b5] focus-visible:border-[#8f87ff] focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15 dark:border-[#e4e8f2] dark:bg-white/95 dark:text-[#131313] dark:placeholder:text-[#9aa4b5] sm:h-[62px] sm:rounded-[20px] sm:px-6"
+            className="h-[50px] rounded-[18px] border border-[#e4e8f2] bg-white/95 px-4 text-base text-[#131313] shadow-[0_12px_28px_rgba(31,28,64,0.05),inset_0_1px_0_rgba(255,255,255,0.95)] placeholder:text-[#9aa4b5] focus-visible:border-[#8f87ff] lg:focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15 lg:dark:border-[#e4e8f2] lg:dark:bg-white/95 lg:dark:text-[#131313] lg:dark:placeholder:text-[#9aa4b5] sm:h-[62px] sm:rounded-[20px] sm:px-6"
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="password" className="text-sm font-semibold text-[#636b78]">
+          <Label
+            htmlFor="password"
+            className="text-sm font-semibold text-[#636b78] max-lg:dark:text-slate-300"
+          >
             Senha
           </Label>
           <Input
@@ -135,12 +141,12 @@ export function LoginForm() {
             placeholder="Digite sua senha"
             autoComplete="current-password"
             required
-            className="h-[50px] rounded-[18px] border border-[#e4e8f2] bg-white/95 px-4 text-base text-[#131313] shadow-[0_12px_28px_rgba(31,28,64,0.05),inset_0_1px_0_rgba(255,255,255,0.95)] placeholder:text-[#9aa4b5] focus-visible:border-[#8f87ff] focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15 dark:border-[#e4e8f2] dark:bg-white/95 dark:text-[#131313] dark:placeholder:text-[#9aa4b5] sm:h-[62px] sm:rounded-[20px] sm:px-6"
+            className="h-[50px] rounded-[18px] border border-[#e4e8f2] bg-white/95 px-4 text-base text-[#131313] shadow-[0_12px_28px_rgba(31,28,64,0.05),inset_0_1px_0_rgba(255,255,255,0.95)] placeholder:text-[#9aa4b5] focus-visible:border-[#8f87ff] lg:focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15 lg:dark:border-[#e4e8f2] lg:dark:bg-white/95 lg:dark:text-[#131313] lg:dark:placeholder:text-[#9aa4b5] sm:h-[62px] sm:rounded-[20px] sm:px-6"
           />
         </div>
 
         {state.error ? (
-          <p className="rounded-[18px] border border-[#f0b1b8] bg-[#fff2f4] px-5 py-4 text-sm text-[#c43d4b]">
+          <p className="rounded-[18px] border border-[#f0b1b8] bg-[#fff2f4] px-5 py-4 text-sm text-[#c43d4b] max-lg:dark:border-red-400/30 max-lg:dark:bg-red-500/10 max-lg:dark:text-red-300">
             {state.error}
           </p>
         ) : null}
@@ -153,7 +159,7 @@ export function LoginForm() {
         </LoginFieldset>
       </form>
 
-      <div className="mt-3 overflow-hidden rounded-[22px] border border-[#e7e7e7] bg-white shadow-[0_10px_28px_rgba(0,0,0,0.08)] sm:hidden">
+      <div className="mt-3 overflow-hidden rounded-[22px] border border-[#e7e7e7] bg-white shadow-[0_10px_28px_rgba(0,0,0,0.08)] max-lg:dark:border-white/10 max-lg:dark:bg-white/[0.04] max-lg:dark:shadow-none sm:hidden">
         <div className="px-4 py-3">
           <div className="mb-1 text-center text-[1.25rem] font-black leading-none text-[#7a64ff]">
             &ldquo;
@@ -163,7 +169,7 @@ export function LoginForm() {
             dos resultados e o acompanhamento contínuo da operação.
           </p>
         </div>
-        <div className="flex items-center gap-2.5 bg-[#eee7ff] px-4 py-2 text-[0.72rem] leading-5 text-[#7d68f5]">
+        <div className="flex items-center gap-2.5 bg-[#eee7ff] px-4 py-2 text-[0.72rem] leading-5 text-[#7d68f5] max-lg:dark:bg-white/[0.06] max-lg:dark:text-[#b3a4ff]">
           <ShieldCheck className="size-4 shrink-0" />
           <p>Ambiente privado com acessos definidos pela equipe Tráfego Academy.</p>
         </div>

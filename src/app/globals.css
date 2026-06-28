@@ -173,10 +173,15 @@ input[type="date"]::-webkit-date-and-time-value {
 }
 
 @media (max-width: 1023px) {
+  /* Login no mobile: branco no tema claro, escuro no tema escuro (padrão). */
   html[data-surface="login"],
-  html[data-surface="login"] body,
-  html[data-surface="login"].dark body {
+  html[data-surface="login"] body {
     background: #ffffff;
+  }
+
+  html[data-surface="login"].dark,
+  html[data-surface="login"].dark body {
+    background: #070611;
   }
 }
 
