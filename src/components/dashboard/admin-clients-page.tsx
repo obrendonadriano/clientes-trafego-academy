@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ClientCreateForm } from "@/components/admin/client-create-form";
 import { Badge } from "@/components/ui/badge";
@@ -66,19 +67,28 @@ export function AdminClientsPage({
         </p>
       </div>
 
-      <div className="grid min-w-0 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <ClientCreateForm campaigns={campaigns} />
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <div className="min-w-0 xl:sticky xl:top-6 xl:self-start">
+          <ClientCreateForm campaigns={campaigns} />
+        </div>
 
         <Card className="min-w-0 overflow-hidden border-border/60 bg-background/60 xl:self-start">
           <CardHeader className="space-y-3">
-            <CardTitle className="font-display text-2xl">
-              Clientes cadastrados
-            </CardTitle>
-            <Input
-              placeholder="Buscar por empresa ou responsável"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="font-display text-2xl">
+                Clientes cadastrados
+              </CardTitle>
+              <Badge variant="secondary">{clients.length}</Badge>
+            </div>
+            <div className="relative min-w-0">
+              <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="pl-11"
+                placeholder="Buscar por empresa ou responsável"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </div>
           </CardHeader>
           <CardContent className="min-w-0 space-y-3 overflow-hidden">
             {clientCards.length === 0 ? (
