@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import {
@@ -87,14 +88,25 @@ export function DashboardShell({
   function renderSidebarContent() {
     return (
       <>
-        <div className="flex items-start justify-between gap-4 lg:block">
-          <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
-              Tráfego Academy
-            </p>
-            <h1 className="mt-3 font-display text-2xl font-semibold text-foreground">
-              {user.role === "admin" ? "Admin console" : "Client dashboard"}
-            </h1>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl border border-white/10 bg-[#0c0a16] p-1.5 shadow-sm">
+              <Image
+                src="/icon-192.png"
+                alt="Tráfego Academy"
+                width={44}
+                height={44}
+                className="h-full w-full object-contain"
+              />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate font-display text-lg font-semibold leading-tight text-foreground">
+                Tráfego Academy
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {user.role === "admin" ? "Admin console" : "Área do cliente"}
+              </p>
+            </div>
           </div>
 
           <Button
@@ -149,20 +161,31 @@ export function DashboardShell({
     <main className="min-h-screen overflow-x-hidden bg-transparent text-foreground">
       <div className="mx-auto flex min-h-screen max-w-[1680px] min-w-0 flex-col gap-4 overflow-x-hidden px-3 py-3 lg:flex-row lg:gap-6 lg:px-6 lg:py-4">
         <div className="lg:hidden">
-          <div className="dashboard-glass flex items-center justify-between rounded-[1.5rem] px-4 py-3">
-            <div>
-              <p className="text-[0.65rem] uppercase tracking-[0.3em] text-muted-foreground">
-                Tráfego Academy
-              </p>
-              <p className="mt-1 font-display text-lg font-semibold text-foreground">
-                {user.role === "admin" ? "Admin console" : "Client dashboard"}
-              </p>
+          <div className="dashboard-glass flex items-center justify-between gap-3 rounded-[1.5rem] px-3 py-2.5">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-2xl border border-white/10 bg-[#0c0a16] p-1.5 shadow-sm">
+                <Image
+                  src="/icon-192.png"
+                  alt="Tráfego Academy"
+                  width={40}
+                  height={40}
+                  className="h-full w-full object-contain"
+                />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate font-display text-base font-semibold leading-tight text-foreground">
+                  Tráfego Academy
+                </p>
+                <p className="text-[0.7rem] text-muted-foreground">
+                  {user.role === "admin" ? "Admin console" : "Área do cliente"}
+                </p>
+              </div>
             </div>
 
             <Button
               type="button"
               size="icon"
-              className="rounded-full bg-primary text-white hover:bg-primary/90"
+              className="shrink-0 rounded-full bg-primary text-white hover:bg-primary/90"
               onClick={() => setIsMobileMenuOpen(true)}
               aria-label="Abrir menu"
             >
