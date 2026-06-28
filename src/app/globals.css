@@ -91,6 +91,12 @@ body {
     var(--background);
   color: var(--foreground);
   overflow-x: hidden;
+  /* Respeita o notch/relógio quando instalado como app (iOS standalone com
+     viewport-fit=cover). Em navegador comum esses valores são 0. */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 input[type="checkbox"],
