@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { Mail, Megaphone, Pencil, Phone, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ClientCreateForm } from "@/components/admin/client-create-form";
 import { Badge } from "@/components/ui/badge";
@@ -101,40 +101,57 @@ export function AdminClientsPage({
             {clientCards.map(({ client, linkedUser, allowedCampaignCount }) => (
               <div
                 key={client.id}
-                className="dashboard-row min-w-0 rounded-2xl border px-4 py-4"
+                className="dashboard-row group min-w-0 rounded-2xl border p-4 transition hover:border-primary/30"
               >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/12 font-display text-lg font-semibold text-primary">
+                    {client.companyName.charAt(0).toUpperCase()}
+                  </span>
+
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-foreground">{client.companyName}</p>
-                    <p className="text-sm text-muted-foreground">{client.contactName}</p>
-                    <p className="mt-2 min-w-0 text-sm text-muted-foreground">
-                      Login:{" "}
-                      <strong className="break-all text-foreground">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-foreground">
+                          {client.companyName}
+                        </p>
+                        <p className="truncate text-sm text-muted-foreground">
+                          {client.contactName}
+                        </p>
+                      </div>
+                      <Badge variant={client.active ? "success" : "secondary"}>
+                        {client.active ? "Ativo" : "Inativo"}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-3 flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+                      <Mail className="size-3.5 shrink-0" />
+                      <span className="min-w-0 truncate break-all">
                         {linkedUser?.email || "Ainda sem acesso criado"}
-                      </strong>
-                    </p>
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-muted/70 px-3 py-1 text-xs text-muted-foreground dark:bg-white/[0.045]">
+                        <Megaphone className="size-3.5 shrink-0" />
+                        {allowedCampaignCount} campanha
+                        {allowedCampaignCount === 1 ? "" : "s"}
+                      </span>
+                      <span className="inline-flex max-w-full items-center gap-1.5 break-all rounded-full bg-muted/70 px-3 py-1 text-xs text-muted-foreground dark:bg-white/[0.045]">
+                        <Phone className="size-3.5 shrink-0" />
+                        {client.whatsapp}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex justify-end">
+                      <Link
+                        href={`/admin/clientes/${client.id}`}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border/70 bg-background/50 px-4 text-sm font-medium text-foreground transition hover:border-primary/40 hover:bg-muted/70 dark:border-white/10 dark:bg-white/[0.035] dark:hover:bg-white/[0.08]"
+                      >
+                        <Pencil className="size-3.5" />
+                        Editar
+                      </Link>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={client.active ? "success" : "secondary"}>
-                      {client.active ? "Ativo" : "Inativo"}
-                    </Badge>
-                    <Link
-                      href={`/admin/clientes/${client.id}`}
-                      className="inline-flex h-9 items-center justify-center rounded-full border border-border/70 bg-background/50 px-4 text-sm font-medium text-foreground transition hover:bg-muted/70 dark:border-white/10 dark:bg-white/[0.035] dark:hover:bg-white/[0.08]"
-                    >
-                      Editar
-                    </Link>
-                  </div>
-                </div>
-                <div className="mt-3 flex min-w-0 flex-wrap gap-2 text-xs text-muted-foreground">
-                  <span className="max-w-full break-words rounded-full bg-muted/70 dark:bg-white/[0.045] px-3 py-1">
-                    {allowedCampaignCount} campanha
-                    {allowedCampaignCount === 1 ? "" : "s"} liberada
-                    {allowedCampaignCount === 1 ? "" : "s"}
-                  </span>
-                  <span className="max-w-full break-all rounded-full bg-muted/70 dark:bg-white/[0.045] px-3 py-1">
-                    {client.whatsapp}
-                  </span>
                 </div>
               </div>
             ))}
