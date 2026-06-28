@@ -104,6 +104,17 @@ input[type="radio"] {
   accent-color: var(--primary);
 }
 
+/* O iOS dá zoom automático ao focar campos com fonte < 16px. Garantir 16px no
+   mobile elimina esse zoom em qualquer formulário do site, sem mexer no visual
+   do desktop. */
+@media (max-width: 1023px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 input[type="date"] {
   min-width: 0;
   max-width: 100%;
