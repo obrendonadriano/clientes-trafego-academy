@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { createServerClient } from "@supabase/ssr";
 import { isSupabaseConfigured } from "@/lib/env";
 import { getUserById } from "@/lib/mock-data";
+import { getSupabasePublishableKey, getSupabaseUrl } from "@/lib/supabase/env";
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   if (isSupabaseConfigured()) {
-    return NextResponse.next();
+    return refreshSupabaseSession(request);
   }
 
   const session = request.cookies.get("ta_session")?.value;
@@ -43,6 +45,41 @@ export function proxy(request: NextRequest) {
   }
 
   return NextResponse.next();
+}
+
+// Renova o access token do Supabase (que expira em ~1h) a cada navegação e
+// grava os cookies atualizados na resposta. É o que mantém o cliente logado
+// sem precisar relogar toda hora — padrão oficial Supabase + Next.
+async function refreshSupabaseSession(request: NextRequest) {
+  let response = NextResponse.next({ request });
+
+  const url = getSupabaseUrl();
+  const anonKey = getSupabasePublishableKey();
+
+  if (!url || !anonKey) {
+    return response;
+  }
+
+  const supabase = createServerClient(url, anonKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) =>
+          request.cookies.set(name, value),
+        );
+        response = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          response.cookies.set(name, value, options),
+        );
+      },
+    },
+  });
+
+  await supabase.auth.getUser();
+
+  return response;
 }
 
 function redirectToLogin(request: NextRequest) {
