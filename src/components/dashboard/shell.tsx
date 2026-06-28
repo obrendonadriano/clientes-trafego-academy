@@ -15,6 +15,7 @@ import { logoutAction } from "@/app/login/actions";
 import { SideNav, type SideNavItem } from "@/components/dashboard/side-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { FormPendingButton } from "@/components/ui/form-pending-button";
 import type { User } from "@/lib/types";
 
 type DashboardShellProps = {
@@ -128,13 +129,15 @@ export function DashboardShell({
               <ThemeToggle />
             </div>
             <form action={logoutAction} className="min-w-0">
-              <Button
+              <FormPendingButton
                 variant="outline"
                 className="w-full min-w-0 gap-2 rounded-full px-4"
+                idleLabel="Sair"
+                pendingLabel="Saindo..."
               >
                 <LogOut className="size-4 shrink-0" />
                 <span className="truncate">Sair</span>
-              </Button>
+              </FormPendingButton>
             </form>
           </div>
         </div>
