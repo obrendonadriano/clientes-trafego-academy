@@ -75,6 +75,41 @@ function FieldError({ message }: { message?: string }) {
   return <p className="text-xs text-destructive">{message}</p>;
 }
 
+// Máscara de celular brasileiro com +55 fixo: "+55 (11) 99999-9999".
+// Mantém o código do país travado e formata DDD + número conforme digita.
+function formatWhatsapp(raw: string): string {
+  let digits = raw.replace(/\D/g, "");
+
+  if (!digits.startsWith("55")) {
+    digits = `55${digits}`;
+  }
+
+  digits = digits.slice(0, 13); // 55 + DDD (2) + número (9)
+
+  // Só o código do país: volta ao estado inicial pré-preenchido.
+  if (digits.length <= 2) {
+    return "+55 ";
+  }
+
+  const ddd = digits.slice(2, 4);
+  const part1 = digits.slice(4, 9);
+  const part2 = digits.slice(9, 13);
+
+  let formatted = "+55";
+  formatted += ` (${ddd}`;
+  if (ddd.length === 2) {
+    formatted += ")";
+  }
+  if (part1) {
+    formatted += ` ${part1}`;
+  }
+  if (part2) {
+    formatted += `-${part2}`;
+  }
+
+  return formatted;
+}
+
 function Field({
   label,
   htmlFor,
@@ -125,6 +160,8 @@ export function ClientCreateForm({ campaigns }: ClientCreateFormProps) {
   // Erros detectados no blur (disponibilidade) sobrepõem-se aos do servidor.
   const [liveErrors, setLiveErrors] = useState<Record<string, string>>({});
   const [current, setCurrent] = useState(0);
+  // WhatsApp já começa com +55 e é formatado com máscara enquanto digita.
+  const [whatsapp, setWhatsapp] = useState("+55 ");
   // Refs dos painéis para validar nativamente só o passo visível.
   const panelRefs = useRef<(HTMLDivElement | null)[]>([]);
   // Guarda o último resultado da action já tratado, para reagir só a um
@@ -325,7 +362,11 @@ export function ClientCreateForm({ campaigns }: ClientCreateFormProps) {
                   name="whatsapp"
                   required
                   inputMode="tel"
-                  placeholder="+55 11 99999-0000"
+                  value={whatsapp}
+                  onChange={(event) => setWhatsapp(formatWhatsapp(event.target.value))}
+                  pattern="\+55 \(\d{2}\) \d{5}-\d{4}"
+                  title="Informe o WhatsApp no formato +55 (DD) 99999-9999"
+                  placeholder="+55 (11) 99999-9999"
                 />
               </Field>
               <Field
