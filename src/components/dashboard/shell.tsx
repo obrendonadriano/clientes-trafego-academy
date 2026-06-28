@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { logoutAction } from "@/app/login/actions";
+import { RevalidateOnFocus } from "@/components/dashboard/revalidate-on-focus";
 import { SideNav, type SideNavItem } from "@/components/dashboard/side-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -159,6 +160,7 @@ export function DashboardShell({
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-transparent text-foreground">
+      <RevalidateOnFocus />
       <div className="mx-auto flex min-h-screen max-w-[1680px] min-w-0 flex-col gap-4 overflow-x-hidden px-3 py-3 lg:flex-row lg:gap-6 lg:px-6 lg:py-4">
         <div className="lg:hidden">
           <div className="dashboard-glass flex items-center justify-between gap-3 rounded-[1.5rem] px-3 py-2.5">
