@@ -1,5 +1,5 @@
+import { Sparkles } from "lucide-react";
 import { AiReportPanel } from "@/components/dashboard/ai-report-panel";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
   CampaignWithMetrics,
   CampaignPermission,
@@ -26,60 +26,29 @@ export function AdminReportsPage({
   permissions,
 }: AdminReportsPageProps) {
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">
-          Relatórios IA
-        </p>
-        <h3 className="mt-2 font-display text-3xl font-semibold">
-          Histórico e geração de análise
-        </h3>
-        <p className="mt-2 max-w-3xl text-muted-foreground">
-          Aqui ficam juntos o histórico do que já foi gerado e o editor de texto com IA.
-        </p>
+    <div className="min-w-0 space-y-6">
+      <div className="flex items-center gap-3">
+        <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/12 text-primary">
+          <Sparkles className="size-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">
+            Análise com IA
+          </p>
+          <h3 className="font-display text-3xl font-semibold">
+            Gerar relatório para o cliente
+          </h3>
+        </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-        <Card className="border-border/60 bg-background/60">
-          <CardHeader>
-            <CardTitle className="font-display text-2xl">
-              Histórico de relatórios
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {reports.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
-                Nenhum relatório gerado até agora. Use o painel ao lado para
-                criar a primeira análise com IA.
-              </div>
-            ) : null}
-            {reports.slice(0, 10).map((report) => (
-              <div
-                key={report.id}
-                className="rounded-2xl border border-border/60 bg-card px-4 py-3"
-              >
-                <p className="font-medium">{report.clientName}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {report.periodLabel}
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {report.preview}
-                </p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <AiReportPanel
-          initialText={aiText}
-          initialWhatsapp={reports[0]?.whatsapp ?? clients[0]?.whatsapp ?? ""}
-          clients={clients}
-          campaigns={campaigns}
-          clientUsers={clientUsers}
-          permissions={permissions}
-          reports={reports}
-        />
-      </div>
+      <AiReportPanel
+        initialText={aiText}
+        initialWhatsapp={reports[0]?.whatsapp ?? clients[0]?.whatsapp ?? ""}
+        clients={clients}
+        campaigns={campaigns}
+        clientUsers={clientUsers}
+        permissions={permissions}
+      />
     </div>
   );
 }

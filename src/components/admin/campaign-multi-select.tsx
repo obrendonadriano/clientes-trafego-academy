@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import type { CampaignWithMetrics } from "@/lib/types";
 
 type CampaignMultiSelectProps = {
@@ -13,6 +14,8 @@ type CampaignMultiSelectProps = {
   onChange?: (ids: string[]) => void;
   inputName?: string;
   showSelectionSummary?: boolean;
+  // Lista mais baixa para painéis estreitos (ex.: gerar relatório).
+  dense?: boolean;
 };
 
 export function CampaignMultiSelect({
@@ -22,6 +25,7 @@ export function CampaignMultiSelect({
   onChange,
   inputName = "campaignIds",
   showSelectionSummary = false,
+  dense = false,
 }: CampaignMultiSelectProps) {
   const [query, setQuery] = useState("");
   const [internalSelected, setInternalSelected] = useState<string[]>(selectedIds);
@@ -93,7 +97,12 @@ export function CampaignMultiSelect({
       ))}
 
       <div className="dashboard-row min-w-0 rounded-[1.35rem] border p-2">
-        <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
+        <div
+          className={cn(
+            "space-y-2 overflow-y-auto pr-1",
+            dense ? "max-h-[228px]" : "max-h-[320px]",
+          )}
+        >
           {filteredCampaigns.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/70 dark:border-white/10 px-4 py-6 text-sm text-muted-foreground">
               Nenhuma campanha encontrada com esse nome.

@@ -1,28 +1,32 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { Check, Copy, MessageCircleMore, Sparkles } from "lucide-react";
+import {
+  Check,
+  Copy,
+  MessageCircleMore,
+  Sparkles,
+  Users,
+} from "lucide-react";
 import {
   generateAiReportAction,
   type GenerateReportState,
 } from "@/app/admin/relatorios-ia/actions";
 import { CampaignMultiSelect } from "@/components/admin/campaign-multi-select";
-import {
-  PeriodFilter,
-  type PeriodFilterValue,
-} from "@/components/dashboard/period-filter";
+import { periods, type PeriodFilterValue } from "@/components/dashboard/period-filter";
 import { Button } from "@/components/ui/button";
 import { FormPendingButton } from "@/components/ui/form-pending-button";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { getDefaultCustomRange } from "@/lib/dashboard-metrics";
+import { formatPeriodLabel, getDefaultCustomRange } from "@/lib/dashboard-metrics";
+import { cn } from "@/lib/utils";
 import { generateWhatsappLink } from "@/lib/whatsapp";
 import type {
   CampaignWithMetrics,
   CampaignPermission,
   Client,
-  ReportHistoryItem,
   User,
 } from "@/lib/types";
 
@@ -33,13 +37,23 @@ type AiReportPanelProps = {
   campaigns: CampaignWithMetrics[];
   clientUsers: User[];
   permissions: CampaignPermission[];
-  reports: ReportHistoryItem[];
 };
 
 const initialState: GenerateReportState = {};
 
-// Textarea com shimmer durante a geração — precisa estar dentro do form para
-// ler useFormStatus, por isso é um componente separado.
+function StepLabel({ index, children }: { index: number; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary/12 text-xs font-semibold text-primary">
+        {index}
+      </span>
+      <span className="text-sm font-semibold text-foreground">{children}</span>
+    </div>
+  );
+}
+
+// Textarea com shimmer durante a geração e altura automática conforme o texto.
+// Precisa estar dentro do form para ler useFormStatus.
 function ReportTextarea({
   text,
   onChange,
@@ -48,17 +62,30 @@ function ReportTextarea({
   onChange: (value: string) => void;
 }) {
   const { pending } = useFormStatus();
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) {
+      return;
+    }
+
+    element.style.height = "auto";
+    element.style.height = `${Math.max(element.scrollHeight, 320)}px`;
+  }, [text]);
 
   return (
     <div className="relative">
       <Textarea
-        className="min-h-[240px]"
+        ref={ref}
+        className="min-h-[320px] resize-none text-[0.95rem] leading-7"
         value={text}
         disabled={pending}
+        placeholder="A análise gerada pela IA aparecerá aqui. Você pode editar o texto livremente antes de enviar."
         onChange={(event) => onChange(event.target.value)}
       />
       {pending ? (
-        <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-background/70 backdrop-blur-[2px]">
+        <div className="absolute inset-0 flex items-center justify-center rounded-[1.35rem] bg-background/70 backdrop-blur-[2px]">
           <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <Sparkles className="size-4 animate-pulse text-primary" />
             Gerando análise…
@@ -76,13 +103,11 @@ export function AiReportPanel({
   campaigns,
   clientUsers,
   permissions,
-  reports,
 }: AiReportPanelProps) {
   const [state, formAction] = useActionState(generateAiReportAction, initialState);
   const [draftText, setDraftText] = useState<string | null>(null);
   const [selectedClientId, setSelectedClientId] = useState(clients[0]?.id ?? "");
   const [period, setPeriod] = useState<PeriodFilterValue>("Últimos 30 dias");
-  const [comparePrevious, setComparePrevious] = useState(false);
   const [customRange, setCustomRange] = useState(() => getDefaultCustomRange());
   const [copied, setCopied] = useState(false);
 
@@ -134,8 +159,6 @@ export function AiReportPanel({
     );
   }, [campaigns, clientUsers, permissions, selectedClientId]);
 
-  // Seleção real de campanhas (controlada): começa com todas do cliente e é
-  // redefinida quando o cliente muda.
   const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(() =>
     availableCampaigns.map((campaign) => campaign.id),
   );
@@ -165,8 +188,6 @@ export function AiReportPanel({
     );
   }
 
-  // Quando uma nova análise chega do servidor, descarta o rascunho local para
-  // exibir o texto recém-gerado (padrão de estado derivado durante o render).
   const [lastServerText, setLastServerText] = useState(state.text);
   if (state.text !== lastServerText) {
     setLastServerText(state.text);
@@ -184,28 +205,24 @@ export function AiReportPanel({
     [text, whatsapp],
   );
 
-  const latestReport = reports[0];
+  const periodLabel = formatPeriodLabel(period, customRange);
+  const canGenerate = selectedCampaignIds.length > 0 && Boolean(selectedClientId);
 
   return (
-    <div className="rounded-3xl border border-border/60 bg-background/60 p-5">
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">Análise com IA</p>
-            <h3 className="mt-1 font-display text-2xl font-semibold">
-              Texto editável antes de enviar ao cliente
-            </h3>
-          </div>
-        </div>
-
-        <form id="generate-ai-report-form" action={formAction} className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Cliente</label>
+    <form action={formAction} className="grid min-w-0 gap-6 xl:grid-cols-[0.82fr_1.18fr]">
+      {/* COLUNA ESQUERDA — configuração */}
+      <div className="min-w-0 space-y-4 xl:sticky xl:top-6 xl:self-start">
+        <div className="dashboard-card min-w-0 space-y-6 rounded-[1.5rem] border p-5">
+          {/* 1 · Cliente */}
+          <div className="space-y-3">
+            <StepLabel index={1}>Cliente</StepLabel>
+            <div className="relative min-w-0">
+              <Users className="pointer-events-none absolute left-4 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
               <Select
                 name="clientId"
                 value={selectedClientId}
                 onChange={(event) => handleClientChange(event.target.value)}
+                className="pl-11"
               >
                 <option value="" disabled>
                   Selecione um cliente
@@ -217,17 +234,18 @@ export function AiReportPanel({
                 ))}
               </Select>
             </div>
-            <input type="hidden" name="period" value={period} />
           </div>
 
+          {/* 2 · Campanhas */}
           <div className="space-y-3">
-            <p className="text-sm font-medium text-foreground">Campanhas</p>
+            <StepLabel index={2}>Campanhas</StepLabel>
             {availableCampaigns.length > 0 ? (
               <CampaignMultiSelect
                 campaigns={availableCampaigns}
                 value={selectedCampaignIds}
                 onChange={setSelectedCampaignIds}
                 showSelectionSummary
+                dense
               />
             ) : (
               <div className="rounded-2xl border border-dashed border-border/60 px-4 py-3 text-sm text-muted-foreground">
@@ -236,50 +254,119 @@ export function AiReportPanel({
             )}
           </div>
 
-          <PeriodFilter
-            compact
-            active={period}
-            onChange={setPeriod}
-            comparePrevious={comparePrevious}
-            onComparePreviousChange={setComparePrevious}
-            customRange={customRange}
-            onCustomRangeChange={setCustomRange}
-            onApplyCustomRange={() => setPeriod("Personalizado")}
-          />
+          {/* 3 · Período */}
+          <div className="space-y-3">
+            <StepLabel index={3}>Período</StepLabel>
+            <div className="flex flex-wrap gap-1.5">
+              {periods.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setPeriod(option)}
+                  className={cn(
+                    "min-h-9 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition active:scale-[0.985]",
+                    period === option
+                      ? "border-primary bg-primary text-white"
+                      : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/30 hover:text-foreground dark:border-white/10 dark:bg-white/[0.035] dark:hover:bg-white/[0.06]",
+                  )}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
 
+            {period === "Personalizado" ? (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <label className="space-y-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">De</span>
+                  <input
+                    type="date"
+                    value={customRange.start}
+                    max={customRange.end}
+                    onChange={(event) =>
+                      setCustomRange((range) => ({ ...range, start: event.target.value }))
+                    }
+                    className="flex h-12 w-full min-w-0 rounded-2xl border border-input bg-background/70 px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-4 focus:ring-ring dark:border-white/10 dark:bg-black/30 dark:text-white"
+                  />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">Até</span>
+                  <input
+                    type="date"
+                    value={customRange.end}
+                    min={customRange.start}
+                    onChange={(event) =>
+                      setCustomRange((range) => ({ ...range, end: event.target.value }))
+                    }
+                    className="flex h-12 w-full min-w-0 rounded-2xl border border-input bg-background/70 px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-4 focus:ring-ring dark:border-white/10 dark:bg-black/30 dark:text-white"
+                  />
+                </label>
+              </div>
+            ) : null}
+          </div>
+
+          <input type="hidden" name="period" value={period} />
           <input type="hidden" name="customStart" value={customRange.start} />
           <input type="hidden" name="customEnd" value={customRange.end} />
 
-          {state?.error ? (
+          <FormPendingButton
+            type="submit"
+            size="lg"
+            className="w-full gap-2"
+            disabled={!canGenerate}
+            idleLabel="Gerar mensagem"
+            pendingLabel="Gerando mensagem..."
+          >
+            <Sparkles className="size-4" />
+            Gerar mensagem
+          </FormPendingButton>
+
+          {state.error ? (
             <p className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               {state.error}
             </p>
           ) : null}
 
-          {state?.success ? (
+          {state.success ? (
             <p className="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary">
               {state.success}
             </p>
           ) : null}
+        </div>
+      </div>
 
-          <ReportTextarea text={text} onChange={setDraftText} />
+      {/* COLUNA DIREITA — editor (foco) */}
+      <div className="min-w-0">
+        <div className="dashboard-card flex min-w-0 flex-col rounded-[1.5rem] border p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary">
+                <Sparkles className="size-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-foreground">
+                  Mensagem para o cliente
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {selectedClient?.companyName ?? "Selecione um cliente"} • {periodLabel}
+                </p>
+              </div>
+            </div>
+            <span className="shrink-0 rounded-full bg-muted/70 px-2.5 py-1 text-xs text-muted-foreground dark:bg-white/[0.05]">
+              {text.length} caracteres
+            </span>
+          </div>
 
-          <div className="flex flex-wrap gap-3">
-            <FormPendingButton
-              type="submit"
-              variant="outline"
-              className="gap-2 rounded-full"
-              disabled={selectedCampaignIds.length === 0}
-              idleLabel="Gerar mensagem"
-              pendingLabel="Gerando mensagem..."
-            >
-              <Sparkles className="size-4" />
-              Gerar mensagem
-            </FormPendingButton>
+          <div className="mt-4">
+            <ReportTextarea text={text} onChange={setDraftText} />
+          </div>
+
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <Button
               type="button"
               variant="outline"
-              className="gap-2 rounded-full"
+              className="h-12 flex-1 gap-2 rounded-2xl"
+              disabled={!text}
               onClick={() => copyMessage(text)}
             >
               {copied ? (
@@ -290,36 +377,26 @@ export function AiReportPanel({
               ) : (
                 <>
                   <Copy className="size-4" />
-                  Copiar mensagem
+                  Copiar
                 </>
               )}
             </Button>
             <a
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+              className={cn(
+                "inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-sm font-medium text-primary-foreground transition hover:opacity-90",
+                !text && "pointer-events-none opacity-50",
+              )}
               href={whatsappLink}
               target="_blank"
               rel="noreferrer"
+              aria-disabled={!text}
             >
               <MessageCircleMore className="size-4" />
               Abrir no WhatsApp
             </a>
           </div>
-        </form>
-
-        {latestReport ? (
-          <div className="rounded-2xl border border-border/60 bg-card px-4 py-3 text-sm text-muted-foreground">
-            Último relatório salvo:{" "}
-            <strong className="text-foreground">
-              {latestReport.clientName}
-            </strong>{" "}
-            • {latestReport.periodLabel}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-border/60 px-4 py-3 text-sm text-muted-foreground">
-            Nenhum relatório gerado ainda. A primeira análise aparecerá aqui.
-          </div>
-        )}
+        </div>
       </div>
-    </div>
+    </form>
   );
 }
