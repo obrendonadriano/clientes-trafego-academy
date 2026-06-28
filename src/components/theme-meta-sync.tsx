@@ -12,10 +12,10 @@ export function ThemeMetaSync() {
   const { resolvedTheme } = useTheme();
 
   useEffect(() => {
-    document.documentElement.dataset.surface = pathname === "/login" ? "login" : "app";
+    const isApp =
+      pathname.startsWith("/admin") || pathname.startsWith("/dashboard");
+    document.documentElement.dataset.surface = isApp ? "app" : "login";
 
-    // O login agora segue o tema (escuro por padrão no mobile), em vez de
-    // forçar branco.
     const themeColor =
       resolvedTheme === "dark" ? DARK_THEME_COLOR : LIGHT_THEME_COLOR;
 
