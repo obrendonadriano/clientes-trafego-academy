@@ -13,6 +13,7 @@ import {
 } from "@/lib/dashboard-metrics";
 import { clampMetricsWindowForRole } from "@/lib/data/date-range";
 import { CACHE_TAGS, getReportGenerationData } from "@/lib/data/queries";
+import { getSegmentPromptContext } from "@/lib/segments";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { generateGeminiAnalysis } from "@/lib/services/gemini";
 
@@ -65,6 +66,7 @@ function buildPrompt(input: {
   campaignNames: string[];
   periodLabel: string;
   totals: ReturnType<typeof summarizeMetrics>;
+  segmentContext?: string | null;
 }) {
   const objective = getCampaignObjective(input.totals.resultLabel);
   const metricFocus =
@@ -83,7 +85,7 @@ O texto final será enviado por WhatsApp.
 Cliente: ${input.clientName}
 Campanhas analisadas: ${input.campaignNames.join(", ")}
 Período: ${input.periodLabel}
-
+${input.segmentContext ? `\n${input.segmentContext}\n` : ""}
 Métricas consolidadas:
 - Investimento total: ${formatCurrency(input.totals.amountSpent)}
 - Alcance: ${Math.round(input.totals.reach)}
@@ -116,7 +118,11 @@ Regras obrigatórias:
 - não sugerir melhorias, testes, ajustes ou otimizações;
 - não escrever alertas ou pontos negativos;
 - não falar com tom técnico interno de gestor para cliente final.
-- ${metricFocus}
+- ${metricFocus}${
+    input.segmentContext
+      ? `\n- Considere o CONTEXTO DO NEGÓCIO acima: escreva demonstrando que entende o nicho do cliente e refira-se aos resultados com a terminologia correta do segmento (ex.: conversas no WhatsApp, pessoas interessadas em quitar, convites vendidos), em vez de termos genéricos como apenas "resultados" ou "vendas" quando não for o caso.`
+      : ""
+  }
 
 Evite linguagem robótica.`;
 }
@@ -208,6 +214,10 @@ export async function generateAiReportAction(
       campaignNames: campaigns.map((campaign) => campaign.name),
       periodLabel,
       totals,
+      segmentContext: getSegmentPromptContext(
+        client.segment,
+        client.segmentDescription,
+      ),
     });
 
     let text: string;

@@ -19,6 +19,8 @@ create table if not exists public.clients (
   responsavel text not null,
   whatsapp text,
   observacoes text,
+  segmento text,
+  segmento_descricao text,
   ativo boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -124,6 +126,8 @@ alter table public.clients
   add column if not exists responsavel text,
   add column if not exists whatsapp text,
   add column if not exists observacoes text,
+  add column if not exists segmento text,
+  add column if not exists segmento_descricao text,
   add column if not exists ativo boolean not null default true,
   add column if not exists created_at timestamptz not null default now();
 

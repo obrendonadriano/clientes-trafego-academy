@@ -1,8 +1,13 @@
 "use client";
 
 import type { ComponentProps, ComponentType, ReactNode } from "react";
+import { useState } from "react";
+import { Briefcase } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { CLIENT_SEGMENTS } from "@/lib/segments";
 import { cn } from "@/lib/utils";
 
 // Helpers compartilhados entre o cadastro (wizard) e a edição de clientes,
@@ -100,3 +105,52 @@ export function formatWhatsapp(raw: string): string {
 export const WHATSAPP_PATTERN = "\\+55 \\(\\d{2}\\) \\d{5}-\\d{4}";
 export const WHATSAPP_TITLE =
   "Informe o WhatsApp no formato +55 (DD) 99999-9999";
+
+// Seleção do nicho do cliente (dá contexto à IA dos relatórios). Presets +
+// "Outro" com descrição livre. Opcional — sem segmento, o texto sai genérico.
+export function SegmentField({
+  defaultSegment,
+  defaultDescription,
+}: {
+  defaultSegment?: string;
+  defaultDescription?: string;
+}) {
+  const [segment, setSegment] = useState(defaultSegment ?? "");
+
+  return (
+    <div className="min-w-0 space-y-4 md:col-span-2">
+      <Field label="Segmento do cliente (contexto da IA)" htmlFor="segment" optional>
+        <div className="relative min-w-0">
+          <Briefcase className="pointer-events-none absolute left-4 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Select
+            id="segment"
+            name="segment"
+            value={segment}
+            onChange={(event) => setSegment(event.target.value)}
+            className="pl-11"
+          >
+            <option value="">Não definido (texto genérico)</option>
+            {CLIENT_SEGMENTS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+      </Field>
+
+      {segment === "outro" ? (
+        <Field label="Descreva o negócio do cliente" htmlFor="segmentDescription">
+          <Textarea
+            id="segmentDescription"
+            name="segmentDescription"
+            required
+            defaultValue={defaultDescription}
+            className="min-h-[88px]"
+            placeholder="O que o cliente vende, qual o público e o que conta como 'resultado' (ex.: conversas no WhatsApp, ingressos vendidos...)."
+          />
+        </Field>
+      ) : null}
+    </div>
+  );
+}

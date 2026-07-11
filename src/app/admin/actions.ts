@@ -237,6 +237,8 @@ export async function createClientWorkspaceAction(
     contactName: formData.get("contactName"),
     whatsapp: formData.get("whatsapp"),
     notes: formData.get("notes"),
+    segment: formData.get("segment"),
+    segmentDescription: formData.get("segmentDescription"),
     accountName: formData.get("accountName"),
     username: formData.get("username"),
     email: formData.get("email"),
@@ -279,6 +281,8 @@ export async function createClientWorkspaceAction(
       responsavel: parsed.data.contactName,
       whatsapp: parsed.data.whatsapp,
       observacoes: parsed.data.notes || null,
+      segmento: parsed.data.segment || null,
+      segmento_descricao: parsed.data.segmentDescription || null,
       ativo: true,
     })
     .select("id")
@@ -394,6 +398,8 @@ export async function updateClientWorkspaceAction(
     contactName: formData.get("contactName"),
     whatsapp: formData.get("whatsapp"),
     notes: formData.get("notes"),
+    segment: formData.get("segment"),
+    segmentDescription: formData.get("segmentDescription"),
     clientActive: formData.get("clientActive"),
     accountName: formData.get("accountName"),
     username: formData.get("username"),
@@ -441,6 +447,8 @@ export async function updateClientWorkspaceAction(
       responsavel: parsed.data.contactName,
       whatsapp: parsed.data.whatsapp,
       observacoes: parsed.data.notes || null,
+      segmento: parsed.data.segment || null,
+      segmento_descricao: parsed.data.segmentDescription || null,
       ativo: activeClient,
     })
     .eq("id", parsed.data.clientId);

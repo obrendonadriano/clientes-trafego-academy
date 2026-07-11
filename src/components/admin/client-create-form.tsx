@@ -25,6 +25,7 @@ import { CampaignMultiSelect } from "@/components/admin/campaign-multi-select";
 import {
   Field,
   IconInput,
+  SegmentField,
   WHATSAPP_PATTERN,
   WHATSAPP_TITLE,
   formatWhatsapp,
@@ -281,6 +282,8 @@ export function ClientCreateForm({ campaigns }: ClientCreateFormProps) {
                   placeholder="+55 (11) 99999-9999"
                 />
               </Field>
+              <SegmentField />
+
               <Field
                 label="Observações"
                 htmlFor="notes"

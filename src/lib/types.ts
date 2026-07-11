@@ -20,6 +20,10 @@ export type Client = {
   whatsapp: string;
   notes: string;
   active: boolean;
+  // Nicho do cliente (chave pré-definida ou "outro") + descrição livre quando
+  // "outro". Alimenta o contexto da IA nos relatórios.
+  segment?: string;
+  segmentDescription?: string;
 };
 
 export type CampaignMetric = {

@@ -29,6 +29,7 @@ import { CampaignMultiSelect } from "@/components/admin/campaign-multi-select";
 import {
   Field,
   IconInput,
+  SegmentField,
   WHATSAPP_PATTERN,
   WHATSAPP_TITLE,
   formatWhatsapp,
@@ -385,6 +386,10 @@ export function AdminClientProfilePage({
                     <span className="font-medium">Cliente ativo</span>
                     <Switch name="clientActive" defaultChecked={client.active} />
                   </div>
+                  <SegmentField
+                    defaultSegment={client.segment}
+                    defaultDescription={client.segmentDescription}
+                  />
                   <Field
                     label="Observações"
                     htmlFor="notes"

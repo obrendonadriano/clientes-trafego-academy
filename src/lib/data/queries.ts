@@ -58,6 +58,8 @@ type DbClientRow = {
   responsavel: string;
   whatsapp: string | null;
   observacoes: string | null;
+  segmento?: string | null;
+  segmento_descricao?: string | null;
   ativo: boolean;
 };
 
@@ -189,6 +191,8 @@ function mapClient(row: DbClientRow): Client {
     whatsapp: row.whatsapp ?? "",
     notes: row.observacoes ?? "",
     active: row.ativo,
+    segment: row.segmento ?? undefined,
+    segmentDescription: row.segmento_descricao ?? undefined,
   };
 }
 
@@ -453,16 +457,33 @@ const fetchUsersCached = unstable_cache(
 
 const fetchClientsCached = unstable_cache(
   async () => {
-    const { data, error } = await requireAdminClient()
+    const admin = requireAdminClient();
+    const baseColumns = "id, nome_empresa, responsavel, whatsapp, observacoes, ativo";
+
+    // Tenta com as colunas de segmento; se ainda não existirem (migração não
+    // aplicada), refaz sem elas para não derrubar o painel.
+    const withSegments = await admin
       .from("clients")
-      .select("id, nome_empresa, responsavel, whatsapp, observacoes, ativo")
+      .select(`${baseColumns}, segmento, segmento_descricao`)
       .order("created_at", { ascending: true });
+
+    let rows = withSegments.data as DbClientRow[] | null;
+    let error = withSegments.error;
+
+    if (error && /segmento/i.test(error.message)) {
+      const fallback = await admin
+        .from("clients")
+        .select(baseColumns)
+        .order("created_at", { ascending: true });
+      rows = fallback.data as DbClientRow[] | null;
+      error = fallback.error;
+    }
 
     if (error) {
       throw new Error(error.message);
     }
 
-    return ((data as DbClientRow[] | null) ?? []).map(mapClient);
+    return (rows ?? []).map(mapClient);
   },
   ["clients"],
   { tags: [CACHE_TAGS.clients], revalidate: 300 },
