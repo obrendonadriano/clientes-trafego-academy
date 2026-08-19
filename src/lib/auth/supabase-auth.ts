@@ -87,18 +87,18 @@ export async function getSupabaseCurrentUser() {
     return null;
   }
 
-  const {
-    data: { user: authUser },
-  } = await serverClient.auth.getUser();
+  const { data: claimsData, error: claimsError } =
+    await serverClient.auth.getClaims();
+  const authUserId = claimsData?.claims?.sub;
 
-  if (!authUser) {
+  if (claimsError || !authUserId) {
     return null;
   }
 
   const { data: profileRow, error } = await adminClient
     .from("users")
     .select("id, auth_user_id, nome, username, email, role, whatsapp, ativo, client_id, clients(nome_empresa)")
-    .eq("auth_user_id", authUser.id)
+    .eq("auth_user_id", authUserId)
     .maybeSingle();
 
   if (error || !profileRow || !profileRow.ativo) {

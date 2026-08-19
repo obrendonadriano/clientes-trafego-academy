@@ -1,13 +1,12 @@
 import { Suspense } from "react";
-import { AdminHomePage } from "@/components/dashboard/admin-home-page";
-import { DashboardShell } from "@/components/dashboard/shell";
+import { AdminOverview } from "@/components/dashboard/admin-overview";
 import { PageSectionSkeleton } from "@/components/dashboard/skeletons";
-import { getCurrentUser } from "@/lib/auth/session";
+import { PageHeader } from "@/components/shell/page-header";
 import { resolveMetricsWindow } from "@/lib/data/date-range";
 import { getAdminOverviewData } from "@/lib/data/queries";
 
 type AdminPageProps = {
-  searchParams: Promise<{ start?: string; end?: string }>;
+  searchParams: Promise<{ start?: string; end?: string; cliente?: string }>;
 };
 
 async function AdminHomeSection({
@@ -15,34 +14,24 @@ async function AdminHomeSection({
 }: {
   searchParams: AdminPageProps["searchParams"];
 }) {
-  const window = resolveMetricsWindow("admin", await searchParams);
-  const data = await getAdminOverviewData(window);
+  const params = await searchParams;
+  const window = resolveMetricsWindow("admin", params);
+  const data = await getAdminOverviewData(window, params.cliente);
 
-  return (
-    <AdminHomePage
-      clientCount={data.clientCount}
-      campaignCount={data.campaignCount}
-      clientUserCount={data.clientUserCount}
-      permissionCount={data.permissionCount}
-      activeClientCount={data.activeClientCount}
-      activeCampaignCount={data.activeCampaignCount}
-      metricRows={data.metricRows}
-    />
-  );
+  return <AdminOverview view="geral" metricRows={data.metricRows} />;
 }
 
-export default async function AdminPage({ searchParams }: AdminPageProps) {
-  const user = await getCurrentUser();
-
+export default function AdminPage({ searchParams }: AdminPageProps) {
   return (
-    <DashboardShell
-      user={user}
-      title="Dashboard geral"
-      subtitle="Visão executiva da operação, com atalhos para clientes, campanhas e relatórios."
-    >
+    <div className="flex min-w-0 flex-col gap-[1.05rem]">
+      <PageHeader
+        eyebrow="Área administrativa"
+        title="Dashboard geral"
+      />
+
       <Suspense fallback={<PageSectionSkeleton />}>
         <AdminHomeSection searchParams={searchParams} />
       </Suspense>
-    </DashboardShell>
+    </div>
   );
 }

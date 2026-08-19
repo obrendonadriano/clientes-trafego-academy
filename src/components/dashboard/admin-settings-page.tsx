@@ -13,9 +13,12 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import type { IntegrationSetting, MetaAdAccount } from "@/lib/types";
 
+export type SettingsView = "integracoes" | "contas";
+
 type AdminSettingsPageProps = {
   integrations: IntegrationSetting[];
   metaAccounts: MetaAdAccount[];
+  view?: SettingsView;
 };
 
 const initialState: SettingsActionState = {};
@@ -39,13 +42,7 @@ function SaveButton() {
   );
 }
 
-function IntegrationCard({
-  integration,
-  metaAccounts,
-}: {
-  integration: IntegrationSetting;
-  metaAccounts: MetaAdAccount[];
-}) {
+function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
   const [state, formAction] = useActionState(saveIntegrationSettingsAction, initialState);
 
   const icon =
@@ -132,9 +129,8 @@ function IntegrationCard({
 
               <p className="text-sm text-muted-foreground">
                 Informe aqui o App ID, App Secret e o Access Token compartilhado da
-                sua Business Manager. As contas de anúncio são cadastradas na lista
-                de <strong className="text-foreground">Contas de anúncio</strong> mais
-                abaixo.
+                sua Business Manager. As contas de anúncio são cadastradas na aba{" "}
+                <strong className="text-foreground">Contas Meta</strong>.
               </p>
 
               <div className="flex flex-wrap gap-3">
@@ -227,11 +223,6 @@ function IntegrationCard({
           ) : null}
         </form>
 
-        {/* Gerenciador de várias contas de anúncio — fora do form de
-            credenciais porque tem os próprios forms de add/remover. */}
-        {integration.provider === "meta_ads" ? (
-          <MetaAccountsManager accounts={metaAccounts} />
-        ) : null}
       </CardContent>
     </Card>
   );
@@ -240,30 +231,17 @@ function IntegrationCard({
 export function AdminSettingsPage({
   integrations,
   metaAccounts,
+  view = "integracoes",
 }: AdminSettingsPageProps) {
-  return (
-    <div className="space-y-6">
-      <div>
-        <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">
-          Configurações
-        </p>
-        <h3 className="mt-2 font-display text-3xl font-semibold">
-          Conexões e integrações
-        </h3>
-        <p className="mt-2 max-w-3xl text-muted-foreground">
-          Centralize aqui as conexões do sistema, como Meta Ads, Gemini e a base principal do projeto.
-        </p>
-      </div>
+  if (view === "contas") {
+    return <MetaAccountsManager accounts={metaAccounts} />;
+  }
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        {integrations.map((integration) => (
-          <IntegrationCard
-            key={integration.provider}
-            integration={integration}
-            metaAccounts={metaAccounts}
-          />
-        ))}
-      </div>
+  return (
+    <div className="grid gap-6 xl:grid-cols-2">
+      {integrations.map((integration) => (
+        <IntegrationCard key={integration.provider} integration={integration} />
+      ))}
     </div>
   );
 }

@@ -3,17 +3,11 @@
 // 1) Assets estáticos do build (JS, CSS, fontes, imagens, ícones) → cache com
 //    stale-while-revalidate. Faz o app abrir instantâneo do 2º load em diante.
 //
-// 2) Páginas do app (admin/dashboard) → ao reabrir, serve a ÚLTIMA versão na
-//    hora (do cache) e atualiza ao fundo. Como os dados só mudam quando alguém
-//    importa métricas, mostrar o último dado na hora deixa a navegação
-//    instantânea. A página revalida sozinha ao voltar ao foco (ver shell).
-//
-// O que NUNCA é cacheado: /api, payloads RSC, login/público e respostas com
-// redirect. O cache de páginas é limpo no logout (privacidade).
+// HTML/RSC autenticado nunca entra no Cache Storage. Além de ficar obsoleto,
+// ele contém dados privados e não pode sobreviver à expiração/troca da sessão.
 
 const STATIC_CACHE = "ta-static-v1";
-const PAGES_CACHE = "ta-pages-v1";
-const KEEP = [STATIC_CACHE, PAGES_CACHE];
+const KEEP = [STATIC_CACHE];
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -31,13 +25,6 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Permite ao app pedir a limpeza do cache de páginas (no logout).
-self.addEventListener("message", (event) => {
-  if (event.data === "clear-pages-cache") {
-    event.waitUntil(caches.delete(PAGES_CACHE));
-  }
-});
-
 function isCacheableAsset(url) {
   if (url.origin !== self.location.origin) {
     return false;
@@ -52,17 +39,6 @@ function isCacheableAsset(url) {
 
   return /\.(?:js|css|woff2?|ttf|otf|png|webp|svg|jpg|jpeg|gif|ico)$/.test(
     url.pathname,
-  );
-}
-
-// Só as páginas logadas entram no cache de navegação.
-function isPrivatePage(url) {
-  return (
-    url.origin === self.location.origin &&
-    (url.pathname === "/admin" ||
-      url.pathname.startsWith("/admin/") ||
-      url.pathname === "/dashboard" ||
-      url.pathname.startsWith("/dashboard/"))
   );
 }
 
@@ -97,11 +73,9 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
 
-  // Navegações (reabrir o app, recarregar): última versão na hora + revalida.
+  // Navegações passam sempre pela rede para que autenticação e isolamento de
+  // tenant sejam revalidados pelo servidor.
   if (request.mode === "navigate") {
-    if (isPrivatePage(url)) {
-      event.respondWith(staleWhileRevalidate(PAGES_CACHE, request));
-    }
     return;
   }
 

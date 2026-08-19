@@ -1,9 +1,8 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { AdminClientProfilePage } from "@/components/dashboard/admin-client-profile-page";
-import { DashboardShell } from "@/components/dashboard/shell";
 import { FormPageSkeleton } from "@/components/dashboard/skeletons";
-import { getCurrentUser } from "@/lib/auth/session";
+import { PageHeader } from "@/components/shell/page-header";
 import { resolveMetricsWindow } from "@/lib/data/date-range";
 import { getAdminClientProfileData } from "@/lib/data/queries";
 
@@ -29,21 +28,21 @@ async function AdminClientProfileSection({
   return <AdminClientProfilePage {...data} />;
 }
 
-export default async function AdminClientProfileRoute({
+export default function AdminClientProfileRoute({
   params,
   searchParams,
 }: AdminClientProfileRouteProps) {
-  const user = await getCurrentUser();
-
   return (
-    <DashboardShell
-      user={user}
-      title="Perfil do cliente"
-      subtitle="Página individual do cliente para editar dados, login, senha e campanhas liberadas."
-    >
+    <div className="flex min-w-0 flex-col gap-5">
+      <PageHeader
+        eyebrow="Área administrativa"
+        title="Perfil do cliente"
+        description="Página individual do cliente para editar dados, login, senha e campanhas liberadas."
+      />
+
       <Suspense fallback={<FormPageSkeleton />}>
         <AdminClientProfileSection params={params} searchParams={searchParams} />
       </Suspense>
-    </DashboardShell>
+    </div>
   );
 }

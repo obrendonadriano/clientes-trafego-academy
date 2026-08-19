@@ -74,8 +74,10 @@
   --font-display: var(--font-space-grotesk);
 }
 
-* {
-  border-color: var(--border);
+@layer base {
+  * {
+    border-color: var(--border);
+  }
 }
 
 html {
@@ -126,6 +128,16 @@ input[type="date"]::-webkit-date-and-time-value {
   text-align: left;
 }
 
+/* Abas continuam roláveis por toque no celular, sem exibir uma barra visual. */
+.scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
 .dark body {
   background:
     linear-gradient(rgba(2, 3, 6, 0.8), rgba(2, 3, 6, 0.86)),
@@ -133,6 +145,58 @@ input[type="date"]::-webkit-date-and-time-value {
     linear-gradient(90deg, rgba(255, 255, 255, 0.17) 1px, transparent 1px),
     #020306;
   background-size: auto, 28px 28px, 28px 28px, auto;
+}
+
+/* Moldura das áreas autenticadas. As variáveis ficam escopadas aqui para o
+   login manter sua identidade atual e o painel seguir o protótipo compacto. */
+.app-shell-frame {
+  --background: #f2f2f6;
+  --foreground: #292b31;
+  --card: #ffffff;
+  --card-foreground: #292b31;
+  --popover: #ffffff;
+  --popover-foreground: #292b31;
+  --primary: #5d5294;
+  --muted: #e9e9ef;
+  --muted-foreground: #74767d;
+  --border: rgba(41, 43, 49, 0.12);
+  --input: rgba(41, 43, 49, 0.07);
+  --font-display: var(--font-manrope);
+  --radius: 8px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+  --radius-xl: 14px;
+  --radius-2xl: 14px;
+  --radius-3xl: 14px;
+}
+
+.dark .app-shell-frame {
+  --background: #161826;
+  --foreground: #e9e9ed;
+  --card: #232532;
+  --card-foreground: #e9e9ed;
+  --popover: #272936;
+  --popover-foreground: #e9e9ed;
+  --primary: #9184d9;
+  --muted: #2b2d3a;
+  --muted-foreground: #92939a;
+  --border: rgba(233, 233, 237, 0.11);
+  --input: rgba(233, 233, 237, 0.08);
+}
+
+.app-shell-frame .dashboard-glass,
+.app-shell-frame .dashboard-card {
+  border-radius: 0.875rem;
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.app-shell-frame .dashboard-row {
+  background: color-mix(in srgb, var(--card) 92%, var(--background));
+  border-color: var(--border);
 }
 
 .dashboard-glass {
@@ -181,6 +245,19 @@ input[type="date"]::-webkit-date-and-time-value {
 .dark .dashboard-row {
   background: rgba(255, 255, 255, 0.035);
   border-color: rgba(214, 220, 255, 0.11);
+}
+
+.dark .app-shell-frame .dashboard-glass,
+.dark .app-shell-frame .dashboard-card {
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.dark .app-shell-frame .dashboard-row {
+  background: color-mix(in srgb, var(--card) 92%, var(--background));
+  border-color: var(--border);
 }
 
 @media (max-width: 1023px) {

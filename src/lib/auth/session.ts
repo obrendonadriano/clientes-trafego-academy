@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { isDevelopmentAuthFallbackEnabled } from "@/lib/auth/mode";
 import { isSupabaseConfigured } from "@/lib/env";
 import { getUserById } from "@/lib/mock-data";
@@ -16,7 +17,7 @@ export async function getCurrentUser(): Promise<User> {
   return user;
 }
 
-export async function getOptionalCurrentUser() {
+const getOptionalCurrentUserCached = cache(async () => {
   if (isSupabaseConfigured()) {
     const supabaseUser = await getSupabaseCurrentUser();
 
@@ -32,6 +33,13 @@ export async function getOptionalCurrentUser() {
   }
 
   return getFallbackCurrentUser();
+});
+
+// Layouts, pages e Server Actions frequentemente pedem o mesmo usuário na
+// mesma renderização. React.cache mantém uma única validação de sessão e uma
+// única leitura do perfil por request, sem compartilhar usuário entre requests.
+export async function getOptionalCurrentUser() {
+  return getOptionalCurrentUserCached();
 }
 
 async function getFallbackCurrentUser() {

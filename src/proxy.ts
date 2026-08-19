@@ -65,7 +65,7 @@ async function refreshSupabaseSession(request: NextRequest) {
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet, headersToSet) {
         cookiesToSet.forEach(({ name, value }) =>
           request.cookies.set(name, value),
         );
@@ -73,11 +73,16 @@ async function refreshSupabaseSession(request: NextRequest) {
         cookiesToSet.forEach(({ name, value, options }) =>
           response.cookies.set(name, value, options),
         );
+        Object.entries(headersToSet).forEach(([name, value]) =>
+          response.headers.set(name, value),
+        );
       },
     },
   });
 
-  await supabase.auth.getUser();
+  // Verifica o JWT localmente quando o projeto usa chaves assimétricas (com
+  // JWKS em cache) e só cai para rede em projetos legados com chave simétrica.
+  await supabase.auth.getClaims();
 
   return response;
 }

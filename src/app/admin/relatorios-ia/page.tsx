@@ -1,8 +1,6 @@
 import { Suspense } from "react";
 import { AdminReportsPage } from "@/components/dashboard/admin-reports-page";
-import { DashboardShell } from "@/components/dashboard/shell";
 import { FormPageSkeleton } from "@/components/dashboard/skeletons";
-import { getCurrentUser } from "@/lib/auth/session";
 import { getReportsPageData } from "@/lib/data/queries";
 
 async function AdminReportsSection() {
@@ -20,14 +18,10 @@ async function AdminReportsSection() {
   );
 }
 
-export default async function AdminReportsRoute() {
-  const user = await getCurrentUser();
-
+export default function AdminReportsRoute() {
   return (
-    <DashboardShell user={user}>
-      <Suspense fallback={<FormPageSkeleton />}>
-        <AdminReportsSection />
-      </Suspense>
-    </DashboardShell>
+    <Suspense fallback={<FormPageSkeleton />}>
+      <AdminReportsSection />
+    </Suspense>
   );
 }

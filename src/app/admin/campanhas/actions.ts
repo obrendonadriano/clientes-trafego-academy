@@ -6,6 +6,7 @@ import {
   MetaPermissionError,
   MetaTokenExpiredError,
   updateMetaCampaign,
+  updateMetaObjectStatus,
 } from "@/lib/meta-ads";
 import { getAccessTokenForMetaAccount } from "@/lib/meta/accounts";
 import { importAllMetaCampaigns, runMetaSync } from "@/lib/sync/meta-sync";
@@ -150,6 +151,105 @@ export async function toggleCampaignStatusAction(
   return { success: active ? "Campanha ativada." : "Campanha pausada." };
 }
 
+export async function toggleAdLevelStatusAction(
+  level: "adset" | "ad",
+  externalId: string,
+  active: boolean,
+): Promise<CampaignEditResult> {
+  const user = await getOptionalCurrentUser();
+
+  if (!user || user.role !== "admin") {
+    return { error: "Apenas administradores podem gerenciar anúncios." };
+  }
+
+  if (!externalId || (level !== "adset" && level !== "ad")) {
+    return { error: "Item inválido." };
+  }
+
+  const adminClient = createSupabaseAdminClient();
+  if (!adminClient) {
+    return { error: "Supabase não configurado." };
+  }
+
+  const { data, error } = await adminClient
+    .from("meta_ad_level_metrics")
+    .select("meta_account_id")
+    .eq("level", level)
+    .eq("external_id", externalId)
+    .limit(1)
+    .maybeSingle<{ meta_account_id: string | null }>();
+
+  if (error || !data) {
+    return { error: "Conjunto ou anúncio não encontrado." };
+  }
+
+  const token = await getAccessTokenForMetaAccount(data.meta_account_id);
+  if (!token) {
+    return { error: "Não há token da Meta configurado para este item." };
+  }
+
+  try {
+    await updateMetaObjectStatus(externalId, active ? "ACTIVE" : "PAUSED", token);
+  } catch (writeError) {
+    return { error: describeMetaWriteError(writeError) };
+  }
+
+  const nextStatus = active ? "ACTIVE" : "PAUSED";
+  const update = await adminClient
+    .from("meta_ad_level_metrics")
+    .update({ status: nextStatus, effective_status: nextStatus })
+    .eq("level", level)
+    .eq("external_id", externalId);
+
+  if (update.error) {
+    return { error: update.error.message };
+  }
+
+  updateTag("campaigns");
+  revalidatePath("/admin/campanhas");
+  revalidatePath("/dashboard/campanhas");
+  return { success: active ? "Item ativado." : "Item pausado." };
+}
+
+// Botao unico "Atualizar dados da Meta": importa campanhas e, na sequencia,
+// as metricas. Conjuntos de anuncios e anuncios sao lidos ao vivo na API na
+// hora em que as telas abrem, entao nao precisam de importacao separada.
+export async function syncMetaAction(
+  prevState: CampaignImportState,
+  formData: FormData,
+): Promise<CampaignImportState> {
+  void prevState;
+  void formData;
+
+  try {
+    const user = await getOptionalCurrentUser();
+    if (!user || user.role !== "admin") {
+      return { error: "Apenas administradores podem sincronizar a Meta Ads." };
+    }
+
+    const result = await runMetaSync();
+
+    updateTag("campaigns");
+    revalidatePath("/admin");
+    revalidatePath("/admin/campanhas");
+    revalidatePath("/admin/clientes");
+    revalidatePath("/admin/sincronizacao");
+    revalidatePath("/admin/fechamento");
+    revalidatePath("/dashboard");
+
+    return {
+      success: `${result.campaignCount} campanha(s), ${result.metricCount} métricas de campanha e ${result.adLevelMetricCount} métricas de anúncios atualizadas.`,
+    };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Falha inesperada ao atualizar os dados da Meta Ads.",
+    };
+  }
+}
+
 export async function importMetaCampaignsAction(
   prevState: CampaignImportState,
   formData: FormData,
@@ -158,6 +258,11 @@ export async function importMetaCampaignsAction(
   void formData;
 
   try {
+    const user = await getOptionalCurrentUser();
+    if (!user || user.role !== "admin") {
+      return { error: "Apenas administradores podem importar campanhas." };
+    }
+
     const count = await importAllMetaCampaigns();
     updateTag("campaigns");
     revalidatePath("/admin/campanhas");
@@ -181,12 +286,17 @@ export async function importMetaInsightsAction(
   void formData;
 
   try {
+    const user = await getOptionalCurrentUser();
+    if (!user || user.role !== "admin") {
+      return { error: "Apenas administradores podem importar métricas." };
+    }
+
     const result = await runMetaSync();
     revalidatePath("/admin");
     revalidatePath("/admin/campanhas");
     revalidatePath("/dashboard");
     return {
-      success: `Sincronização concluída com ${result.campaignCount} campanha(s) e ${result.metricCount} registro(s).`,
+      success: `Sincronização concluída com ${result.campaignCount} campanha(s), ${result.metricCount} métricas de campanha e ${result.adLevelMetricCount} métricas de anúncios.`,
     };
   } catch (error) {
     return {
@@ -206,9 +316,14 @@ export async function runMetaAutoSyncAction(
   void formData;
 
   try {
+    const user = await getOptionalCurrentUser();
+    if (!user || user.role !== "admin") {
+      return { error: "Apenas administradores podem sincronizar a Meta Ads." };
+    }
+
     const result = await runMetaSync();
     return {
-      success: `Sincronização concluída com ${result.campaignCount} campanha(s) e ${result.metricCount} registro(s).`,
+      success: `Sincronização concluída com ${result.campaignCount} campanha(s), ${result.metricCount} métricas de campanha e ${result.adLevelMetricCount} métricas de anúncios.`,
     };
   } catch (error) {
     return {

@@ -32,7 +32,6 @@ Campos principais:
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `GEMINI_API_KEY`
-- `CRON_SECRET`
 
 ## 4. Build e start
 
@@ -63,17 +62,10 @@ sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d dashboard.trafegoacademy.online
 ```
 
-## 7. Cron de 15 minutos
+## 7. Atualização manual da Meta Ads
 
-```bash
-crontab -e
-```
-
-Adicione:
-
-```bash
-*/15 * * * * APP_URL=https://dashboard.trafegoacademy.online CRON_SECRET=seu_segredo /var/www/trafegoacademy-dashboard/deploy/meta-sync.sh >> /var/log/trafegoacademy-meta-sync.log 2>&1
-```
+Os dados da Meta são atualizados pelos botões do painel. Não é necessário
+configurar cron na VPS.
 
 ## 8. Atualizações futuras
 

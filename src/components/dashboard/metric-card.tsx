@@ -1,8 +1,11 @@
+import type { ReactNode } from "react";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type MetricCardProps = {
   label: string;
+  // Marcador opcional ao lado do rótulo (ex.: o "(?)" dos impostos).
+  info?: ReactNode;
   value: string;
   change: string;
   positive?: boolean;
@@ -12,6 +15,7 @@ type MetricCardProps = {
 
 export function MetricCard({
   label,
+  info,
   value,
   change,
   positive = true,
@@ -22,7 +26,10 @@ export function MetricCard({
       <div className="absolute inset-x-5 top-0 h-1 rounded-b-full bg-[linear-gradient(90deg,rgba(62,214,184,0.18),rgba(122,142,255,0.95),rgba(139,120,255,0.22))]" />
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-sm leading-6 text-muted-foreground">{label}</p>
+          <p className="flex items-center gap-1.5 text-sm leading-6 text-muted-foreground">
+            {label}
+            {info}
+          </p>
         </div>
         <div
           className={cn(

@@ -2,18 +2,21 @@
 
 import { useActionState, useMemo, useState } from "react";
 import { refreshClientMetricsAction } from "@/app/dashboard/actions";
-import { CampaignsTable } from "@/components/dashboard/campaigns-table";
+import { MetaSyncOverlay } from "@/components/dashboard/meta-sync-overlay";
 import {
-  PeriodFilter,
-  type PeriodFilterValue,
-} from "@/components/dashboard/period-filter";
+  CampaignLevelTabs,
+  type CampaignLevel,
+} from "@/components/dashboard/campaign-level-tabs";
+import { AdLevelTable } from "@/components/dashboard/ad-level-table";
+import { usePeriodScope } from "@/components/shell/period-scope";
+import { withMetaTaxes } from "@/lib/taxes";
+import { CampaignsTable } from "@/components/dashboard/campaigns-table";
 import { FormPendingButton } from "@/components/ui/form-pending-button";
 import {
   filterMetricsByRange,
   formatMoney,
   formatPeriodLabel,
   getDateRangeForPeriod,
-  getDefaultCustomRange,
   resolveCurrency,
   sumResults,
   getReferenceNowForPeriod,
@@ -23,11 +26,17 @@ import type {
   RawCampaignMetric,
   SyncStatus,
 } from "@/lib/types";
+import type { AdLevelRow } from "@/lib/data/ad-levels";
 
 type ClientCampaignsPageProps = {
   campaigns: CampaignWithMetrics[];
   metricRows: RawCampaignMetric[];
   syncStatus: SyncStatus | null;
+  adSets: AdLevelRow[];
+  adSetsNotice?: string;
+  ads: AdLevelRow[];
+  adsNotice?: string;
+  initialLevel?: CampaignLevel;
 };
 
 function formatDateTime(value?: string | null) {
@@ -58,11 +67,16 @@ export function ClientCampaignsPage({
   campaigns,
   metricRows,
   syncStatus,
+  adSets,
+  adSetsNotice,
+  ads,
+  adsNotice,
+  initialLevel = "campaign",
 }: ClientCampaignsPageProps) {
-  const [period, setPeriod] = useState<PeriodFilterValue>("Últimos 30 dias");
-  const [comparePrevious, setComparePrevious] = useState(false);
-  const [customRange, setCustomRange] = useState(() => getDefaultCustomRange());
-  const [refreshState, refreshAction] = useActionState(
+  const [activeLevel, setActiveLevel] = useState<CampaignLevel>(initialLevel);
+  const scope = usePeriodScope();
+  const { period, customRange } = scope;
+  const [refreshState, refreshAction, isRefreshing] = useActionState(
     refreshClientMetricsAction,
     {},
   );
@@ -121,9 +135,10 @@ export function ClientCampaignsPage({
           ...campaign,
           metrics: {
             ...campaign.metrics,
-            amountSpent: formatCurrency(totals.amountSpent),
+            // Investido COM impostos (o custo por resultado segue puro).
+            amountSpent: formatCurrency(withMetaTaxes(totals.amountSpent)),
             amountSpentOriginal: isForeign
-              ? formatMoney(totals.amountSpentOriginal, currency)
+              ? formatMoney(withMetaTaxes(totals.amountSpentOriginal), currency)
               : undefined,
             clicks: String(Math.round(totals.clicks)),
             ctr: formatPercent(
@@ -151,6 +166,8 @@ export function ClientCampaignsPage({
 
   return (
     <div className="space-y-6">
+      <MetaSyncOverlay open={isRefreshing} />
+
       <div className="dashboard-card rounded-[1.5rem] border p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
@@ -192,19 +209,20 @@ export function ClientCampaignsPage({
         ) : null}
       </div>
 
-      <PeriodFilter
-        active={period}
-        onChange={setPeriod}
-        comparePrevious={comparePrevious}
-        onComparePreviousChange={setComparePrevious}
-        customRange={customRange}
-        onCustomRangeChange={setCustomRange}
-        onApplyCustomRange={() => setPeriod("Personalizado")}
-        maxCustomRangeDays={92}
-        customLimitLabel="3 meses"
-      />
 
-      <CampaignsTable campaigns={filteredCampaigns} />
+      <div className="space-y-3">
+        <CampaignLevelTabs
+          activeLevel={activeLevel}
+          onLevelChange={setActiveLevel}
+        />
+        {activeLevel === "campaign" ? (
+          <CampaignsTable campaigns={filteredCampaigns} />
+        ) : activeLevel === "adset" ? (
+          <AdLevelTable level="adset" rows={adSets} notice={adSetsNotice} />
+        ) : (
+          <AdLevelTable level="ad" rows={ads} notice={adsNotice} />
+        )}
+      </div>
     </div>
   );
 }

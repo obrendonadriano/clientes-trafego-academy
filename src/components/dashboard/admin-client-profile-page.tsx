@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Contact,
+  Hash,
   KeyRound,
   Lock,
   Mail,
@@ -36,6 +37,7 @@ import {
 } from "@/components/admin/client-form-fields";
 import { FormStepper, type WizardStep } from "@/components/admin/form-stepper";
 import { MetricCard } from "@/components/dashboard/metric-card";
+import { TaxInfo } from "@/components/dashboard/tax-info";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,6 +52,7 @@ type AdminClientProfilePageProps = {
   client: Client;
   linkedUser: UserType | null;
   selectedCampaignIds: string[];
+  automaticCampaignIds: string[];
   allCampaigns: CampaignWithMetrics[];
   metricRows: RawCampaignMetric[];
 };
@@ -96,6 +99,7 @@ export function AdminClientProfilePage({
   client,
   linkedUser,
   selectedCampaignIds,
+  automaticCampaignIds,
   allCampaigns,
   metricRows,
 }: AdminClientProfilePageProps) {
@@ -123,8 +127,14 @@ export function AdminClientProfilePage({
 
   const summary = useMemo(() => summarizeMetrics(metricRows), [metricRows]);
   const selectedCampaigns = useMemo(
-    () => allCampaigns.filter((campaign) => selectedCampaignIds.includes(campaign.id)),
-    [allCampaigns, selectedCampaignIds],
+    () => {
+      const allowedIds = new Set([
+        ...selectedCampaignIds,
+        ...automaticCampaignIds,
+      ]);
+      return allCampaigns.filter((campaign) => allowedIds.has(campaign.id));
+    },
+    [allCampaigns, automaticCampaignIds, selectedCampaignIds],
   );
 
   useEffect(() => {
@@ -254,6 +264,9 @@ export function AdminClientProfilePage({
           <Badge variant={client.active ? "success" : "secondary"}>
             {client.active ? "Cliente ativo" : "Cliente inativo"}
           </Badge>
+          {client.campaignCode ? (
+            <Badge variant="secondary">Codigo Meta: {client.campaignCode}</Badge>
+          ) : null}
           <Link
             href="/admin/clientes"
             className="inline-flex h-11 items-center justify-center gap-1.5 rounded-full border border-border px-5 text-sm font-medium text-foreground transition hover:bg-accent"
@@ -272,7 +285,8 @@ export function AdminClientProfilePage({
         />
         <MetricCard
           label="Investimento"
-          value={formatCurrency(summary.amountSpent)}
+          value={formatCurrency(summary.amountSpentWithTax)}
+          info={<TaxInfo />}
           change="somando campanhas permitidas"
         />
         <MetricCard
@@ -489,6 +503,16 @@ export function AdminClientProfilePage({
                 hidden={current !== 2}
                 className="min-w-0 space-y-3"
               >
+                {client.campaignCode ? (
+                  <div className="flex items-start gap-3 rounded-2xl border border-primary/20 bg-primary/[0.06] px-4 py-3 text-sm text-muted-foreground">
+                    <Hash className="mt-0.5 size-4 shrink-0 text-primary" />
+                    <p>
+                      Campanhas iniciadas por <strong>{client.campaignCode} -</strong>{" "}
+                      sao vinculadas automaticamente. A selecao abaixo continua
+                      disponivel para liberar campanhas extras manualmente.
+                    </p>
+                  </div>
+                ) : null}
                 <CampaignMultiSelect
                   campaigns={allCampaigns}
                   selectedIds={selectedCampaignIds}
@@ -566,6 +590,17 @@ export function AdminClientProfilePage({
                 {selectedCampaigns.length === 1 ? "" : "s"} selecionada
                 {selectedCampaigns.length === 1 ? "" : "s"}
               </div>
+              {client.campaignCode ? (
+                <div className="flex items-center gap-2 rounded-2xl border border-border/60 bg-card px-4 py-3">
+                  <Hash className="size-3.5 shrink-0" />
+                  <span>
+                    Codigo Meta <strong className="text-foreground">{client.campaignCode}</strong>
+                    {automaticCampaignIds.length > 0
+                      ? ` · ${automaticCampaignIds.length} vinculada${automaticCampaignIds.length === 1 ? "" : "s"} automaticamente`
+                      : " · aguardando campanhas com este prefixo"}
+                  </span>
+                </div>
+              ) : null}
               <div className="rounded-2xl border border-border/60 bg-card px-4 py-3">
                 Leads somados:{" "}
                 <strong className="text-foreground">{Math.round(summary.leads)}</strong>

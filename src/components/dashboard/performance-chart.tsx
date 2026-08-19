@@ -56,14 +56,14 @@ export function PerformanceChart({
       : data;
 
   return (
-    <div className="dashboard-card rounded-[1.5rem] border p-4 text-foreground">
-      <div className="mb-4">
-        <p className="text-sm leading-6 text-muted-foreground">{periodLabel}</p>
-        <h3 className="mt-1 font-display text-2xl font-semibold">
+    <div className="dashboard-card border p-[1.05rem] text-foreground">
+      <div className="mb-[1.05rem]">
+        <h3 className="font-display text-base font-medium">
           Investimento vs. resultados
         </h3>
+        <p className="mt-1 text-xs text-muted-foreground">{periodLabel}</p>
       </div>
-      <div className="h-[280px]">
+      <div className="h-[220px]">
         {data.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 16, right: 8, left: 0, bottom: 8 }}>
@@ -108,7 +108,7 @@ export function PerformanceChart({
                   return [String(value), name];
                 }}
                 contentStyle={{
-                  borderRadius: 18,
+                  borderRadius: 8,
                   border: "1px solid rgba(148,163,184,0.18)",
                   background: "rgba(9,18,29,0.92)",
                   color: "#f8fafc",
@@ -138,7 +138,7 @@ export function PerformanceChart({
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex h-full items-center justify-center rounded-[1.25rem] border border-dashed border-border/70 bg-background/50 px-6 text-center text-sm leading-6 text-muted-foreground dark:border-white/[0.12] dark:bg-white/[0.035]">
+          <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/50 px-6 text-center text-sm leading-6 text-muted-foreground">
             {emptyMessage}
           </div>
         )}

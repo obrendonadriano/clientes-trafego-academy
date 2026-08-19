@@ -1,12 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { MetricCard } from "@/components/dashboard/metric-card";
-import {
-  PeriodFilter,
-  type PeriodFilterValue,
-} from "@/components/dashboard/period-filter";
+import { TaxInfo } from "@/components/dashboard/tax-info";
+import { usePeriodScope } from "@/components/shell/period-scope";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   buildPerformanceSeries,
@@ -15,7 +13,6 @@ import {
   formatMoney,
   formatPeriodLabel,
   getDateRangeForPeriod,
-  getDefaultCustomRange,
   getReferenceNowForPeriod,
   getPreviousDateRange,
   sumResults,
@@ -24,14 +21,13 @@ import {
 import {
   CampaignWithMetrics,
   RawCampaignMetric,
-  ReportHistoryItem,
   SyncStatus,
 } from "@/lib/types";
 
-const PerformanceChart = dynamic(
+const DashboardChart = dynamic(
   () =>
-    import("@/components/dashboard/performance-chart").then(
-      (module) => module.PerformanceChart,
+    import("@/components/dashboard/dashboard-chart").then(
+      (module) => module.DashboardChart,
     ),
   {
     ssr: false,
@@ -43,25 +39,9 @@ const PerformanceChart = dynamic(
   },
 );
 
-const ComparisonChart = dynamic(
-  () =>
-    import("@/components/dashboard/comparison-chart").then(
-      (module) => module.ComparisonChart,
-    ),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="dashboard-card rounded-[1.5rem] border p-4">
-        <div className="h-[260px] animate-pulse rounded-[1.25rem] bg-muted/70 dark:bg-white/[0.08]" />
-      </div>
-    ),
-  },
-);
-
 type ClientDashboardProps = {
   campaigns: CampaignWithMetrics[];
   metricRows: RawCampaignMetric[];
-  reports: ReportHistoryItem[];
   syncStatus: SyncStatus | null;
 };
 
@@ -102,12 +82,10 @@ function formatDateTime(value?: string | null) {
 export function ClientDashboard({
   campaigns,
   metricRows,
-  reports,
   syncStatus,
 }: ClientDashboardProps) {
-  const [period, setPeriod] = useState<PeriodFilterValue>("Últimos 30 dias");
-  const [comparePrevious, setComparePrevious] = useState(true);
-  const [customRange, setCustomRange] = useState(() => getDefaultCustomRange());
+  const scope = usePeriodScope();
+  const { period, customRange, comparePrevious } = scope;
 
   const selected = useMemo(() => {
     const referenceDate = getReferenceNowForPeriod(metricRows, period, customRange);
@@ -140,7 +118,7 @@ export function ClientDashboard({
           ...campaign,
           metrics: {
             ...campaign.metrics,
-            amountSpent: formatCurrency(summary.amountSpent),
+            amountSpent: formatCurrency(summary.amountSpentWithTax),
             clicks: String(Math.round(summary.clicks)),
             ctr: formatPercent(summary.ctr),
             results: String(Math.round(resultCount)),
@@ -176,17 +154,6 @@ export function ClientDashboard({
   return (
     <div className="space-y-6">
         <div id="visao-geral" className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between scroll-mt-8">
-          <PeriodFilter
-            active={period}
-            onChange={setPeriod}
-            comparePrevious={comparePrevious}
-            onComparePreviousChange={setComparePrevious}
-            customRange={customRange}
-            onCustomRangeChange={setCustomRange}
-            onApplyCustomRange={() => setPeriod("Personalizado")}
-            maxCustomRangeDays={92}
-            customLimitLabel="3 meses"
-          />
         </div>
 
         <div id="metricas" className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 scroll-mt-8">
@@ -217,7 +184,8 @@ export function ClientDashboard({
         </div>
 
         {comparePrevious ? (
-          <ComparisonChart
+          <DashboardChart
+            kind="comparison"
             current={selected.totals}
             previous={selected.previousTotals}
             periodLabel={selected.periodLabel}
@@ -225,7 +193,8 @@ export function ClientDashboard({
         ) : null}
 
         <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-          <PerformanceChart
+          <DashboardChart
+            kind="performance"
             data={selected.chartData}
             periodLabel={selected.periodLabel}
             emptyMessage="As métricas desta conta ainda não foram importadas para o período selecionado."
@@ -245,26 +214,20 @@ export function ClientDashboard({
               </div>
               <div className="dashboard-row rounded-2xl border px-4 py-3">
                 Investimento total:{" "}
-                <strong className="text-foreground">{formatCurrency(selected.totals.amountSpent)}</strong>
-                {foreignSub(selected.totals.amountSpentOriginal, selected.totals.currency) ? (
+                <strong className="text-foreground">
+                  {formatCurrency(selected.totals.amountSpentWithTax)}
+                </strong>
+                <TaxInfo className="ml-1 align-text-bottom" />
+                {foreignSub(selected.totals.amountSpentOriginalWithTax, selected.totals.currency) ? (
                   <span className="ml-1 text-xs">
-                    ({foreignSub(selected.totals.amountSpentOriginal, selected.totals.currency)})
+                    ({foreignSub(selected.totals.amountSpentOriginalWithTax, selected.totals.currency)})
                   </span>
                 ) : null}
-              </div>
-              <div className="dashboard-row rounded-2xl border px-4 py-3">
-                Histórico recente: <strong className="text-foreground">{reports.length} análises</strong>
               </div>
               <div className="dashboard-row rounded-2xl border px-4 py-3">
                 Última atualização:{" "}
                 <strong className="text-foreground">
                   {formatDateTime(syncStatus?.lastSuccessAt)}
-                </strong>
-              </div>
-              <div className="dashboard-row rounded-2xl border px-4 py-3">
-                Próxima atualização:{" "}
-                <strong className="text-foreground">
-                  {formatDateTime(syncStatus?.nextRunAt)}
                 </strong>
               </div>
               <div className="dashboard-row rounded-2xl border px-4 py-3">
@@ -284,13 +247,11 @@ export function ClientDashboard({
                 <strong className="text-foreground">{selected.periodLabel}</strong>
               </div>
               <div className="dashboard-row rounded-2xl border px-4 py-3">
-                Sincronização automática:{" "}
-                <strong className="text-foreground">
-                  a cada {syncStatus?.intervalMinutes ?? 15} minutos
-                </strong>
+                Atualização dos dados: {" "}
+                <strong className="text-foreground">manual</strong>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
                   {syncStatus?.message ??
-                    "Os dados desta conta são atualizados automaticamente pela integração com a Meta Ads."}
+                    "Use o botão Atualizar métricas na página de campanhas para consultar os dados mais recentes da Meta Ads."}
                 </p>
               </div>
             </CardContent>

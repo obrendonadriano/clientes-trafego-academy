@@ -25,6 +25,7 @@ export type AdminActionState = {
   success?: string;
   error?: string;
   fieldErrors?: Record<string, string>;
+  campaignCode?: string;
 };
 
 // Traduz erros do Postgres/Supabase Auth para mensagens amigáveis por campo.
@@ -343,9 +344,27 @@ export async function createClientWorkspaceAction(
     }
   }
 
-  revalidateData(CACHE_TAGS.clients, CACHE_TAGS.users, CACHE_TAGS.permissions);
+  const codeResult = await adminClient
+    .from("client_campaign_codes")
+    .select("code")
+    .eq("client_id", clientInsert.data.id)
+    .eq("status", "active")
+    .maybeSingle<{ code: string }>();
+  const campaignCode = codeResult.data?.code;
+
+  revalidateData(
+    CACHE_TAGS.clients,
+    CACHE_TAGS.users,
+    CACHE_TAGS.permissions,
+    CACHE_TAGS.campaigns,
+  );
   revalidatePath("/admin");
-  return { success: "Cliente criado com acesso ao portal configurado." };
+  return {
+    success: campaignCode
+      ? `Cliente criado. Codigo automatico das campanhas: ${campaignCode}.`
+      : "Cliente criado com acesso ao portal configurado.",
+    campaignCode,
+  };
 }
 
 export async function createCampaignAction(
@@ -372,6 +391,7 @@ export async function createCampaignAction(
     status: parsed.data.status,
     plataforma: parsed.data.platform,
     client_id: parsed.data.clientId,
+    client_assignment_source: "manual",
   });
 
   if (error) {

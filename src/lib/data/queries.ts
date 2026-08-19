@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { cache } from "react";
 import { format, parseISO } from "date-fns";
 import { getMockSnapshot } from "@/lib/mock-data";
 import { isSupabaseAdminConfigured } from "@/lib/env";
@@ -26,6 +27,7 @@ import {
   User,
 } from "@/lib/types";
 import { getSupabasePublishableKey, getSupabaseUrl } from "@/lib/supabase/env";
+import { withMetaTaxes } from "@/lib/taxes";
 
 export const CACHE_TAGS = {
   users: "users",
@@ -61,6 +63,11 @@ type DbClientRow = {
   segmento?: string | null;
   segmento_descricao?: string | null;
   ativo: boolean;
+};
+
+type DbClientCampaignCodeRow = {
+  client_id: string | null;
+  code: string;
 };
 
 type DbCampaignRow = {
@@ -125,11 +132,9 @@ type DbReportRow = {
 
 type DbSyncStatusRow = {
   provider: "meta_ads" | "gemini" | "supabase";
-  interval_minutes: number;
   status: SyncStatus["status"];
   last_attempt_at: string | null;
   last_success_at: string | null;
-  next_run_at: string | null;
   message: string | null;
 };
 
@@ -183,7 +188,7 @@ function mapUser(row: DbUserRow): User {
   };
 }
 
-function mapClient(row: DbClientRow): Client {
+function mapClient(row: DbClientRow, campaignCode?: string): Client {
   return {
     id: row.id,
     companyName: row.nome_empresa,
@@ -191,6 +196,7 @@ function mapClient(row: DbClientRow): Client {
     whatsapp: row.whatsapp ?? "",
     notes: row.observacoes ?? "",
     active: row.ativo,
+    campaignCode,
     segment: row.segmento ?? undefined,
     segmentDescription: row.segmento_descricao ?? undefined,
   };
@@ -378,7 +384,9 @@ function toCampaignWithMetrics(
   return {
     ...base,
     metrics: {
-      amountSpent: formatCurrency(metric?.amount_spent ?? 0),
+      // Investido exibido COM os impostos da Meta; CPC/CPM/custo por
+      // resultado continuam sobre a veiculação pura (batem com a Meta).
+      amountSpent: formatCurrency(withMetaTaxes(metric?.amount_spent ?? 0)),
       reach: String(metric?.reach ?? 0),
       impressions: String(metric?.impressions ?? 0),
       clicks: String(metric?.clicks ?? 0),
@@ -395,7 +403,9 @@ function toCampaignWithMetrics(
       periodLabel: metric ? "Última sincronização" : "Aguardando importação",
       currency,
       amountSpentOriginal:
-        isForeign && metric ? formatMoney(metric.amount_spent_original, currency) : undefined,
+        isForeign && metric
+          ? formatMoney(withMetaTaxes(metric.amount_spent_original), currency)
+          : undefined,
       cpcOriginal: isForeign && metric ? formatMoney(metric.cpc_original, currency) : undefined,
       cpmOriginal: isForeign && metric ? formatMoney(metric.cpm_original, currency) : undefined,
       costPerLeadOriginal:
@@ -483,7 +493,20 @@ const fetchClientsCached = unstable_cache(
       throw new Error(error.message);
     }
 
-    return (rows ?? []).map(mapClient);
+    // Compatibilidade durante o deploy: o painel continua carregando mesmo
+    // antes de a migracao dos codigos ser aplicada. Depois dela, o codigo e
+    // incorporado ao mesmo objeto de cliente usado em todas as telas.
+    const codeResult = await admin
+      .from("client_campaign_codes")
+      .select("client_id, code")
+      .eq("status", "active");
+    const codeByClientId = new Map(
+      ((codeResult.data as DbClientCampaignCodeRow[] | null) ?? [])
+        .filter((item) => item.client_id)
+        .map((item) => [item.client_id as string, item.code] as const),
+    );
+
+    return (rows ?? []).map((row) => mapClient(row, codeByClientId.get(row.id)));
   },
   ["clients"],
   { tags: [CACHE_TAGS.clients], revalidate: 300 },
@@ -525,53 +548,97 @@ const fetchPermissionsCached = unstable_cache(
   { tags: [CACHE_TAGS.permissions], revalidate: 300 },
 );
 
-// Janela de métricas filtrada NO BANCO por data (e opcionalmente campanhas).
-// campaignIds deve vir ordenado para chave de cache estável.
-const fetchMetricsWindowCached = unstable_cache(
-  async (startDate: string, endDate: string, campaignIds: string[] | null) => {
+// Janela de métricas filtrada NO BANCO por data, granularidade e (opcional)
+// campanhas.
+//
+// IMPORTANTE: aqui NÃO se usa `unstable_cache`. O resultado de uma janela
+// grande passa de 8 MB e o cache de dados do Next recusa qualquer item acima
+// de 2 MB — a gravação falha de forma assíncrona, vira `unhandledRejection` e
+// o processo do servidor MORRE (Node 22 encerra o processo nesse caso). Era o
+// que derrubava o servidor ao abrir /admin/campanhas.
+//
+// `cache()` do React deduplica a mesma consulta dentro de um request (várias
+// seções da página pedem a mesma janela) sem tentar persistir nada em disco.
+const fetchMetricsWindowCached = cache(
+  async (
+    startDate: string,
+    endDate: string,
+    campaignKey: string | null,
+    includeHourly: boolean,
+  ): Promise<RawCampaignMetric[]> => {
+    const campaignIds = campaignKey ? campaignKey.split(",") : null;
     const adminClient = requireAdminClient();
     const pageSize = 1000;
-    const rows: DbMetricRow[] = [];
-    let from = 0;
 
-    while (true) {
-      let query = adminClient
-        .from("campaign_metrics")
-        .select(
-          "campaign_id, date, granularity, hour_bucket, hour_label, amount_spent, reach, impressions, clicks, ctr, result_count, result_label, cpc, cpm, leads, cost_per_lead, roi, roas, frequency, currency, exchange_rate",
-        )
-        .gte("date", startDate)
-        .lte("date", endDate);
+    const columns =
+      "campaign_id, date, granularity, hour_bucket, hour_label, amount_spent, reach, impressions, clicks, ctr, result_count, result_label, cpc, cpm, leads, cost_per_lead, roi, roas, frequency, currency, exchange_rate";
 
-      if (campaignIds) {
-        query = query.in("campaign_id", campaignIds);
+    async function fetchAll(granularity: "day" | "hour", from: string) {
+      const rows: DbMetricRow[] = [];
+      let offset = 0;
+
+      while (true) {
+        let query = adminClient
+          .from("campaign_metrics")
+          .select(columns)
+          .eq("granularity", granularity)
+          .gte("date", from)
+          .lte("date", endDate);
+
+        if (campaignIds) {
+          query = query.in("campaign_id", campaignIds);
+        }
+
+        const { data, error } = await query
+          .order("date", { ascending: true })
+          .order("campaign_id", { ascending: true })
+          .order("hour_bucket", { ascending: true, nullsFirst: true })
+          .range(offset, offset + pageSize - 1);
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        const batch = (data as DbMetricRow[] | null) ?? [];
+        rows.push(...batch);
+
+        if (batch.length < pageSize) {
+          return rows;
+        }
+
+        offset += pageSize;
       }
-
-      const { data, error } = await query
-        .order("date", { ascending: true })
-        .order("campaign_id", { ascending: true })
-        .order("hour_bucket", { ascending: true, nullsFirst: true })
-        .range(from, from + pageSize - 1);
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      const batch = (data as DbMetricRow[] | null) ?? [];
-      rows.push(...batch);
-
-      if (batch.length < pageSize) {
-        break;
-      }
-
-      from += pageSize;
     }
 
-    return rows.map(mapMetricRow);
+    // As linhas hora-a-hora só são usadas nos períodos "Hoje" e "Ontem" — para
+    // qualquer janela maior o código prefere as diárias e descarta as horárias.
+    // Como elas são ~95% da tabela, buscá-las inteiras era o que deixava as
+    // páginas em mais de 10s. Aqui vêm apenas os últimos dias da janela.
+    const hourlyFrom = maxIsoDay(startDate, addIsoDays(endDate, -HOURLY_DAYS));
+
+    const [dailyRows, hourlyRows] = await Promise.all([
+      fetchAll("day", startDate),
+      includeHourly
+        ? fetchAll("hour", hourlyFrom)
+        : Promise.resolve([] as DbMetricRow[]),
+    ]);
+
+    return [...dailyRows, ...hourlyRows].map(mapMetricRow);
   },
-  ["metrics-window"],
-  { tags: [CACHE_TAGS.metrics], revalidate: 300 },
 );
+
+// Quantos dias no fim da janela trazem também a granularidade horária.
+const HOURLY_DAYS = 2;
+
+function addIsoDays(day: string, amount: number) {
+  const date = parseISO(day);
+  date.setDate(date.getDate() + amount);
+  return format(date, "yyyy-MM-dd");
+}
+
+function maxIsoDay(a: string, b: string) {
+  return a > b ? a : b;
+}
 
 const fetchReportsCached = unstable_cache(
   async (clientId: string | null) => {
@@ -604,7 +671,7 @@ const fetchSyncStatusesCached = unstable_cache(
     const { data, error } = await requireAdminClient()
       .from("sync_statuses")
       .select(
-        "provider, interval_minutes, status, last_attempt_at, last_success_at, next_run_at, message",
+        "provider, status, last_attempt_at, last_success_at, message",
       );
 
     if (error || !data || data.length === 0) {
@@ -613,11 +680,9 @@ const fetchSyncStatusesCached = unstable_cache(
 
     return (data as DbSyncStatusRow[]).map((row) => ({
       provider: row.provider,
-      intervalMinutes: row.interval_minutes,
       status: row.status,
       lastAttemptAt: row.last_attempt_at,
       lastSuccessAt: row.last_success_at,
-      nextRunAt: row.next_run_at,
       message: row.message,
     }));
   },
@@ -630,10 +695,13 @@ function fetchMetricsWindow(window: MetricsWindow, campaignIds?: string[]) {
     return Promise.resolve([] as RawCampaignMetric[]);
   }
 
+  // A lista ordenada e serializada mantém a dedupe do React.cache estável
+  // entre chamadas que pedem exatamente as mesmas campanhas.
   return fetchMetricsWindowCached(
     window.startDate,
     window.endDate,
-    campaignIds ? [...campaignIds].sort() : null,
+    campaignIds ? [...campaignIds].sort().join(",") : null,
+    window.includeHourly === true,
   );
 }
 
@@ -651,57 +719,112 @@ export type AdminOverviewData = {
   metricRows: RawCampaignMetric[];
 };
 
+// `clientId` vem do seletor de cliente da topbar (?cliente=). Quando presente,
+// os contadores e as metricas passam a considerar so aquele cliente.
 export async function getAdminOverviewData(
   window: MetricsWindow,
+  clientId?: string | null,
 ): Promise<AdminOverviewData> {
   if (!isSupabaseAdminConfigured()) {
     const snapshot = getMockSnapshot();
+    const allowed = clientId ? await getCampaignIdsForClient(clientId) : null;
+    const campaigns = allowed
+      ? snapshot.campaigns.filter((campaign) => allowed.has(campaign.id))
+      : snapshot.campaigns;
+    const campaignIds = new Set(campaigns.map((campaign) => campaign.id));
+    const users = snapshot.users.filter(
+      (user) => user.role === "client" && (!clientId || user.clientId === clientId),
+    );
+    const userIds = new Set(users.map((user) => user.id));
+
     return {
-      clientCount: snapshot.clients.length,
-      activeClientCount: snapshot.clients.filter((client) => client.active).length,
-      campaignCount: snapshot.campaigns.length,
-      activeCampaignCount: snapshot.campaigns.filter(
+      clientCount: clientId ? 1 : snapshot.clients.length,
+      activeClientCount: snapshot.clients.filter(
+        (client) => client.active && (!clientId || client.id === clientId),
+      ).length,
+      campaignCount: campaigns.length,
+      activeCampaignCount: campaigns.filter(
         (campaign) => campaign.status === "Ativa",
       ).length,
-      clientUserCount: snapshot.users.filter((user) => user.role === "client").length,
-      permissionCount: snapshot.permissions.length,
-      metricRows: snapshot.metricRows,
+      clientUserCount: users.length,
+      permissionCount: snapshot.permissions.filter(
+        (permission) => !clientId || userIds.has(permission.userId),
+      ).length,
+      metricRows: clientId
+        ? snapshot.metricRows.filter((row) => campaignIds.has(row.campaignId))
+        : snapshot.metricRows,
     };
   }
 
-  const [clients, campaigns, users, permissions, metricRows] = await Promise.all([
+  const [clients, allCampaigns, allUsers, permissions] = await Promise.all([
     fetchClientsCached(),
     fetchCampaignBasesCached(),
     fetchUsersCached(),
     fetchPermissionsCached(),
-    fetchMetricsWindow(window),
   ]);
 
+  const clientCampaignIds = clientId
+    ? await getCampaignIdsForClient(clientId)
+    : null;
+  const campaigns = clientCampaignIds
+    ? allCampaigns.filter((campaign) => clientCampaignIds.has(campaign.id))
+    : allCampaigns;
+  const users = allUsers.filter(
+    (user) => user.role === "client" && (!clientId || user.clientId === clientId),
+  );
+  const userIds = new Set(users.map((user) => user.id));
+
+  // Com cliente selecionado, so as metricas das campanhas dele sao buscadas.
+  const metricRows = await fetchMetricsWindow(
+    window,
+    clientId ? campaigns.map((campaign) => campaign.id) : undefined,
+  );
+
   return {
-    clientCount: clients.length,
-    activeClientCount: clients.filter((client) => client.active).length,
+    clientCount: clientId ? 1 : clients.length,
+    activeClientCount: clients.filter(
+      (client) => client.active && (!clientId || client.id === clientId),
+    ).length,
     campaignCount: campaigns.length,
     activeCampaignCount: campaigns.filter((campaign) => campaign.status === "Ativa")
       .length,
-    clientUserCount: users.filter((user) => user.role === "client").length,
-    permissionCount: permissions.length,
+    clientUserCount: users.length,
+    permissionCount: permissions.filter(
+      (permission) => !clientId || userIds.has(permission.userId),
+    ).length,
     metricRows,
   };
 }
 
-export async function getAdminCampaignsData(window: MetricsWindow) {
+export async function getAdminCampaignsData(
+  window: MetricsWindow,
+  clientId?: string | null,
+) {
   if (!isSupabaseAdminConfigured()) {
     const snapshot = getMockSnapshot();
+    const allowed = clientId ? await getCampaignIdsForClient(clientId) : null;
+    const campaigns = allowed
+      ? snapshot.campaigns.filter((campaign) => allowed.has(campaign.id))
+      : snapshot.campaigns;
+    const campaignIds = new Set(campaigns.map((campaign) => campaign.id));
+
     return {
-      campaigns: snapshot.campaigns,
-      metricRows: snapshot.metricRows,
+      campaigns,
+      metricRows: clientId
+        ? snapshot.metricRows.filter((row) => campaignIds.has(row.campaignId))
+        : snapshot.metricRows,
     };
   }
 
-  const [bases, metricRows] = await Promise.all([
-    fetchCampaignBasesCached(),
-    fetchMetricsWindow(window),
-  ]);
+  const allBases = await fetchCampaignBasesCached();
+  const allowed = clientId ? await getCampaignIdsForClient(clientId) : null;
+  const bases = allowed
+    ? allBases.filter((base) => allowed.has(base.id))
+    : allBases;
+  const metricRows = await fetchMetricsWindow(
+    window,
+    clientId ? bases.map((base) => base.id) : undefined,
+  );
 
   return {
     campaigns: withWindowMetrics(bases, metricRows),
@@ -757,17 +880,24 @@ export async function getAdminClientProfileData(
           .filter((permission) => permission.userId === linkedUser.id)
           .map((permission) => permission.campaignId)
       : [];
+    const automaticCampaignIds = snapshot.campaigns
+      .filter((campaign) => campaign.clientId === client.id)
+      .map((campaign) => campaign.id);
+    const allowedCampaignIds = Array.from(
+      new Set([...selectedCampaignIds, ...automaticCampaignIds]),
+    );
 
     return {
       client,
       linkedUser,
       selectedCampaignIds,
+      automaticCampaignIds,
       allowedCampaigns: snapshot.campaigns.filter((campaign) =>
-        selectedCampaignIds.includes(campaign.id),
+        allowedCampaignIds.includes(campaign.id),
       ),
       allCampaigns: snapshot.campaigns,
       metricRows: snapshot.metricRows.filter((row) =>
-        selectedCampaignIds.includes(row.campaignId),
+        allowedCampaignIds.includes(row.campaignId),
       ),
     };
   }
@@ -794,20 +924,72 @@ export async function getAdminClientProfileData(
         .filter((permission) => permission.userId === linkedUser.id)
         .map((permission) => permission.campaignId)
     : [];
+  const automaticCampaignIds = bases
+    .filter((campaign) => campaign.clientId === client.id)
+    .map((campaign) => campaign.id);
+  const allowedCampaignIds = Array.from(
+    new Set([...selectedCampaignIds, ...automaticCampaignIds]),
+  );
 
-  const metricRows = await fetchMetricsWindow(window, selectedCampaignIds);
+  const metricRows = await fetchMetricsWindow(window, allowedCampaignIds);
   const allCampaigns = withWindowMetrics(bases, metricRows);
 
   return {
     client,
     linkedUser,
     selectedCampaignIds,
+    automaticCampaignIds,
     allowedCampaigns: allCampaigns.filter((campaign) =>
-      selectedCampaignIds.includes(campaign.id),
+      allowedCampaignIds.includes(campaign.id),
     ),
     allCampaigns,
     metricRows,
   };
+}
+
+export async function getCampaignIdsForUser(user: User): Promise<Set<string>> {
+  if (user.role !== "client") {
+    return new Set();
+  }
+
+  if (!isSupabaseAdminConfigured()) {
+    const snapshot = getMockSnapshot();
+    const allowedIds = new Set(
+      snapshot.permissions
+        .filter((permission) => permission.userId === user.id)
+        .map((permission) => permission.campaignId),
+    );
+
+    if (user.clientId) {
+      for (const campaign of snapshot.campaigns) {
+        if (campaign.clientId === user.clientId) {
+          allowedIds.add(campaign.id);
+        }
+      }
+    }
+
+    return allowedIds;
+  }
+
+  const [permissions, campaigns] = await Promise.all([
+    fetchPermissionsCached(),
+    fetchCampaignBasesCached(),
+  ]);
+  const allowedIds = new Set(
+    permissions
+      .filter((permission) => permission.userId === user.id)
+      .map((permission) => permission.campaignId),
+  );
+
+  if (user.clientId) {
+    for (const campaign of campaigns) {
+      if (campaign.clientId === user.clientId) {
+        allowedIds.add(campaign.id);
+      }
+    }
+  }
+
+  return allowedIds;
 }
 
 export async function getClientPortalData(user: User, window: MetricsWindow) {
@@ -817,11 +999,7 @@ export async function getClientPortalData(user: User, window: MetricsWindow) {
 
   if (!isSupabaseAdminConfigured()) {
     const snapshot = getMockSnapshot();
-    const allowedIds = new Set(
-      snapshot.permissions
-        .filter((permission) => permission.userId === user.id)
-        .map((permission) => permission.campaignId),
-    );
+    const allowedIds = await getCampaignIdsForUser(user);
     const campaigns = snapshot.campaigns.filter((campaign) =>
       allowedIds.has(campaign.id),
     );
@@ -829,26 +1007,19 @@ export async function getClientPortalData(user: User, window: MetricsWindow) {
     return {
       campaigns,
       metricRows: snapshot.metricRows.filter((row) => allowedIds.has(row.campaignId)),
-      reports: snapshot.reports.filter(
-        (report) => !user.clientId || report.clientId === user.clientId,
-      ),
       syncStatus:
         snapshot.syncStatuses.find((status) => status.provider === "meta_ads") ??
         null,
     };
   }
 
-  const [permissions, bases, syncStatuses, reports] = await Promise.all([
-    fetchPermissionsCached(),
+  const [allowedIdSet, bases, syncStatuses] = await Promise.all([
+    getCampaignIdsForUser(user),
     fetchCampaignBasesCached(),
     fetchSyncStatusesCached(),
-    user.clientId ? fetchReportsCached(user.clientId) : Promise.resolve([]),
   ]);
 
-  const allowedIds = permissions
-    .filter((permission) => permission.userId === user.id)
-    .map((permission) => permission.campaignId);
-  const allowedIdSet = new Set(allowedIds);
+  const allowedIds = [...allowedIdSet];
 
   const metricRows = await fetchMetricsWindow(safeWindow, allowedIds);
 
@@ -858,7 +1029,6 @@ export async function getClientPortalData(user: User, window: MetricsWindow) {
       metricRows,
     ),
     metricRows,
-    reports,
     syncStatus:
       syncStatuses.find((status) => status.provider === "meta_ads") ?? null,
   };
@@ -969,6 +1139,192 @@ function getDefaultIntegrations(): IntegrationSetting[] {
       config: {},
     },
   ];
+}
+
+// Resolve as campanhas de um cliente. O vinculo NAO vem de campaigns.client_id
+// (o import da Meta nao preenche esse campo) e sim das permissoes do usuario
+// vinculado ao cliente — a mesma regra do portal do cliente. Ainda assim, se
+// alguma campanha tiver client_id preenchido manualmente, ela tambem entra.
+export async function getCampaignIdsForClient(
+  clientId: string,
+): Promise<Set<string>> {
+  if (!isSupabaseAdminConfigured()) {
+    const snapshot = getMockSnapshot();
+    const users = snapshot.users.filter(
+      (user) => user.role === "client" && user.clientId === clientId,
+    );
+    const userIds = new Set(users.map((user) => user.id));
+
+    return new Set([
+      ...snapshot.permissions
+        .filter((permission) => userIds.has(permission.userId))
+        .map((permission) => permission.campaignId),
+      ...snapshot.campaigns
+        .filter((campaign) => campaign.clientId === clientId)
+        .map((campaign) => campaign.id),
+    ]);
+  }
+
+  const [users, permissions, bases] = await Promise.all([
+    fetchUsersCached(),
+    fetchPermissionsCached(),
+    fetchCampaignBasesCached(),
+  ]);
+
+  const userIds = new Set(
+    users
+      .filter((user) => user.role === "client" && user.clientId === clientId)
+      .map((user) => user.id),
+  );
+
+  return new Set([
+    ...permissions
+      .filter((permission) => userIds.has(permission.userId))
+      .map((permission) => permission.campaignId),
+    ...bases
+      .filter((base) => base.clientId === clientId)
+      .map((base) => base.id),
+  ]);
+}
+
+// Fonte do fechamento: campanhas + metricas da janela EXATA pedida (sem a
+// uniao com a janela padrao que as paginas usam). Respeita o papel: admin ve
+// tudo (ou so o cliente selecionado), cliente ve apenas o que foi liberado.
+export async function getClosingSourceData(
+  user: User,
+  window: MetricsWindow,
+  clientId?: string | null,
+): Promise<{
+  clientName: string;
+  campaigns: CampaignWithMetrics[];
+  metricRows: RawCampaignMetric[];
+}> {
+  if (user.role !== "admin") {
+    const portal = await getClientPortalData(user, window);
+    // getClientPortalData carrega a janela pedida e ja filtra por permissao.
+    const allowedIds = new Set(portal.campaigns.map((campaign) => campaign.id));
+
+    return {
+      clientName: user.clientName ?? user.name,
+      campaigns: portal.campaigns,
+      metricRows: portal.metricRows.filter((row) => allowedIds.has(row.campaignId)),
+    };
+  }
+
+  if (!isSupabaseAdminConfigured()) {
+    const snapshot = getMockSnapshot();
+    const allowed = clientId ? await getCampaignIdsForClient(clientId) : null;
+    const campaigns = allowed
+      ? snapshot.campaigns.filter((campaign) => allowed.has(campaign.id))
+      : snapshot.campaigns;
+    const campaignIds = new Set(campaigns.map((campaign) => campaign.id));
+    const client = clientId
+      ? snapshot.clients.find((item) => item.id === clientId)
+      : undefined;
+
+    return {
+      clientName: client?.companyName ?? "Todos os clientes",
+      campaigns,
+      metricRows: snapshot.metricRows.filter(
+        (row) =>
+          campaignIds.has(row.campaignId) &&
+          row.date >= window.startDate &&
+          row.date <= window.endDate,
+      ),
+    };
+  }
+
+  const [clients, allBases] = await Promise.all([
+    fetchClientsCached(),
+    fetchCampaignBasesCached(),
+  ]);
+
+  const allowedIds = clientId ? await getCampaignIdsForClient(clientId) : null;
+  const bases = allowedIds
+    ? allBases.filter((base) => allowedIds.has(base.id))
+    : allBases;
+  const metricRows = await fetchMetricsWindow(
+    window,
+    clientId ? bases.map((base) => base.id) : undefined,
+  );
+
+  const client = clientId
+    ? clients.find((item) => item.id === clientId)
+    : undefined;
+
+  return {
+    clientName: client?.companyName ?? "Todos os clientes",
+    campaigns: withWindowMetrics(bases, metricRows),
+    metricRows,
+  };
+}
+
+// Dados leves da moldura (topbar): seletor de cliente, busca e selo de sync.
+// Nao carrega metricas — roda em toda navegacao das areas logadas.
+export type AppShellData = {
+  clients: { id: string; name: string }[];
+  campaigns: { id: string; name: string; clientName?: string }[];
+  syncStatus: SyncStatus | null;
+};
+
+export async function getAppShellData(user: User): Promise<AppShellData> {
+  if (user.role !== "admin") {
+    const { syncStatus } = await getClientPortalShellData(user);
+    return { clients: [], campaigns: [], syncStatus };
+  }
+
+  if (!isSupabaseAdminConfigured()) {
+    const snapshot = getMockSnapshot();
+    return {
+      clients: snapshot.clients.map((client) => ({
+        id: client.id,
+        name: client.companyName,
+      })),
+      campaigns: snapshot.campaigns.map((campaign) => ({
+        id: campaign.id,
+        name: campaign.name,
+        clientName: campaign.clientName,
+      })),
+      syncStatus:
+        snapshot.syncStatuses.find((status) => status.provider === "meta_ads") ?? null,
+    };
+  }
+
+  const [clients, bases, syncStatuses] = await Promise.all([
+    fetchClientsCached(),
+    fetchCampaignBasesCached(),
+    fetchSyncStatusesCached(),
+  ]);
+
+  return {
+    clients: clients.map((client) => ({ id: client.id, name: client.companyName })),
+    campaigns: bases.map((base) => ({
+      id: base.id,
+      name: base.name,
+      clientName: base.clientName,
+    })),
+    syncStatus:
+      syncStatuses.find((status) => status.provider === "meta_ads") ?? null,
+  };
+}
+
+// So o selo de sync para o portal do cliente (sem lista de clientes).
+async function getClientPortalShellData(user: User) {
+  void user;
+
+  if (!isSupabaseAdminConfigured()) {
+    const snapshot = getMockSnapshot();
+    return {
+      syncStatus:
+        snapshot.syncStatuses.find((status) => status.provider === "meta_ads") ?? null,
+    };
+  }
+
+  const syncStatuses = await fetchSyncStatusesCached();
+  return {
+    syncStatus:
+      syncStatuses.find((status) => status.provider === "meta_ads") ?? null,
+  };
 }
 
 export async function getIntegrationSettings() {

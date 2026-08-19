@@ -9,6 +9,7 @@ export type ResolvedMetaAccount = {
   label: string;
   adAccountId: string;
   accessToken: string;
+  lastSyncedAt: string | null;
 };
 
 type DbMetaAccountRow = {
@@ -86,18 +87,10 @@ export async function getSyncableMetaAccounts(): Promise<ResolvedMetaAccount[]> 
   const accounts: ResolvedMetaAccount[] = [];
   const seen = new Set<string>();
 
-  // Conta principal (config antiga / campos de cima).
-  if (shared.enabled && shared.adAccountId && shared.accessToken) {
-    accounts.push({
-      id: null,
-      label: "Conta principal",
-      adAccountId: shared.adAccountId,
-      accessToken: shared.accessToken,
-    });
-    seen.add(bareAdAccountId(shared.adAccountId));
-  }
-
-  // Contas da lista (token próprio ou, se vazio, o compartilhado).
+  // As contas da LISTA vêm primeiro porque têm `id` — sem ele o resultado da
+  // sincronização não tem onde ser gravado e a conta fica "pendente" para
+  // sempre, mesmo funcionando. (Era o caso da "Conta principal": a config
+  // antiga entrava antes, com id null, e a linha real da tabela era pulada.)
   for (const row of rows) {
     const bare = bareAdAccountId(row.ad_account_id);
 
@@ -116,8 +109,25 @@ export async function getSyncableMetaAccounts(): Promise<ResolvedMetaAccount[]> 
       label: row.label,
       adAccountId: row.ad_account_id,
       accessToken,
+      lastSyncedAt: row.last_synced_at,
     });
     seen.add(bare);
+  }
+
+  // Conta da config antiga: só entra se ainda não estiver na lista acima.
+  if (shared.enabled && shared.adAccountId && shared.accessToken) {
+    const bare = bareAdAccountId(shared.adAccountId);
+
+    if (!seen.has(bare)) {
+      accounts.push({
+        id: null,
+        label: "Conta principal",
+        adAccountId: shared.adAccountId,
+      accessToken: shared.accessToken,
+      lastSyncedAt: null,
+      });
+      seen.add(bare);
+    }
   }
 
   return accounts;
@@ -269,13 +279,14 @@ export async function setMetaAccountSyncStatus(
     return;
   }
 
+  const now = new Date().toISOString();
   await adminClient
     .from("meta_ad_accounts")
     .update({
       status,
       last_message: message,
-      last_synced_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      ...(status === "ok" ? { last_synced_at: now } : {}),
+      updated_at: now,
     })
     .eq("id", id);
 }

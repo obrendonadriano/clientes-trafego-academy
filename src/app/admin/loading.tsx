@@ -1,5 +1,5 @@
-import { DashboardShellSkeleton } from "@/components/dashboard/skeletons";
+import { PageShellSkeleton } from "@/components/dashboard/skeletons";
 
 export default function AdminLoading() {
-  return <DashboardShellSkeleton />;
+  return <PageShellSkeleton />;
 }

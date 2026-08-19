@@ -1,12 +1,17 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
+  fetchMetaAds,
   fetchMetaAdSets,
   fetchMetaCampaigns,
   fetchMetaInsights,
+  fetchMetaLevelInsights,
   getCurrencyRateToBrl,
+  getDailyRatesToBrl,
+  resolveRateForDay,
   MetaPermissionError,
   MetaRateLimitError,
+  MetaTemporaryError,
   MetaTokenExpiredError,
 } from "@/lib/meta-ads";
 import {
@@ -24,11 +29,11 @@ import {
 } from "@/lib/dashboard-metrics";
 import { IntegrationProvider, SyncStatus } from "@/lib/types";
 
-const META_SYNC_INTERVAL_MINUTES = 15;
 const META_PROVIDER: IntegrationProvider = "meta_ads";
 
-// Importante: client_id NÃO faz parte do payload de import — o upsert não
-// pode sobrescrever o vínculo com cliente feito manualmente pelo admin.
+// Importante: client_id NÃO faz parte do payload de import. O banco detecta o
+// codigo no nome e faz o vinculo automatico por trigger, preservando qualquer
+// liberacao/vinculo manual feito pelo admin.
 type CampaignImportRow = {
   nome: string;
   status: string;
@@ -66,9 +71,27 @@ type MetricImportRow = {
   exchange_rate: number;
 };
 
-type SyncStatusRow = {
-  id: string;
-  provider: string;
+type AdLevelMetricImportRow = {
+  meta_account_id: string | null;
+  ad_account_id: string;
+  level: "adset" | "ad";
+  external_id: string;
+  name: string;
+  campaign_id: string;
+  campaign_name: string;
+  adset_external_id: string | null;
+  adset_name: string | null;
+  date: string;
+  amount_spent: number;
+  impressions: number;
+  clicks: number;
+  result_count: number;
+  result_label: string;
+  currency: string;
+  exchange_rate: number;
+  status: string;
+  effective_status: string;
+  updated_at: string;
 };
 
 type CampaignLookupRow = {
@@ -91,8 +114,8 @@ type SyncStatusPayload = {
 export type MetaSyncResult = {
   campaignCount: number;
   metricCount: number;
+  adLevelMetricCount: number;
   lastSuccessAt: string;
-  nextRunAt: string;
 };
 
 function getPrioritizedActionValue(
@@ -172,22 +195,6 @@ function getPrimaryResult(
   return { count: 0, label: getResultLabelForCategory(category) };
 }
 
-function getNextRunAt(baseDate = new Date()) {
-  const nextDate = new Date(baseDate);
-  nextDate.setSeconds(0, 0);
-
-  const minutes = nextDate.getMinutes();
-  const nextSlot = Math.ceil((minutes + 1) / META_SYNC_INTERVAL_MINUTES) * META_SYNC_INTERVAL_MINUTES;
-
-  if (nextSlot >= 60) {
-    nextDate.setHours(nextDate.getHours() + 1, 0, 0, 0);
-    return nextDate.toISOString();
-  }
-
-  nextDate.setMinutes(nextSlot, 0, 0);
-  return nextDate.toISOString();
-}
-
 async function persistSyncStatus(input: Omit<SyncStatusPayload, "provider" | "interval_minutes" | "updated_at">) {
   const adminClient = createSupabaseAdminClient();
 
@@ -197,30 +204,67 @@ async function persistSyncStatus(input: Omit<SyncStatusPayload, "provider" | "in
 
   const payload: SyncStatusPayload = {
     provider: META_PROVIDER,
-    interval_minutes: META_SYNC_INTERVAL_MINUTES,
+    // A coluna é mantida por compatibilidade com o schema existente, mas zero
+    // deixa explícito que não há intervalo/agendamento automático.
+    interval_minutes: 0,
+    next_run_at: null,
     updated_at: new Date().toISOString(),
     ...input,
   };
 
-  const existing = await adminClient
+  await adminClient
     .from("sync_statuses")
-    .select("id, provider")
+    .upsert(payload, { onConflict: "provider" });
+}
+
+const SYNC_LOCK_STALE_MS = 10 * 60 * 1000;
+
+async function claimMetaSync(startedAtIso: string) {
+  const adminClient = createSupabaseAdminClient();
+
+  if (!adminClient) {
+    throw new Error("Supabase admin não configurado para sincronizar.");
+  }
+
+  const payload = {
+    status: "running" as const,
+    last_attempt_at: startedAtIso,
+    message: "Atualização manual dos dados da Meta Ads em andamento.",
+    updated_at: startedAtIso,
+  };
+  const staleBefore = new Date(Date.now() - SYNC_LOCK_STALE_MS).toISOString();
+  const claimed = await adminClient
+    .from("sync_statuses")
+    .update(payload)
     .eq("provider", META_PROVIDER)
-    .maybeSingle<SyncStatusRow>();
+    .or(`status.neq.running,last_attempt_at.is.null,last_attempt_at.lt.${staleBefore}`)
+    .select("provider")
+    .maybeSingle<{ provider: string }>();
 
-  if (existing.error) {
-    return;
+  if (claimed.error) {
+    throw new Error(claimed.error.message);
   }
 
-  if (existing.data) {
-    await adminClient
-      .from("sync_statuses")
-      .update(payload)
-      .eq("id", existing.data.id);
-    return;
+  if (claimed.data) {
+    return true;
   }
 
-  await adminClient.from("sync_statuses").insert(payload);
+  const inserted = await adminClient.from("sync_statuses").insert({
+    provider: META_PROVIDER,
+    interval_minutes: 0,
+    next_run_at: null,
+    ...payload,
+  });
+
+  if (!inserted.error) {
+    return true;
+  }
+
+  if (inserted.error.code === "23505") {
+    return false;
+  }
+
+  throw new Error(inserted.error.message);
 }
 
 function chunk<T>(items: T[], size: number) {
@@ -245,8 +289,8 @@ async function upsertCampaignRows(rows: CampaignImportRow[]) {
   }
 
   // Upsert em lote por external_id. Como client_id não está no payload, o
-  // ON CONFLICT só atualiza nome/status/plataforma/source e novas linhas
-  // entram sem vínculo (o admin vincula ao cliente depois).
+  // ON CONFLICT não sobrescreve vinculos manuais. O trigger do Supabase
+  // reconcilia o prefixo de quatro digitos depois de cada insert/rename.
   for (const batch of chunk(rows, 500)) {
     const { error } = await adminClient
       .from("campaigns")
@@ -277,6 +321,164 @@ async function upsertMetricRows(rows: MetricImportRow[]) {
       throw new Error(error.message);
     }
   }
+}
+
+async function upsertAdLevelMetricRows(rows: AdLevelMetricImportRow[]) {
+  const adminClient = createSupabaseAdminClient();
+
+  if (!adminClient) {
+    throw new Error("Supabase admin não configurado para importar anúncios.");
+  }
+
+  for (const batch of chunk(rows, 500)) {
+    const { error } = await adminClient.from("meta_ad_level_metrics").upsert(batch, {
+      onConflict: "level,ad_account_id,external_id,date",
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  }
+}
+
+function saoPauloIsoDay(daysAgo = 0) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(Date.now() - daysAgo * 86_400_000));
+}
+
+export async function importMetaAdLevelMetrics(account: ResolvedMetaAccount) {
+  const adminClient = createSupabaseAdminClient();
+
+  if (!adminClient) {
+    throw new Error("Supabase admin não configurado para importar anúncios.");
+  }
+
+  const adAccountId = account.adAccountId.replace(/^act_/i, "").trim();
+  const existing = await adminClient
+    .from("meta_ad_level_metrics")
+    .select("id")
+    .eq("ad_account_id", adAccountId)
+    .limit(1);
+
+  if (existing.error) {
+    throw new Error(existing.error.message);
+  }
+
+  // Primeira carga: 92 dias para cobrir todos os presets. Depois: janela
+  // incremental de 7 dias, suficiente para reconciliar atribuições recentes.
+  const days = existing.data && existing.data.length > 0 ? 7 : 92;
+  const since = saoPauloIsoDay(days - 1);
+  const until = saoPauloIsoDay();
+  let campaignQuery = adminClient
+    .from("campaigns")
+    .select("id, external_id, objective");
+  if (account.id) {
+    campaignQuery = campaignQuery.eq("meta_account_id", account.id);
+  }
+
+  const [campaignResult, adSetResult, adResult, adSets, ads] = await Promise.all([
+    campaignQuery,
+    fetchMetaLevelInsights({
+      adAccountId: account.adAccountId,
+      accessToken: account.accessToken,
+      level: "adset",
+      since,
+      until,
+      daily: true,
+    }),
+    fetchMetaLevelInsights({
+      adAccountId: account.adAccountId,
+      accessToken: account.accessToken,
+      level: "ad",
+      since,
+      until,
+      daily: true,
+    }),
+    fetchMetaAdSets({
+      adAccountId: account.adAccountId,
+      accessToken: account.accessToken,
+    }),
+    fetchMetaAds({
+      adAccountId: account.adAccountId,
+      accessToken: account.accessToken,
+    }),
+  ]);
+
+  if (campaignResult.error || !campaignResult.data) {
+    throw new Error(
+      campaignResult.error?.message ?? "Não foi possível mapear campanhas para os anúncios.",
+    );
+  }
+
+  const campaigns = campaignResult.data as CampaignLookupRow[];
+  const campaignByExternalId = new Map(
+    campaigns
+      .filter((campaign) => campaign.external_id)
+      .map((campaign) => [campaign.external_id as string, campaign]),
+  );
+  const now = new Date().toISOString();
+  const rows: AdLevelMetricImportRow[] = [];
+  const currency = (
+    adSetResult.data[0]?.account_currency ||
+    adResult.data[0]?.account_currency ||
+    "BRL"
+  ).toUpperCase();
+  const [currentRate, dailyRates] = await Promise.all([
+    getCurrencyRateToBrl(currency),
+    getDailyRatesToBrl(currency, days + 7),
+  ]);
+  const adSetById = new Map(adSets.data.map((item) => [item.id, item]));
+  const adById = new Map(ads.data.map((item) => [item.id, item]));
+
+  for (const [level, insights] of [
+    ["adset", adSetResult.data],
+    ["ad", adResult.data],
+  ] as const) {
+    for (const insight of insights) {
+      const campaign = campaignByExternalId.get(insight.campaign_id);
+      const externalId = level === "ad" ? insight.ad_id : insight.adset_id;
+
+      if (!campaign || !externalId || !insight.date_start) {
+        continue;
+      }
+
+      const category = getResultCategoryFromObjective(campaign.objective);
+      const primaryResult = getPrimaryResult(insight.actions, category);
+      const entity = level === "ad" ? adById.get(externalId) : adSetById.get(externalId);
+      const rate = resolveRateForDay(dailyRates, insight.date_start, currentRate);
+
+      rows.push({
+        meta_account_id: account.id,
+        ad_account_id: adAccountId,
+        level,
+        external_id: externalId,
+        name:
+          (level === "ad" ? insight.ad_name : insight.adset_name) ?? "Sem nome",
+        campaign_id: campaign.id,
+        campaign_name: insight.campaign_name,
+        adset_external_id: level === "ad" ? (insight.adset_id ?? null) : null,
+        adset_name: level === "ad" ? (insight.adset_name ?? null) : null,
+        date: insight.date_start,
+        amount_spent: Number(insight.spend || 0) * rate,
+        impressions: Number(insight.impressions || 0),
+        clicks: Number(insight.clicks || 0),
+        result_count: primaryResult.count,
+        result_label: primaryResult.label,
+        currency,
+        exchange_rate: rate,
+        status: entity?.status ?? "UNKNOWN",
+        effective_status: entity?.effective_status ?? entity?.status ?? "UNKNOWN",
+        updated_at: now,
+      });
+    }
+  }
+
+  await upsertAdLevelMetricRows(rows);
+  return rows.length;
 }
 
 export async function importMetaCampaigns(account: ResolvedMetaAccount) {
@@ -313,6 +515,14 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
     throw new Error("Supabase admin não configurado para importar métricas.");
   }
 
+  // Refresh incremental diário: atribuições recentes ainda podem mudar, então
+  // reimportamos 7 dias. A primeira carga e os domingos refazem 30 dias para
+  // reconciliar conversões atrasadas sem pagar esse custo em toda execução.
+  const dailyPreset =
+    !account.lastSyncedAt || new Date().getUTCDay() === 0
+      ? "last_30d"
+      : "last_7d";
+
   const [
     last30DaysInsights,
     todayDailyInsights,
@@ -322,7 +532,7 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
     fetchMetaInsights({
       adAccountId: account.adAccountId,
       accessToken: account.accessToken,
-      datePreset: "last_30d",
+      datePreset: dailyPreset,
     }),
     // Dia de HOJE em granularidade diária. Sem isso, os dados de hoje só
     // existiriam como hora-a-hora e seriam descartados ao somar por dia
@@ -420,6 +630,9 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
     todayHourlyInsights.data.find((item) => item.account_currency)?.account_currency ??
     "BRL";
   const currencyRate = await getCurrencyRateToBrl(accountCurrency);
+  // Série diária: cada dia de gasto é convertido pela cotação daquele dia.
+  // Se a série falhar, `resolveRateForDay` cai na cotação atual.
+  const dailyRates = await getDailyRatesToBrl(accountCurrency);
 
   const rows = [
     ...last30DaysInsights.data.map((item) => ({
@@ -495,9 +708,10 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
           0,
         ) ?? 0;
 
-      // Valores monetários convertidos para BRL (currencyRate = 1 quando a
-      // conta já é em real). ROAS é uma razão e não muda com a moeda.
-      const spend = Number(item.spend || 0) * currencyRate;
+      // Valores monetários convertidos para BRL pela cotação do dia do gasto
+      // (rate = 1 quando a conta já é em real). ROAS é razão e não muda.
+      const rate = resolveRateForDay(dailyRates, item.date_start, currencyRate);
+      const spend = Number(item.spend || 0) * rate;
 
       return {
         campaign_id: campaignId,
@@ -512,15 +726,15 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
         ctr: Number(item.ctr || 0),
         result_count: primaryResult.count,
         result_label: primaryResult.label,
-        cpc: Number(item.cpc || 0) * currencyRate,
-        cpm: Number(item.cpm || 0) * currencyRate,
+        cpc: Number(item.cpc || 0) * rate,
+        cpm: Number(item.cpm || 0) * rate,
         leads: normalizedLeads,
         cost_per_lead: normalizedLeads > 0 ? spend / normalizedLeads : 0,
         roi: 0,
         roas,
         frequency: Number(item.frequency || 0),
         currency: (accountCurrency || "BRL").toUpperCase(),
-        exchange_rate: currencyRate,
+        exchange_rate: rate,
       };
     })
     .filter((row): row is MetricImportRow => Boolean(row));
@@ -559,6 +773,10 @@ function describeAccountError(error: unknown) {
     return "A Meta limitou as requisições desta conta. Será retomada na próxima sincronização.";
   }
 
+  if (error instanceof MetaTemporaryError) {
+    return "A Meta ficou instável e não respondeu depois de várias tentativas. Os dados já importados continuam valendo; a próxima sincronização completa o restante.";
+  }
+
   return error instanceof Error ? error.message : "Falha inesperada ao sincronizar a conta.";
 }
 
@@ -566,23 +784,21 @@ export async function runMetaSync() {
   const startedAt = new Date();
   const startedAtIso = startedAt.toISOString();
 
-  await persistSyncStatus({
-    status: "running",
-    last_attempt_at: startedAtIso,
-    message: "Sincronização automática da Meta Ads em andamento.",
-  });
+  const claimed = await claimMetaSync(startedAtIso);
+
+  if (!claimed) {
+    throw new Error("Já existe uma sincronização da Meta Ads em andamento.");
+  }
 
   const accounts = await getSyncableMetaAccounts();
 
   if (accounts.length === 0) {
     const message =
       "Nenhuma conta de anúncio ativa. Cadastre ao menos uma conta em Configurações → Meta Ads.";
-    const nextRunAt = getNextRunAt(new Date());
 
     await persistSyncStatus({
       status: "error",
       last_attempt_at: startedAtIso,
-      next_run_at: nextRunAt,
       message,
     });
     revalidateTag("sync", "max");
@@ -592,6 +808,7 @@ export async function runMetaSync() {
 
   let campaignCount = 0;
   let metricCount = 0;
+  let adLevelMetricCount = 0;
   let okCount = 0;
   const failures: string[] = [];
 
@@ -601,6 +818,7 @@ export async function runMetaSync() {
     try {
       campaignCount += await importMetaCampaigns(account);
       metricCount += await importMetaInsights(account);
+      adLevelMetricCount += await importMetaAdLevelMetrics(account);
       okCount += 1;
 
       if (account.id) {
@@ -618,25 +836,23 @@ export async function runMetaSync() {
 
   const finishedAt = new Date();
   const finishedAtIso = finishedAt.toISOString();
-  const nextRunAt = getNextRunAt(finishedAt);
   const allFailed = okCount === 0;
 
   const summary = allFailed
     ? `Falha ao sincronizar todas as contas. ${failures.join(" | ")}`
     : failures.length > 0
-      ? `${okCount}/${accounts.length} conta(s) sincronizada(s): ${campaignCount} campanha(s) e ${metricCount} registro(s). Com erro: ${failures.join(" | ")}`
-      : `Sincronização concluída: ${okCount} conta(s), ${campaignCount} campanha(s) e ${metricCount} registro(s) de métricas.`;
+      ? `${okCount}/${accounts.length} conta(s) sincronizada(s): ${campaignCount} campanha(s), ${metricCount} métricas de campanha e ${adLevelMetricCount} métricas de anúncios. Com erro: ${failures.join(" | ")}`
+      : `Sincronização concluída: ${okCount} conta(s), ${campaignCount} campanha(s), ${metricCount} métricas de campanha e ${adLevelMetricCount} métricas de anúncios.`;
 
   await persistSyncStatus({
     status: allFailed ? "error" : "success",
     last_attempt_at: startedAtIso,
     last_success_at: allFailed ? undefined : finishedAtIso,
-    next_run_at: nextRunAt,
     message: summary,
   });
 
-  // "max" = stale-while-revalidate; obrigatório aqui porque o cron route
-  // handler não pode chamar updateTag (restrito a Server Actions).
+  // A mesma rotina também pode ser chamada pela rota protegida de sync; por
+  // isso a invalidação usa stale-while-revalidate em vez de updateTag.
   revalidateTag("campaigns", "max");
   revalidateTag("metrics", "max");
   revalidateTag("sync", "max");
@@ -652,8 +868,8 @@ export async function runMetaSync() {
   return {
     campaignCount,
     metricCount,
+    adLevelMetricCount,
     lastSuccessAt: finishedAtIso,
-    nextRunAt,
   } satisfies MetaSyncResult;
 }
 
@@ -703,48 +919,40 @@ export async function getMetaSyncStatus(): Promise<SyncStatus> {
   if (!adminClient) {
     return {
       provider: META_PROVIDER,
-      intervalMinutes: META_SYNC_INTERVAL_MINUTES,
       status: "pending",
       lastAttemptAt: null,
       lastSuccessAt: null,
-      nextRunAt: null,
-      message: "Supabase ainda não foi conectado para ativar a sincronização automática.",
+      message: "Supabase ainda não foi conectado para permitir a atualização manual.",
     };
   }
 
   const { data, error } = await adminClient
     .from("sync_statuses")
-    .select("provider, interval_minutes, status, last_attempt_at, last_success_at, next_run_at, message")
+    .select("provider, status, last_attempt_at, last_success_at, message")
     .eq("provider", META_PROVIDER)
     .maybeSingle<{
       provider: IntegrationProvider;
-      interval_minutes: number;
       status: SyncStatus["status"];
       last_attempt_at: string | null;
       last_success_at: string | null;
-      next_run_at: string | null;
       message: string | null;
     }>();
 
   if (error || !data) {
     return {
       provider: META_PROVIDER,
-      intervalMinutes: META_SYNC_INTERVAL_MINUTES,
       status: "pending",
       lastAttemptAt: null,
       lastSuccessAt: null,
-      nextRunAt: null,
-      message: "A sincronização automática ainda não registrou nenhuma execução.",
+      message: "Nenhuma atualização manual foi executada ainda.",
     };
   }
 
   return {
     provider: data.provider,
-    intervalMinutes: data.interval_minutes ?? META_SYNC_INTERVAL_MINUTES,
     status: data.status,
     lastAttemptAt: data.last_attempt_at,
     lastSuccessAt: data.last_success_at,
-    nextRunAt: data.next_run_at,
     message: data.message,
   };
 }

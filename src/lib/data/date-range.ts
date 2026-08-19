@@ -1,4 +1,14 @@
-import { format, isValid, parseISO, startOfDay, subDays } from "date-fns";
+import {
+  differenceInCalendarDays,
+  endOfMonth,
+  format,
+  isValid,
+  parseISO,
+  startOfDay,
+  startOfMonth,
+  subDays,
+  subMonths,
+} from "date-fns";
 import type { Role } from "@/lib/types";
 
 // Limite de histórico para contas de cliente (regra de negócio: 3 meses).
@@ -10,6 +20,7 @@ export const CLIENT_MAX_RANGE_DAYS = 92;
 export type MetricsWindow = {
   startDate: string;
   endDate: string;
+  includeHourly?: boolean;
 };
 
 function toIsoDay(date: Date) {
@@ -59,35 +70,105 @@ export function clampMetricsWindowForRole(
     }
   }
 
-  return { startDate: toIsoDay(start), endDate: toIsoDay(end) };
+  return {
+    startDate: toIsoDay(start),
+    endDate: toIsoDay(end),
+    includeHourly: window.includeHourly,
+  };
 }
 
 type RangeSearchParams = {
   start?: string | string[];
   end?: string | string[];
+  periodo?: string | string[];
+  comparar?: string | string[];
 };
 
 function firstValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-// Resolve a janela de métricas de uma página a partir da URL (?start=&end=).
-// A janela é sempre a UNIÃO do range pedido com a janela padrão, para que os
-// presets do PeriodFilter (que filtram no client) continuem corretos.
-// O clamp por role é a validação de backend: cliente nunca recebe mais que
-// CLIENT_MAX_RANGE_DAYS, mesmo manipulando a URL.
+function resolveCurrentPeriod(
+  params: RangeSearchParams | undefined,
+  now: Date,
+): MetricsWindow {
+  const today = startOfDay(now);
+  const slug = firstValue(params?.periodo) ?? "d30";
+
+  if (slug === "hoje") {
+    const day = toIsoDay(today);
+    return { startDate: day, endDate: day, includeHourly: true };
+  }
+
+  if (slug === "ontem") {
+    const day = toIsoDay(subDays(today, 1));
+    return { startDate: day, endDate: day, includeHourly: true };
+  }
+
+  if (slug === "d7") {
+    return { startDate: toIsoDay(subDays(today, 6)), endDate: toIsoDay(today) };
+  }
+
+  if (slug === "mes") {
+    return { startDate: toIsoDay(startOfMonth(today)), endDate: toIsoDay(today) };
+  }
+
+  if (slug === "mes-passado") {
+    const previousMonth = subMonths(today, 1);
+    return {
+      startDate: toIsoDay(startOfMonth(previousMonth)),
+      endDate: toIsoDay(endOfMonth(previousMonth)),
+    };
+  }
+
+  if (slug === "custom") {
+    const requestedStart = parseIsoDay(firstValue(params?.start));
+    const requestedEnd = parseIsoDay(firstValue(params?.end));
+
+    if (requestedStart && requestedEnd && requestedStart <= requestedEnd) {
+      return {
+        startDate: toIsoDay(requestedStart),
+        endDate: toIsoDay(requestedEnd),
+        includeHourly:
+          differenceInCalendarDays(requestedEnd, requestedStart) === 0,
+      };
+    }
+  }
+
+  return {
+    startDate: toIsoDay(subDays(today, 29)),
+    endDate: toIsoDay(today),
+  };
+}
+
+// Resolve somente o período que a tela realmente usa. Quando a comparação
+// está ativa, inclui também o intervalo anterior de mesmo tamanho; não baixa
+// mais 92 dias e linhas horárias para todo preset.
 export function resolveMetricsWindow(
   role: Role,
   searchParams?: RangeSearchParams,
   now = new Date(),
 ): MetricsWindow {
-  const defaults = getDefaultMetricsWindow(now);
-  const requestedStart = parseIsoDay(firstValue(searchParams?.start));
+  const current = resolveCurrentPeriod(searchParams, now);
+  const comparePrevious = firstValue(searchParams?.comparar) !== "nenhum";
 
-  const start =
-    requestedStart && requestedStart.getTime() < parseISO(defaults.startDate).getTime()
-      ? toIsoDay(requestedStart)
-      : defaults.startDate;
+  if (!comparePrevious) {
+    return clampMetricsWindowForRole(role, current, now);
+  }
 
-  return clampMetricsWindowForRole(role, { startDate: start, endDate: defaults.endDate }, now);
+  const start = parseISO(current.startDate);
+  const end = parseISO(current.endDate);
+  const days = differenceInCalendarDays(end, start) + 1;
+
+  return {
+    ...clampMetricsWindowForRole(
+      role,
+      {
+        startDate: toIsoDay(subDays(start, days)),
+        endDate: current.endDate,
+      },
+      now,
+    ),
+    includeHourly: current.includeHourly,
+  };
 }

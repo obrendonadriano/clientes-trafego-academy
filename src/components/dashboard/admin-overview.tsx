@@ -1,14 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
-import { MetricCard } from "@/components/dashboard/metric-card";
-import {
-  PeriodFilter,
-  type PeriodFilterValue,
-} from "@/components/dashboard/period-filter";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useMemo } from "react";
+import { TaxInfo } from "@/components/dashboard/tax-info";
+import { usePeriodScope } from "@/components/shell/period-scope";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   buildPerformanceSeries,
   calculateChange,
@@ -16,17 +12,17 @@ import {
   formatMoney,
   formatPeriodLabel,
   getDateRangeForPeriod,
-  getDefaultCustomRange,
   getReferenceNowForPeriod,
   getPreviousDateRange,
   summarizeMetrics,
 } from "@/lib/dashboard-metrics";
 import { RawCampaignMetric } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
-const PerformanceChart = dynamic(
+const DashboardChart = dynamic(
   () =>
-    import("@/components/dashboard/performance-chart").then(
-      (module) => module.PerformanceChart,
+    import("@/components/dashboard/dashboard-chart").then(
+      (module) => module.DashboardChart,
     ),
   {
     ssr: false,
@@ -38,28 +34,12 @@ const PerformanceChart = dynamic(
   },
 );
 
-const ComparisonChart = dynamic(
-  () =>
-    import("@/components/dashboard/comparison-chart").then(
-      (module) => module.ComparisonChart,
-    ),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="dashboard-card rounded-[1.5rem] border p-4">
-        <div className="h-[260px] animate-pulse rounded-[1.25rem] bg-muted/70 dark:bg-white/[0.08]" />
-      </div>
-    ),
-  },
-);
+// Sub-abas da secao "Visao": os KPIs aparecem nas duas, o que muda e o
+// grafico principal (curva do periodo x comparativo com o periodo anterior).
+export type AdminOverviewView = "geral" | "comparativo";
 
 type AdminOverviewProps = {
-  clientCount: number;
-  campaignCount: number;
-  clientUserCount: number;
-  permissionCount: number;
-  activeClientCount: number;
-  activeCampaignCount: number;
+  view?: AdminOverviewView;
   metricRows: RawCampaignMetric[];
 };
 
@@ -85,32 +65,11 @@ function formatChange(value: number, suffix = "%") {
 }
 
 export function AdminOverview({
-  clientCount,
-  campaignCount,
-  clientUserCount,
-  permissionCount,
-  activeClientCount,
-  activeCampaignCount,
+  view = "geral",
   metricRows,
 }: AdminOverviewProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const [isApplying, startTransition] = useTransition();
-  const [period, setPeriod] = useState<PeriodFilterValue>("Últimos 30 dias");
-  const [comparePrevious, setComparePrevious] = useState(true);
-  const [customRange, setCustomRange] = useState(() => getDefaultCustomRange());
-
-  // Range custom pode ir além da janela padrão carregada (92 dias): sincroniza
-  // a URL para o servidor refazer a busca com o período completo.
-  function handleApplyCustomRange() {
-    setPeriod("Personalizado");
-    startTransition(() => {
-      router.replace(
-        `${pathname}?start=${customRange.start}&end=${customRange.end}`,
-        { scroll: false },
-      );
-    });
-  }
+  const scope = usePeriodScope();
+  const { period, customRange, comparePrevious } = scope;
 
   const selected = useMemo(() => {
     const referenceDate = getReferenceNowForPeriod(metricRows, period, customRange);
@@ -134,10 +93,13 @@ export function AdminOverview({
       cards: [
         {
           label: "Investimento total",
-          value: formatCurrency(totals.amountSpent),
+          // Exibe com impostos; a comparação segue sobre o valor puro (a
+          // proporção é a mesma, então a variação % não muda).
+          hasTax: true,
+          value: formatCurrency(totals.amountSpentWithTax),
           sub:
             totals.currency !== "BRL"
-              ? formatMoney(totals.amountSpentOriginal, totals.currency)
+              ? formatMoney(totals.amountSpentOriginalWithTax, totals.currency)
               : undefined,
           change: comparePrevious
             ? formatChange(
@@ -148,6 +110,7 @@ export function AdminOverview({
         },
         {
           label: "Leads gerados",
+          hasTax: false,
           value: String(Math.round(totals.leads)),
           sub: undefined,
           change: comparePrevious
@@ -157,6 +120,7 @@ export function AdminOverview({
         },
         {
           label: "CTR médio",
+          hasTax: false,
           value: formatPercent(totals.ctr),
           sub: undefined,
           change: comparePrevious
@@ -166,6 +130,7 @@ export function AdminOverview({
         },
         {
           label: "ROAS médio",
+          hasTax: false,
           value: formatMultiplier(totals.roas),
           sub: undefined,
           change: comparePrevious
@@ -179,89 +144,64 @@ export function AdminOverview({
   }, [comparePrevious, customRange, metricRows, period]);
 
   return (
-    <div className="space-y-6">
-      <PeriodFilter
-        active={period}
-        onChange={setPeriod}
-        comparePrevious={comparePrevious}
-        onComparePreviousChange={setComparePrevious}
-        customRange={customRange}
-        onCustomRangeChange={setCustomRange}
-        onApplyCustomRange={handleApplyCustomRange}
-        isApplying={isApplying}
-      />
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className="space-y-[1.05rem]">
+      <div className="grid gap-px overflow-hidden rounded-[0.875rem] border bg-border sm:grid-cols-2 xl:grid-cols-4">
         {selected.cards.map((card) => (
-          <MetricCard
+          <div
             key={card.label}
-            label={card.label}
-            value={card.value}
-            sub={card.sub}
-            change={card.change}
-            positive={card.positive}
-          />
+            className="bg-card p-[1.05rem] text-foreground"
+          >
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              {card.label}
+              {card.hasTax ? <TaxInfo /> : null}
+            </p>
+            <p className="mt-2 whitespace-nowrap font-display text-[clamp(1.7rem,1.8vw,2rem)] font-medium leading-none">
+              {card.value}
+            </p>
+            <div className="mt-2 flex min-w-0 items-center gap-1.5 text-xs">
+              <span
+                className={cn(
+                  "truncate",
+                  card.positive ? "text-emerald-400" : "text-destructive",
+                )}
+              >
+                {card.change}
+              </span>
+              {card.sub ? (
+                <span className="ml-auto truncate text-xs text-muted-foreground">
+                  {card.sub}
+                </span>
+              ) : null}
+            </div>
+          </div>
         ))}
       </div>
 
-      {comparePrevious ? (
-        <ComparisonChart
-          current={selected.totals}
-          previous={selected.previousTotals}
-          periodLabel={selected.periodLabel}
-        />
-      ) : null}
-
-      <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-        <PerformanceChart
+      {view === "comparativo" ? (
+        comparePrevious ? (
+          <DashboardChart
+            kind="comparison"
+            current={selected.totals}
+            previous={selected.previousTotals}
+            periodLabel={selected.periodLabel}
+          />
+        ) : (
+          <Card>
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+              A comparação está desligada. Abra o seletor de período na barra
+              superior e escolha <strong className="text-foreground">Período
+              anterior</strong> para ver este gráfico.
+            </CardContent>
+          </Card>
+        )
+      ) : (
+        <DashboardChart
+          kind="performance"
           data={selected.chart}
           periodLabel={selected.periodLabel}
           emptyMessage="Importe métricas da Meta Ads para visualizar a curva real de investimento e resultados."
         />
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-display text-2xl">
-              Situação da operação
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm leading-6 text-muted-foreground">
-            <div className="dashboard-row rounded-2xl border px-4 py-3">
-              Clientes ativos:{" "}
-              <strong className="text-foreground">{activeClientCount}</strong>
-            </div>
-            <div className="dashboard-row rounded-2xl border px-4 py-3">
-              Campanhas ativas:{" "}
-              <strong className="text-foreground">{activeCampaignCount}</strong>
-            </div>
-            <div className="dashboard-row rounded-2xl border px-4 py-3">
-              Clientes com acesso:{" "}
-              <strong className="text-foreground">{clientUserCount}</strong>
-            </div>
-            <div className="dashboard-row rounded-2xl border px-4 py-3">
-              Campanhas cadastradas:{" "}
-              <strong className="text-foreground">{campaignCount}</strong>
-            </div>
-            <div className="dashboard-row rounded-2xl border px-4 py-3">
-              Permissões ativas:{" "}
-              <strong className="text-foreground">{permissionCount}</strong>
-            </div>
-            <div className="dashboard-row rounded-2xl border px-4 py-3">
-              Clientes cadastrados:{" "}
-              <strong className="text-foreground">{clientCount}</strong>
-            </div>
-            <div className="dashboard-row rounded-2xl border px-4 py-3">
-              Filtro atual:{" "}
-              <strong className="text-foreground">{selected.periodLabel}</strong>
-            </div>
-            <div className="dashboard-row rounded-2xl border px-4 py-3">
-              Status das métricas:{" "}
-              <strong className="text-foreground">
-                {selected.hasData ? "dados reais importados" : "sem métricas no período"}
-              </strong>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      )}
     </div>
   );
 }

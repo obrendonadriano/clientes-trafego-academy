@@ -24,17 +24,17 @@ export function ThemeToggle({ className, compact }: ThemeToggleProps) {
         aria-label={isDark ? "Ativar tema claro" : "Ativar tema escuro"}
         onClick={() => setTheme(isDark ? "light" : "dark")}
         className={cn(
-          "grid size-10 shrink-0 place-items-center rounded-full border transition-colors",
+          "grid size-10 shrink-0 place-items-center rounded-lg border transition-colors",
           isDark
-            ? "border-white/10 bg-white/[0.06] text-amber-300 hover:bg-white/10"
+            ? "border-border bg-background/60 text-foreground/80 hover:bg-muted"
             : "border-border bg-muted text-slate-600 hover:bg-muted/70",
           className,
         )}
       >
         {isDark ? (
-          <Sun className="size-[1.05rem]" strokeWidth={1.75} />
-        ) : (
           <Moon className="size-[1.05rem]" strokeWidth={1.75} />
+        ) : (
+          <Sun className="size-[1.05rem]" strokeWidth={1.75} />
         )}
       </button>
     );

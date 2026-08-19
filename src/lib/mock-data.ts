@@ -382,14 +382,71 @@ const metricRows: RawCampaignMetric[] = [
 const syncStatuses: SyncStatus[] = [
   {
     provider: "meta_ads",
-    intervalMinutes: 15,
     status: "success",
     lastAttemptAt: "2026-04-08T15:45:00-03:00",
     lastSuccessAt: "2026-04-08T15:45:00-03:00",
-    nextRunAt: "2026-04-08T16:00:00-03:00",
-    message: "Sincronização automática preparada para importar campanhas e métricas da Meta Ads.",
+    message: "Última atualização manual concluída com sucesso.",
   },
 ];
+
+// Conjuntos de anuncios e anuncios de exemplo (usados quando o Supabase nao
+// esta configurado). Derivam das campanhas mock para os numeros baterem.
+export function getMockAdLevelRows(
+  level: "adset" | "ad",
+  clientId?: string | null,
+) {
+  const source = clientId
+    ? campaigns.filter((campaign) => campaign.clientId === clientId)
+    : campaigns;
+
+  const parseMoney = (value: string) =>
+    Number(value.replace(/[^0-9,]/g, "").replace(",", ".")) || 0;
+  const parseCount = (value: string) => Number(value.replace(/\D/g, "")) || 0;
+
+  const suffixes =
+    level === "adset"
+      ? ["Publico frio", "Remarketing 30d"]
+      : ["Criativo A - video", "Criativo B - imagem", "Criativo C - carrossel"];
+
+  return source.flatMap((campaign) => {
+    const spend = parseMoney(campaign.metrics.amountSpent);
+    const clicks = parseCount(campaign.metrics.clicks);
+    const impressions = parseCount(campaign.metrics.impressions);
+    const results = parseCount(campaign.metrics.results);
+
+    return suffixes.map((suffix, index) => {
+      // Distribuicao decrescente: o primeiro item leva a maior fatia.
+      const share = (suffixes.length - index) / ((suffixes.length * (suffixes.length + 1)) / 2);
+      const rowSpend = Math.round(spend * share);
+      const rowClicks = Math.round(clicks * share);
+      const rowResults = Math.round(results * share);
+      const rowImpressions = Math.round(impressions * share);
+
+      return {
+        id: `${campaign.id}-${level}-${index + 1}`,
+        name: `${campaign.name} - ${suffix}`,
+        campaignId: campaign.id,
+        campaignName: campaign.name,
+        adSetId: level === "ad" ? `${campaign.id}-adset-1` : undefined,
+        adSetName:
+          level === "ad" ? `${campaign.name} - Publico frio` : undefined,
+        amountSpent: rowSpend,
+        amountSpentOriginal: rowSpend,
+        impressions: rowImpressions,
+        clicks: rowClicks,
+        ctr: rowImpressions > 0 ? (rowClicks / rowImpressions) * 100 : 0,
+        cpc: rowClicks > 0 ? rowSpend / rowClicks : 0,
+        results: rowResults,
+        resultLabel: campaign.metrics.resultLabel,
+        costPerResult: rowResults > 0 ? rowSpend / rowResults : 0,
+        currency: "BRL",
+        exchangeRate: 1,
+        status: campaign.status,
+        effectiveStatus: campaign.status === "Ativa" ? "ACTIVE" : "PAUSED",
+      };
+    });
+  });
+}
 
 export function getMockSnapshot(): AppDataSnapshot {
   return {

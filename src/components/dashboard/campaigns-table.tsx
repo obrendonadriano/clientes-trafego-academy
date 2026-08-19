@@ -1,7 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, LoaderCircle, Pencil, X } from "lucide-react";
+import Link from "next/link";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Check,
+  ChevronRight,
+  LoaderCircle,
+  Pencil,
+  X,
+} from "lucide-react";
 import {
   renameCampaignAction,
   toggleCampaignStatusAction,
@@ -11,6 +21,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { TaxInfo } from "@/components/dashboard/tax-info";
+import { useScopedHref } from "@/components/shell/period-scope";
 import { cn } from "@/lib/utils";
 import { CampaignWithMetrics } from "@/lib/types";
 
@@ -19,6 +31,7 @@ type CampaignsTableProps = {
   // No admin, permite editar o nome e ligar/desligar o status direto na tabela
   // (espelhando na Meta). No portal do cliente fica falso: só leitura.
   editable?: boolean;
+  detailBasePath?: "/admin/campanhas" | "/dashboard/campanhas";
 };
 
 // Nome da campanha: editável inline quando `editable` (admin).
@@ -282,7 +295,13 @@ function SortIcon({
   );
 }
 
-export function CampaignsTable({ campaigns, editable = false }: CampaignsTableProps) {
+export function CampaignsTable({
+  campaigns,
+  editable = false,
+  detailBasePath,
+}: CampaignsTableProps) {
+  const scopedHref = useScopedHref();
+  const showDrilldown = Boolean(detailBasePath);
   const [sortKey, setSortKey] = React.useState<SortKey>("amountSpent");
   const [sortDirection, setSortDirection] = React.useState<SortDirection>("desc");
 
@@ -348,7 +367,7 @@ export function CampaignsTable({ campaigns, editable = false }: CampaignsTablePr
 
   if (campaigns.length === 0) {
     return (
-      <div className="dashboard-card overflow-hidden rounded-[1.5rem] border">
+      <div className="dashboard-card overflow-hidden rounded-[0.875rem] border">
         <div className="px-4 py-8 text-center text-sm text-muted-foreground">
           Nenhuma campanha com métricas para o período selecionado.
         </div>
@@ -360,7 +379,7 @@ export function CampaignsTable({ campaigns, editable = false }: CampaignsTablePr
     <div className="space-y-4">
       {/* Mobile: cards no lugar da tabela larga (que estouraria a tela). */}
       <div className="space-y-3 md:hidden">
-        <div className="dashboard-card flex items-center gap-3 rounded-[1.5rem] border px-4 py-3">
+        <div className="dashboard-card flex items-center gap-3 rounded-[0.875rem] border px-4 py-3">
           <span className="shrink-0 text-sm text-muted-foreground">Ordenar por</span>
           <Select
             value={`${sortKey}:${sortDirection}`}
@@ -384,7 +403,7 @@ export function CampaignsTable({ campaigns, editable = false }: CampaignsTablePr
         {sortedCampaigns.map((campaign) => (
           <div
             key={campaign.id}
-            className="dashboard-card rounded-[1.5rem] border p-4 text-foreground"
+            className="dashboard-card rounded-[0.875rem] border p-4 text-foreground"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -433,7 +452,7 @@ export function CampaignsTable({ campaigns, editable = false }: CampaignsTablePr
           </div>
         ))}
 
-        <div className="dashboard-card rounded-[1.5rem] border p-4 text-sm text-muted-foreground">
+        <div className="dashboard-card rounded-[0.875rem] border p-4 text-sm text-muted-foreground">
           <p className="font-semibold text-foreground">
             Totais • {sortedCampaigns.length} campanha
             {sortedCampaigns.length === 1 ? "" : "s"}
@@ -465,8 +484,8 @@ export function CampaignsTable({ campaigns, editable = false }: CampaignsTablePr
         </div>
       </div>
 
-      <div className="dashboard-card hidden overflow-hidden rounded-[1.5rem] border text-foreground md:block">
-      <div className="max-h-[560px] overflow-auto">
+      <div className="dashboard-card hidden overflow-hidden rounded-[0.875rem] border text-foreground md:block">
+      <div className="overflow-x-auto">
         <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
           <thead className="sticky top-0 z-10 bg-muted/95 text-muted-foreground backdrop-blur dark:bg-[#111525]/95">
             <tr>
@@ -492,9 +511,15 @@ export function CampaignsTable({ campaigns, editable = false }: CampaignsTablePr
                       <span>{column.label}</span>
                       <SortIcon active={active} direction={sortDirection} />
                     </button>
+                    {column.key === "amountSpent" ? (
+                      <TaxInfo className="ml-1.5 align-middle" />
+                    ) : null}
                   </th>
                 );
               })}
+              {showDrilldown ? (
+                <th className="w-12 border-b border-border/70 px-2 py-3 dark:border-white/10" />
+              ) : null}
             </tr>
           </thead>
           <tbody>
@@ -539,10 +564,24 @@ export function CampaignsTable({ campaigns, editable = false }: CampaignsTablePr
                 <td className="min-w-[88px] border-b border-border/60 dark:border-white/10 px-4 py-3 align-middle">
                   {campaign.metrics.roas}
                 </td>
+                {showDrilldown && detailBasePath ? (
+                  <td className="border-b border-border/60 px-2 py-3 text-right align-middle dark:border-white/10">
+                    <Link
+                      href={scopedHref(
+                        `${detailBasePath}/conjuntos?campanha=${encodeURIComponent(campaign.id)}`,
+                      )}
+                      aria-label={`Ver conjuntos de ${campaign.name}`}
+                      title="Ver conjuntos de anúncios"
+                      className="inline-grid size-8 place-items-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground dark:hover:bg-white/[0.06]"
+                    >
+                      <ChevronRight className="size-4" />
+                    </Link>
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>
-          <tfoot className="sticky bottom-0 z-10 bg-card/95 backdrop-blur dark:bg-[#111525]/95">
+          <tfoot className="bg-card">
             <tr className="text-foreground">
               <td className="border-t border-border/70 dark:border-white/10 px-4 py-3 font-semibold">Totais</td>
               <td className="border-t border-border/70 dark:border-white/10 px-4 py-3 text-sm text-muted-foreground">

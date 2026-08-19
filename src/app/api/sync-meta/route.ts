@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { importAllMetaCampaigns, runMetaSync } from "@/lib/sync/meta-sync";
+import { runMetaSync } from "@/lib/sync/meta-sync";
 
 // Rota "botão apertável por API": executa exatamente o mesmo código dos botões
 // "Importar campanhas" e "Importar métricas" da página /admin/campanhas, na
@@ -17,9 +17,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // 1) Botão "Importar campanhas"
-    await importAllMetaCampaigns();
-    // 2) Botão "Importar métricas" (também reimporta campanhas, idempotente)
+    // runMetaSync já importa campanhas antes das métricas.
     await runMetaSync();
 
     return NextResponse.json({ ok: true });

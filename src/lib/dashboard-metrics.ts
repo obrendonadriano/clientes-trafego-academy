@@ -12,6 +12,7 @@ import {
   subMonths,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { withMetaTaxes } from "@/lib/taxes";
 import { PerformancePoint, RawCampaignMetric } from "@/lib/types";
 
 // Range custom padrão exibido nos seletores de período (últimos 7 dias reais).
@@ -37,7 +38,13 @@ type DateRange = {
 };
 
 export type MetricTotals = {
+  // Veiculação pura, como aparece no Gerenciador de Anúncios da Meta.
   amountSpent: number;
+  // Veiculação + PIS/COFINS + ISS: o valor que de fato é cobrado no Brasil.
+  // É este que o painel exibe como "investido"; os custos derivados (CPC,
+  // custo por resultado, ROAS) seguem sobre o valor puro, para continuarem
+  // batendo com a Meta.
+  amountSpentWithTax: number;
   reach: number;
   impressions: number;
   clicks: number;
@@ -55,6 +62,11 @@ export type MetricTotals = {
   // monetários reconstruídos nessa moeda (para exibir, ex.: US$ ao lado do R$).
   currency: string;
   amountSpentOriginal: number;
+  amountSpentOriginalWithTax: number;
+  // Parcela do gasto vinda de contas em moeda estrangeira (em BRL) e a cotação
+  // média ponderada do período. Em conta 100% em real: 0 e 1.
+  foreignSpent: number;
+  averageRate: number;
   cpcOriginal: number;
   cpmOriginal: number;
   costPerLeadOriginal: number;
@@ -88,6 +100,30 @@ export function resolveCurrency(rows: Pick<RawCampaignMetric, "currency">[]) {
   );
 
   return foreign.size === 1 ? [...foreign][0] : "BRL";
+}
+
+// true quando o conjunto tem contas em real E em moeda estrangeira ao mesmo
+// tempo. Nesse caso não existe "total na moeda original": só a parcela
+// estrangeira pode ser expressa na outra moeda.
+export function hasMixedCurrencies(
+  rows: Pick<RawCampaignMetric, "currency">[],
+) {
+  let hasLocal = false;
+  let hasForeign = false;
+
+  for (const row of rows) {
+    if ((row.currency || "BRL").toUpperCase() === "BRL") {
+      hasLocal = true;
+    } else {
+      hasForeign = true;
+    }
+
+    if (hasLocal && hasForeign) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // Categoria do resultado principal, derivada do OBJETIVO da campanha (Meta),
@@ -268,19 +304,28 @@ function selectSummaryGranularityForRange(
   rows: RawCampaignMetric[],
   range: DateRange,
 ) {
-  const rowsInRange = getRowsInRange(rows, range);
+  return dedupeMetricRowsByDay(getRowsInRange(rows, range));
+}
 
-  if (rowsInRange.length === 0) {
-    return [];
+// O mesmo dia pode existir em duas granularidades: a linha diária e as 24
+// linhas hora a hora (o sync grava as duas para hoje/ontem, e elas ficam
+// guardadas). Somar as duas conta o gasto DUAS VEZES.
+//
+// A regra é por dia, e não pelo período inteiro: quando o dia tem linha
+// diária, ela manda; os dias que só têm horárias entram por elas (senão o
+// gasto desses dias sumiria da conta).
+export function dedupeMetricRowsByDay(rows: RawCampaignMetric[]) {
+  if (rows.length === 0) {
+    return rows;
   }
 
-  const dailyRows = rowsInRange.filter((row) => row.granularity === "day");
+  const daysWithDaily = new Set(
+    rows.filter((row) => row.granularity === "day").map((row) => row.date),
+  );
 
-  if (dailyRows.length > 0) {
-    return dailyRows;
-  }
-
-  return rowsInRange;
+  return rows.filter(
+    (row) => row.granularity === "day" || !daysWithDaily.has(row.date),
+  );
 }
 
 function selectChartGranularityForRange(rows: RawCampaignMetric[], range: DateRange) {
@@ -419,16 +464,24 @@ export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
       acc.frequency.push(row.frequency);
       // Receita estimada da linha (ROAS × gasto) para o ROAS ponderado.
       acc.revenue += row.roas * row.amountSpent;
-      // Gasto reconstruído na moeda original (BRL / taxa). Para BRL, taxa = 1.
-      acc.amountSpentOriginal +=
-        row.exchangeRate && row.exchangeRate > 0
-          ? row.amountSpent / row.exchangeRate
-          : row.amountSpent;
+      // Gasto reconstruído na moeda ORIGINAL — só das linhas que estão de fato
+      // em moeda estrangeira. Somar as linhas em real aqui misturaria reais com
+      // dólares no mesmo total e distorceria a cotação média (era o que fazia
+      // aparecer "cotação média R$ 3,41" num período de dólar a R$ 5,20).
+      if ((row.currency || "BRL").toUpperCase() !== "BRL") {
+        acc.foreignSpent += row.amountSpent;
+        acc.amountSpentOriginal +=
+          row.exchangeRate && row.exchangeRate > 0
+            ? row.amountSpent / row.exchangeRate
+            : row.amountSpent;
+      }
       return acc;
     },
     {
       amountSpent: 0,
       amountSpentOriginal: 0,
+      // Parcela do gasto (em BRL) que veio de contas em moeda estrangeira.
+      foreignSpent: 0,
       reach: 0,
       impressions: 0,
       clicks: 0,
@@ -442,6 +495,12 @@ export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
   );
 
   const currency = resolveCurrency(rows);
+  // Cotação média ponderada do período: só faz sentido sobre a parcela
+  // estrangeira (gasto convertido ÷ gasto na moeda original).
+  const averageRate =
+    totals.amountSpentOriginal > 0
+      ? totals.foreignSpent / totals.amountSpentOriginal
+      : 1;
   // CPC/CPM na moeda original derivam do gasto original.
   const cpcOriginal = totals.clicks > 0 ? totals.amountSpentOriginal / totals.clicks : 0;
   const cpmOriginal =
@@ -455,6 +514,7 @@ export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
 
   return {
     amountSpent: totals.amountSpent,
+    amountSpentWithTax: withMetaTaxes(totals.amountSpent),
     reach: totals.reach,
     impressions: totals.impressions,
     clicks: totals.clicks,
@@ -479,6 +539,9 @@ export function summarizeMetrics(rows: RawCampaignMetric[]): MetricTotals {
     frequency: average(totals.frequency),
     currency,
     amountSpentOriginal: totals.amountSpentOriginal,
+    amountSpentOriginalWithTax: withMetaTaxes(totals.amountSpentOriginal),
+    foreignSpent: totals.foreignSpent,
+    averageRate,
     cpcOriginal,
     cpmOriginal,
     costPerLeadOriginal,
@@ -530,7 +593,8 @@ function groupMetricsByKey(
     .sort((a, b) => a.sortValue - b.sortValue)
     .map<PerformancePoint>((item) => ({
       label: item.label,
-      amountSpent: Number(item.amountSpent.toFixed(2)),
+      // O grafico de investimento acompanha os cards: valor com impostos.
+      amountSpent: Number(withMetaTaxes(item.amountSpent).toFixed(2)),
       leads: Number(item.leads.toFixed(2)),
     }));
 }

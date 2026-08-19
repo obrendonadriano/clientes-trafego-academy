@@ -36,8 +36,8 @@ export function ComparisonChart({
   const data = [
     {
       label: "Investimento",
-      atual: Number(current.amountSpent.toFixed(2)),
-      anterior: Number(previous.amountSpent.toFixed(2)),
+      atual: Number(current.amountSpentWithTax.toFixed(2)),
+      anterior: Number(previous.amountSpentWithTax.toFixed(2)),
       isCurrency: true,
     },
     {
@@ -57,14 +57,14 @@ export function ComparisonChart({
   const hasAnyData = data.some((item) => item.atual > 0 || item.anterior > 0);
 
   return (
-    <div className="dashboard-card rounded-[1.5rem] border p-4 text-foreground">
-      <div className="mb-4">
-        <p className="text-sm leading-6 text-muted-foreground">{periodLabel}</p>
-        <h3 className="mt-1 font-display text-2xl font-semibold">
+    <div className="dashboard-card border p-[1.05rem] text-foreground">
+      <div className="mb-[1.05rem]">
+        <h3 className="font-display text-base font-medium">
           Comparativo de períodos
         </h3>
+        <p className="mt-1 text-xs text-muted-foreground">{periodLabel}</p>
       </div>
-      <div className="h-[260px]">
+      <div className="h-[220px]">
         {hasAnyData ? (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
@@ -86,7 +86,7 @@ export function ComparisonChart({
                   return [formatted, name === "atual" ? "Período atual" : "Período anterior"];
                 }}
                 contentStyle={{
-                  borderRadius: 18,
+                  borderRadius: 8,
                   border: "1px solid rgba(148,163,184,0.18)",
                   background: "rgba(9,18,29,0.92)",
                   color: "#f8fafc",
@@ -103,7 +103,7 @@ export function ComparisonChart({
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex h-full items-center justify-center rounded-[1.25rem] border border-dashed border-border/70 bg-background/50 px-6 text-center text-sm leading-6 text-muted-foreground dark:border-white/[0.12] dark:bg-white/[0.035]">
+          <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/50 px-6 text-center text-sm leading-6 text-muted-foreground">
             Ative a comparação com o período anterior para visualizar este gráfico.
           </div>
         )}

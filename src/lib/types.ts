@@ -20,6 +20,8 @@ export type Client = {
   whatsapp: string;
   notes: string;
   active: boolean;
+  // Codigo reservado usado no prefixo das campanhas da Meta.
+  campaignCode?: string;
   // Nicho do cliente (chave pré-definida ou "outro") + descrição livre quando
   // "outro". Alimenta o contexto da IA nos relatórios.
   segment?: string;
@@ -58,6 +60,7 @@ export type CampaignWithMetrics = {
   platform: string;
   clientId?: string | null;
   clientName?: string;
+  assignmentSource?: "unassigned" | "manual" | "code" | "conflict";
   // Categoria do resultado principal (derivada do objetivo da Meta).
   resultCategory?: string;
   metrics: CampaignMetric;
@@ -138,11 +141,9 @@ export type IntegrationSetting = {
 
 export type SyncStatus = {
   provider: IntegrationProvider;
-  intervalMinutes: number;
   status: "pending" | "running" | "success" | "error";
   lastAttemptAt?: string | null;
   lastSuccessAt?: string | null;
-  nextRunAt?: string | null;
   message?: string | null;
 };
 

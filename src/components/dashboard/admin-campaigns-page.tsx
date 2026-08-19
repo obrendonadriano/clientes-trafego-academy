@@ -1,14 +1,18 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { usePathname, useRouter } from "next/navigation";
-import { useActionState, useMemo, useState, useTransition } from "react";
+import { useActionState, useMemo, useState } from "react";
+import { syncMetaAction } from "@/app/admin/campanhas/actions";
 import {
-  importMetaCampaignsAction,
-  importMetaInsightsAction,
-} from "@/app/admin/campanhas/actions";
+  CampaignLevelTabs,
+  type CampaignLevel,
+} from "@/components/dashboard/campaign-level-tabs";
+import { AdLevelTable } from "@/components/dashboard/ad-level-table";
+import { usePeriodScope } from "@/components/shell/period-scope";
 import { CampaignsTable } from "@/components/dashboard/campaigns-table";
+import { MetaSyncOverlay } from "@/components/dashboard/meta-sync-overlay";
 import { MetricCard } from "@/components/dashboard/metric-card";
+import { TaxInfo } from "@/components/dashboard/tax-info";
 
 const CampaignBreakdownChart = dynamic(
   () =>
@@ -24,25 +28,26 @@ const CampaignBreakdownChart = dynamic(
     ),
   },
 );
-import {
-  PeriodFilter,
-  type PeriodFilterValue,
-} from "@/components/dashboard/period-filter";
 import { FormPendingButton } from "@/components/ui/form-pending-button";
 import {
   filterMetricsByRange,
   formatMoney,
   getDateRangeForPeriod,
-  getDefaultCustomRange,
   getReferenceNowForPeriod,
   sumResults,
   summarizeMetrics,
 } from "@/lib/dashboard-metrics";
 import type { CampaignWithMetrics, RawCampaignMetric } from "@/lib/types";
+import type { AdLevelRow } from "@/lib/data/ad-levels";
 
 type AdminCampaignsPageProps = {
   campaigns: CampaignWithMetrics[];
   metricRows: RawCampaignMetric[];
+  adSets: AdLevelRow[];
+  adSetsNotice?: string;
+  ads: AdLevelRow[];
+  adsNotice?: string;
+  initialLevel?: CampaignLevel;
 };
 
 function formatCurrency(value: number) {
@@ -64,29 +69,16 @@ function formatMultiplier(value: number) {
 export function AdminCampaignsPage({
   campaigns,
   metricRows,
+  adSets,
+  adSetsNotice,
+  ads,
+  adsNotice,
+  initialLevel = "campaign",
 }: AdminCampaignsPageProps) {
-  const [state, importAction] = useActionState(importMetaCampaignsAction, {});
-  const [insightsState, importInsightsAction] = useActionState(
-    importMetaInsightsAction,
-    {},
-  );
-  const router = useRouter();
-  const pathname = usePathname();
-  const [isApplying, startTransition] = useTransition();
-  const [period, setPeriod] = useState<PeriodFilterValue>("Últimos 30 dias");
-  const [comparePrevious, setComparePrevious] = useState(true);
-  const [customRange, setCustomRange] = useState(() => getDefaultCustomRange());
-
-  // Range custom além da janela padrão (92 dias) exige refetch no servidor.
-  function handleApplyCustomRange() {
-    setPeriod("Personalizado");
-    startTransition(() => {
-      router.replace(
-        `${pathname}?start=${customRange.start}&end=${customRange.end}`,
-        { scroll: false },
-      );
-    });
-  }
+  const [activeLevel, setActiveLevel] = useState<CampaignLevel>(initialLevel);
+  const [syncState, syncMeta, isSyncing] = useActionState(syncMetaAction, {});
+  const scope = usePeriodScope();
+  const { period, customRange } = scope;
 
   const selected = useMemo(() => {
     const referenceDate = getReferenceNowForPeriod(metricRows, period, customRange);
@@ -113,9 +105,11 @@ export function AdminCampaignsPage({
           ...campaign,
           metrics: {
             ...campaign.metrics,
-            amountSpent: formatCurrency(summary.amountSpent),
+            // Investido exibido COM impostos; o custo por resultado abaixo
+            // segue sobre o valor puro, para bater com a Meta.
+            amountSpent: formatCurrency(summary.amountSpentWithTax),
             amountSpentOriginal: isForeign
-              ? formatMoney(summary.amountSpentOriginal, summary.currency)
+              ? formatMoney(summary.amountSpentOriginalWithTax, summary.currency)
               : undefined,
             clicks: String(Math.round(summary.clicks)),
             ctr: formatPercent(summary.ctr),
@@ -152,6 +146,8 @@ export function AdminCampaignsPage({
 
   return (
     <div className="space-y-6">
+      <MetaSyncOverlay open={isSyncing} />
+
       <div>
         <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">
           Campanhas
@@ -164,16 +160,6 @@ export function AdminCampaignsPage({
         </p>
       </div>
 
-      <PeriodFilter
-        active={period}
-        onChange={setPeriod}
-        comparePrevious={comparePrevious}
-        onComparePreviousChange={setComparePrevious}
-        customRange={customRange}
-        onCustomRangeChange={setCustomRange}
-        onApplyCustomRange={handleApplyCustomRange}
-        isApplying={isApplying}
-      />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
@@ -183,7 +169,8 @@ export function AdminCampaignsPage({
         />
         <MetricCard
           label="Investimento total"
-          value={formatCurrency(selected.totals.amountSpent)}
+          value={formatCurrency(selected.totals.amountSpentWithTax)}
+          info={<TaxInfo />}
           change="Meta Ads importado"
         />
         <MetricCard
@@ -206,49 +193,33 @@ export function AdminCampaignsPage({
               Meta Ads
             </h4>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Importe campanhas conectadas pela Meta e traga para o sistema.
+              Um botão só atualiza campanhas, conjuntos, anúncios e métricas de
+              todas as contas conectadas. As abas usam o último snapshot salvo
+              no Supabase e não aguardam a Meta para abrir.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <form action={importAction}>
-              <FormPendingButton size="lg" idleLabel="Importar campanhas" pendingLabel="Importando campanhas...">
-                Importar campanhas
-              </FormPendingButton>
-            </form>
-            <form action={importInsightsAction}>
+            <form action={syncMeta}>
               <FormPendingButton
                 size="lg"
-                variant="outline"
-                idleLabel="Importar métricas"
-                pendingLabel="Importando métricas..."
+                idleLabel="Atualizar dados da Meta"
+                pendingLabel="Atualizando... pode levar alguns minutos"
               >
-                Importar métricas
+                Atualizar dados da Meta
               </FormPendingButton>
             </form>
           </div>
         </div>
 
-        {state.error ? (
+        {syncState.error ? (
           <p className="mt-4 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {state.error}
+            {syncState.error}
           </p>
         ) : null}
 
-        {state.success ? (
+        {syncState.success ? (
           <p className="mt-4 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary">
-            {state.success}
-          </p>
-        ) : null}
-
-        {insightsState.error ? (
-          <p className="mt-4 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {insightsState.error}
-          </p>
-        ) : null}
-
-        {insightsState.success ? (
-          <p className="mt-4 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary">
-            {insightsState.success}
+            {syncState.success}
           </p>
         ) : null}
       </div>
@@ -262,7 +233,24 @@ export function AdminCampaignsPage({
         periodLabel={period}
       />
 
-      <CampaignsTable campaigns={selected.campaigns} editable />
+      <div className="space-y-3">
+        <CampaignLevelTabs
+          activeLevel={activeLevel}
+          onLevelChange={setActiveLevel}
+        />
+        {activeLevel === "campaign" ? (
+          <CampaignsTable campaigns={selected.campaigns} editable />
+        ) : activeLevel === "adset" ? (
+          <AdLevelTable
+            level="adset"
+            rows={adSets}
+            notice={adSetsNotice}
+            editable
+          />
+        ) : (
+          <AdLevelTable level="ad" rows={ads} notice={adsNotice} editable />
+        )}
+      </div>
     </div>
   );
 }
