@@ -323,6 +323,82 @@ async function upsertMetricRows(rows: MetricImportRow[]) {
   }
 }
 
+function metricRowKey(
+  row: Pick<MetricImportRow, "campaign_id" | "date" | "granularity" | "hour_bucket">,
+) {
+  return `${row.campaign_id}:${row.date}:${row.granularity}:${row.hour_bucket}`;
+}
+
+// A Meta pode revisar atribuições e até deixar de devolver uma linha diária que
+// existia numa sincronização anterior. Upsert sozinho não remove essa sobra e o
+// painel continua somando gasto/resultados antigos. Depois de gravar o retrato
+// novo, removemos somente as chaves que não vieram mais da Meta no mesmo período.
+async function removeStaleMetricRows(input: {
+  campaignIds: string[];
+  importedRows: MetricImportRow[];
+  startDate: string;
+  endDate: string;
+}) {
+  const adminClient = createSupabaseAdminClient();
+
+  if (!adminClient || input.campaignIds.length === 0) {
+    return;
+  }
+
+  const importedKeys = new Set(input.importedRows.map(metricRowKey));
+  const staleIds: string[] = [];
+
+  for (const campaignBatch of chunk(input.campaignIds, 100)) {
+    let offset = 0;
+
+    while (true) {
+      const { data, error } = await adminClient
+        .from("campaign_metrics")
+        .select("id, campaign_id, date, granularity, hour_bucket")
+        .in("campaign_id", campaignBatch)
+        .gte("date", input.startDate)
+        .lte("date", input.endDate)
+        .order("id", { ascending: true })
+        .range(offset, offset + 999);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const rows = (data ?? []) as Array<{
+        id: string;
+        campaign_id: string;
+        date: string;
+        granularity: "day" | "hour";
+        hour_bucket: number;
+      }>;
+
+      for (const row of rows) {
+        if (!importedKeys.has(metricRowKey(row))) {
+          staleIds.push(row.id);
+        }
+      }
+
+      if (rows.length < 1000) {
+        break;
+      }
+
+      offset += rows.length;
+    }
+  }
+
+  for (const staleBatch of chunk(staleIds, 500)) {
+    const { error } = await adminClient
+      .from("campaign_metrics")
+      .delete()
+      .in("id", staleBatch);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  }
+}
+
 async function upsertAdLevelMetricRows(rows: AdLevelMetricImportRow[]) {
   const adminClient = createSupabaseAdminClient();
 
@@ -515,13 +591,10 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
     throw new Error("Supabase admin não configurado para importar métricas.");
   }
 
-  // Refresh incremental diário: atribuições recentes ainda podem mudar, então
-  // reimportamos 7 dias. A primeira carga e os domingos refazem 30 dias para
-  // reconciliar conversões atrasadas sem pagar esse custo em toda execução.
-  const dailyPreset =
-    !account.lastSyncedAt || new Date().getUTCDay() === 0
-      ? "last_30d"
-      : "last_7d";
+  // A atualização é manual e o usuário espera um retrato exato ao clicar.
+  // Reconsultamos sempre os 30 dias para incorporar revisões de atribuição da
+  // Meta, em vez de manter conversões antigas fora de uma janela incremental.
+  const dailyPreset = "last_30d";
 
   const [
     last30DaysInsights,
@@ -742,19 +815,25 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
   const uniqueRows = Array.from(
     new Map(
       rows.map((row) => [
-        `${row.campaign_id}:${row.date}:${row.granularity}:${row.hour_bucket}`,
+        metricRowKey(row),
         row,
       ] as const),
     ).values(),
   );
 
-  // Conta sem campanhas ativas ou sem dados no período não é erro — registra
-  // zero métricas e segue (campanhas pausadas mantêm o histórico já salvo).
-  if (uniqueRows.length === 0) {
-    return 0;
+  // Primeiro grava o retrato novo; só depois remove as linhas que não vieram
+  // mais. Assim, uma falha no upsert nunca apaga o último snapshot válido.
+  if (uniqueRows.length > 0) {
+    await upsertMetricRows(uniqueRows);
   }
 
-  await upsertMetricRows(uniqueRows);
+  await removeStaleMetricRows({
+    campaignIds: (campaigns as CampaignLookupRow[]).map((campaign) => campaign.id),
+    importedRows: uniqueRows,
+    // last_30d fecha em ontem e a consulta "today" completa o dia corrente.
+    startDate: saoPauloIsoDay(30),
+    endDate: saoPauloIsoDay(),
+  });
 
   return uniqueRows.length;
 }

@@ -8,6 +8,7 @@ import {
 import type { MetricsWindow } from "@/lib/data/date-range";
 import { clampMetricsWindowForRole } from "@/lib/data/date-range";
 import { getClosingSourceData } from "@/lib/data/queries";
+import { getCurrencyRateToBrl } from "@/lib/meta-ads";
 import { breakdownMetaTaxes, type TaxBreakdown } from "@/lib/taxes";
 import type { RawCampaignMetric, User } from "@/lib/types";
 
@@ -66,22 +67,44 @@ function countDays(window: MetricsWindow) {
   return Math.max(1, Math.round((end - start) / 86400000) + 1);
 }
 
-function summarizeRows(rows: RawCampaignMetric[]) {
+function saoPauloIsoDay() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function summarizeRows(
+  rows: RawCampaignMetric[],
+  currentRates: ReadonlyMap<string, number>,
+) {
   return rows.reduce(
     (accumulator, row) => {
-      accumulator.amountSpent += row.amountSpent;
+      const currency = (row.currency || "BRL").toUpperCase();
+      const isForeign = currency !== "BRL";
+      const storedRate = row.exchangeRate && row.exchangeRate > 0 ? row.exchangeRate : 1;
+      const amountSpentOriginal = isForeign
+        ? row.amountSpent / storedRate
+        : row.amountSpent;
+      const currentRate = isForeign
+        ? currentRates.get(currency) ?? storedRate
+        : 1;
+      const amountSpent = isForeign
+        ? amountSpentOriginal * currentRate
+        : row.amountSpent;
+
+      accumulator.amountSpent += amountSpent;
       accumulator.results += row.results;
       accumulator.leads += getLeadEquivalent(row);
       accumulator.clicks += row.clicks;
       accumulator.impressions += row.impressions;
       // Só as linhas em moeda estrangeira entram na reconstrução do valor
       // original — somar as linhas em real aqui misturaria reais com dólares.
-      if ((row.currency || "BRL").toUpperCase() !== "BRL") {
-        accumulator.foreignSpent += row.amountSpent;
-        accumulator.amountSpentOriginal +=
-          row.exchangeRate && row.exchangeRate > 0
-            ? row.amountSpent / row.exchangeRate
-            : row.amountSpent;
+      if (isForeign) {
+        accumulator.foreignSpent += amountSpent;
+        accumulator.amountSpentOriginal += amountSpentOriginal;
       }
       return accumulator;
     },
@@ -108,7 +131,30 @@ export async function getClosingData(
 
   // Sem isso o mesmo dia entraria duas vezes (linha diária + linhas horárias)
   // e o fechamento cobraria quase o dobro.
-  const metricRows = dedupeMetricRowsByDay(source.metricRows);
+  // Fechamento é cobrança, então usa somente dias consolidados. A Meta expõe
+  // valores intradiários no endpoint "Hoje", mas ainda não os inclui no total
+  // consolidado do Gerenciador; somá-los aqui fazia o fechamento ficar maior.
+  const currentDay = saoPauloIsoDay();
+  const metricRows = dedupeMetricRowsByDay(source.metricRows).filter(
+    (row) => row.date < currentDay,
+  );
+  const foreignCurrencies = [
+    ...new Set(
+      metricRows
+        .map((row) => (row.currency || "BRL").toUpperCase())
+        .filter((currency) => currency !== "BRL"),
+    ),
+  ];
+  // O fechamento usa uma única cotação atual por moeda, como no conversor de
+  // dólar. O valor original é reconstruído pela taxa gravada em cada linha.
+  const currentRates = new Map(
+    await Promise.all(
+      foreignCurrencies.map(async (currency) => [
+        currency,
+        await getCurrencyRateToBrl(currency),
+      ] as const),
+    ),
+  );
   const rowsByCampaign = new Map<string, RawCampaignMetric[]>();
 
   for (const row of metricRows) {
@@ -120,7 +166,7 @@ export async function getClosingData(
   const campaigns: ClosingCampaignRow[] = source.campaigns
     .map((campaign) => {
       const rows = rowsByCampaign.get(campaign.id) ?? [];
-      const totals = summarizeRows(rows);
+      const totals = summarizeRows(rows, currentRates);
 
       return {
         id: campaign.id,
@@ -140,7 +186,7 @@ export async function getClosingData(
     .filter((campaign) => campaign.amountSpent > 0)
     .sort((a, b) => b.amountSpent - a.amountSpent);
 
-  const overall = summarizeRows(metricRows);
+  const overall = summarizeRows(metricRows, currentRates);
   const currency = resolveCurrency(metricRows);
 
   return {
@@ -157,9 +203,8 @@ export async function getClosingData(
     amountSpentOriginal: overall.amountSpentOriginal,
     foreignSpent: overall.foreignSpent,
     mixedCurrencies: hasMixedCurrencies(metricRows),
-    // Cotação média ponderada: gasto convertido da parcela estrangeira dividido
-    // pelo gasto dela na moeda original. Usar o total (com as contas em real
-    // junto) dava uma "cotação" muito abaixo da real.
+    // Cotação atual média ponderada: gasto convertido da parcela estrangeira
+    // dividido pelo gasto dela na moeda original. Contas em real ficam de fora.
     averageRate:
       overall.amountSpentOriginal > 0
         ? overall.foreignSpent / overall.amountSpentOriginal
