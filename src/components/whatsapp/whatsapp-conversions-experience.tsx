@@ -527,6 +527,7 @@ function QrConnection({
   const [timedOut, setTimedOut] = useState(false);
   const inFlight = useRef(false);
   const mounted = useRef(true);
+  const nextRefreshAtRef = useRef(0);
 
   const loadQr = useCallback(async () => {
     if (inFlight.current || document.visibilityState === "hidden") {
@@ -565,6 +566,7 @@ function QrConnection({
         const renewAt = Date.now() + QR_RENEW_MS;
         setNow(Date.now());
         setNextRefreshAt(renewAt);
+        nextRefreshAtRef.current = renewAt;
       }
     } catch (loadError) {
       if (mounted.current) {
@@ -573,7 +575,9 @@ function QrConnection({
             ? loadError.message
             : "Não foi possível buscar o código agora.",
         );
-        setNextRefreshAt(Date.now() + 3_000);
+        const retryAt = Date.now() + 3_000;
+        setNextRefreshAt(retryAt);
+        nextRefreshAtRef.current = retryAt;
       }
     } finally {
       inFlight.current = false;
@@ -595,7 +599,7 @@ function QrConnection({
       }
       if (
         document.visibilityState === "visible" &&
-        current >= nextRefreshAt
+        current >= nextRefreshAtRef.current
       ) {
         void loadQr();
       }
@@ -615,7 +619,7 @@ function QrConnection({
       window.clearInterval(tick);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [loadQr, nextRefreshAt, startedAt]);
+  }, [loadQr, startedAt]);
 
   const remaining = Math.max(0, nextRefreshAt - now);
   const progress = remaining / QR_RENEW_MS;
