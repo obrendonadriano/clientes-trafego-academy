@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { ConversionsPage } from "@/components/conversions/conversions-page";
+import { WhatsappConversionsExperience } from "@/components/whatsapp/whatsapp-conversions-experience";
 import { ListSkeleton } from "@/components/dashboard/skeletons";
 import { PageHeader } from "@/components/shell/page-header";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -46,15 +47,24 @@ async function ConversionsSection({
     }),
     user.role === "admin"
       ? getAppShellData(user)
-      : Promise.resolve({ clients: [], campaigns: [], syncStatus: null }),
+      : Promise.resolve({
+          clients: [],
+          campaigns: [],
+          syncStatus: null,
+          whatsappSession: null,
+        }),
   ]);
+
+  if (user.role === "client") {
+    return <WhatsappConversionsExperience data={data} tab={tab} period={period} />;
+  }
 
   return (
     <ConversionsPage
       data={data}
       tab={tab}
       period={period}
-      isAdmin={user.role === "admin"}
+      isAdmin
       clients={shell.clients}
       selectedClientId={clientId}
     />

@@ -12,7 +12,8 @@ export async function AppShellContainer({
   user: User;
   children: ReactNode;
 }) {
-  const { clients, campaigns, syncStatus } = await getAppShellData(user);
+  const { clients, campaigns, syncStatus, whatsappSession } =
+    await getAppShellData(user);
 
   const searchEntries = [
     ...clients.map((client) => ({
@@ -37,6 +38,7 @@ export async function AppShellContainer({
       clients={clients}
       searchEntries={searchEntries}
       syncStatus={syncStatus}
+      whatsappSession={whatsappSession}
       maxRangeDays={user.role === "client" ? CLIENT_MAX_RANGE_DAYS : undefined}
       maxRangeLabel={user.role === "client" ? "3 meses" : undefined}
     >

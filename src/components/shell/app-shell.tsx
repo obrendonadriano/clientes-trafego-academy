@@ -10,8 +10,11 @@ import { MobileBottomNav } from "@/components/shell/mobile-bottom-nav";
 import { SubTabs } from "@/components/shell/sub-tabs";
 import { RevalidateOnFocus } from "@/components/dashboard/revalidate-on-focus";
 import { ToastProvider } from "@/components/ui/toast";
+import { WhatsappGlobalAlert } from "@/components/whatsapp/whatsapp-global-alert";
+import { WhatsappSessionProvider } from "@/components/whatsapp/whatsapp-session-provider";
 import { findActiveSection } from "@/lib/navigation";
 import type { SyncStatus, User } from "@/lib/types";
+import type { WhatsappSession } from "@/lib/whatsapp-session";
 
 type AppShellProps = {
   children: ReactNode;
@@ -19,6 +22,7 @@ type AppShellProps = {
   clients: ClientOption[];
   searchEntries: SearchEntry[];
   syncStatus?: SyncStatus | null;
+  whatsappSession: WhatsappSession | null;
   maxRangeDays?: number;
   maxRangeLabel?: string;
 };
@@ -30,6 +34,7 @@ export function AppShell({
   clients,
   searchEntries,
   syncStatus,
+  whatsappSession,
   maxRangeDays,
   maxRangeLabel,
 }: AppShellProps) {
@@ -44,6 +49,10 @@ export function AppShell({
 
   return (
     <ToastProvider>
+    <WhatsappSessionProvider
+      enabled={user.role === "client"}
+      initialSession={whatsappSession}
+    >
     <div className="fixed inset-x-0 bottom-[env(safe-area-inset-bottom)] top-[env(safe-area-inset-top)] min-h-0 w-full overflow-hidden bg-[#ececf2] lg:px-4 lg:py-4 dark:bg-[#161826]">
       <div className="app-shell-frame flex h-full min-h-0 w-full overflow-hidden bg-background lg:rounded-[0.875rem] lg:border lg:border-border lg:shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
         <RevalidateOnFocus />
@@ -61,6 +70,8 @@ export function AppShell({
 
           {showsCampaignTabsInContent ? null : <SubTabs tabs={section.subTabs} />}
 
+          {user.role === "client" ? <WhatsappGlobalAlert /> : null}
+
           {/* A moldura não rola: somente o conteúdo desta aba. No celular, o
               padding inferior preserva a área ocupada pela navegação fixa. */}
           <main
@@ -76,6 +87,7 @@ export function AppShell({
         </div>
       </div>
     </div>
+    </WhatsappSessionProvider>
     </ToastProvider>
   );
 }

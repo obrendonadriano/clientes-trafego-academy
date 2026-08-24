@@ -28,6 +28,8 @@ import {
 } from "@/lib/types";
 import { getSupabasePublishableKey, getSupabaseUrl } from "@/lib/supabase/env";
 import { withMetaTaxes } from "@/lib/taxes";
+import { getCurrentWhatsappSession } from "@/lib/data/whatsapp-sessions";
+import type { WhatsappSession } from "@/lib/whatsapp-session";
 
 export const CACHE_TAGS = {
   users: "users",
@@ -1276,12 +1278,16 @@ export type AppShellData = {
   clients: { id: string; name: string }[];
   campaigns: { id: string; name: string; clientName?: string }[];
   syncStatus: SyncStatus | null;
+  whatsappSession: WhatsappSession | null;
 };
 
 export async function getAppShellData(user: User): Promise<AppShellData> {
   if (user.role !== "admin") {
-    const { syncStatus } = await getClientPortalShellData(user);
-    return { clients: [], campaigns: [], syncStatus };
+    const [{ syncStatus }, whatsappSession] = await Promise.all([
+      getClientPortalShellData(user),
+      getCurrentWhatsappSession(),
+    ]);
+    return { clients: [], campaigns: [], syncStatus, whatsappSession };
   }
 
   if (!isSupabaseAdminConfigured()) {
@@ -1298,6 +1304,7 @@ export async function getAppShellData(user: User): Promise<AppShellData> {
       })),
       syncStatus:
         snapshot.syncStatuses.find((status) => status.provider === "meta_ads") ?? null,
+      whatsappSession: null,
     };
   }
 
@@ -1316,6 +1323,7 @@ export async function getAppShellData(user: User): Promise<AppShellData> {
     })),
     syncStatus:
       syncStatuses.find((status) => status.provider === "meta_ads") ?? null,
+    whatsappSession: null,
   };
 }
 
