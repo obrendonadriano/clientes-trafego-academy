@@ -20,6 +20,7 @@ type WahaQrResponse = {
 
 export async function GET(request: Request) {
   try {
+    const statusOnly = new URL(request.url).searchParams.get("status") === "1";
     const { clientId } = await authenticateWhatsappRequest(request);
     const config = await getWahaConfig();
     const record = await getWhatsappSessionRecord(clientId);
@@ -49,7 +50,7 @@ export async function GET(request: Request) {
       ultimo_erro: status === "FAILED" ? "A sessão WAHA informou uma falha." : null,
     });
 
-    if (status !== "SCAN_QR_CODE") {
+    if (status !== "SCAN_QR_CODE" || statusOnly) {
       return Response.json({ status });
     }
 

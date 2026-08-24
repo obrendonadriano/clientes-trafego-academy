@@ -165,6 +165,29 @@ export function WhatsappConversionsExperience(
     }
   }, [applyApiStatus, authenticatedFetch, refreshSession]);
 
+  const checkConnectionStatus = useCallback(async () => {
+    if (document.visibilityState === "hidden") {
+      return;
+    }
+
+    try {
+      const response = await authenticatedFetch("/whatsapp/qr?status=1");
+      const payload = await readPayload(response);
+      if (!response.ok) {
+        throw new Error(responseError(response, payload));
+      }
+      applyApiStatus(payload.status);
+      await refreshSession();
+      setRequestError(null);
+    } catch (error) {
+      setRequestError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível consultar o andamento da conexão.",
+      );
+    }
+  }, [applyApiStatus, authenticatedFetch, refreshSession]);
+
   const restartConnection = useCallback(async () => {
     setRequestError(null);
     setIsRequesting(true);
@@ -237,6 +260,7 @@ export function WhatsappConversionsExperience(
       <PreparingConnection
         error={requestError}
         startedAt={attemptStartedAt}
+        onCheckStatus={checkConnectionStatus}
         onRestart={restartConnection}
         isRequesting={isRequesting}
       />
@@ -438,11 +462,13 @@ function OnboardingBenefit({
 function PreparingConnection({
   error,
   startedAt,
+  onCheckStatus,
   onRestart,
   isRequesting,
 }: {
   error: string | null;
   startedAt: number | null;
+  onCheckStatus: () => Promise<void>;
   onRestart: () => Promise<void>;
   isRequesting: boolean;
 }) {
@@ -456,6 +482,37 @@ function PreparingConnection({
     const timer = window.setTimeout(() => setTimedOut(true), remaining);
     return () => window.clearTimeout(timer);
   }, [startedAt]);
+
+  useEffect(() => {
+    let checking = false;
+
+    const check = async () => {
+      if (checking || document.visibilityState === "hidden") {
+        return;
+      }
+      checking = true;
+      try {
+        await onCheckStatus();
+      } finally {
+        checking = false;
+      }
+    };
+
+    const firstCheck = window.setTimeout(() => void check(), 750);
+    const interval = window.setInterval(() => void check(), 3_000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void check();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.clearTimeout(firstCheck);
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [onCheckStatus]);
 
   return (
     <Card>
