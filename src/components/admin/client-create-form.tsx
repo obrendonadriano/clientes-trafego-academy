@@ -23,6 +23,7 @@ import {
   type AdminActionState,
 } from "@/app/admin/actions";
 import { CampaignMultiSelect } from "@/components/admin/campaign-multi-select";
+import { WabaHelp } from "@/components/admin/waba-help";
 import {
   Field,
   IconInput,
@@ -413,6 +414,8 @@ export function ClientCreateForm({ campaigns }: ClientCreateFormProps) {
             hidden={current !== 3}
             className="min-w-0 space-y-4"
           >
+            <WabaHelp creationFlow />
+
             <div className="grid min-w-0 gap-4 md:grid-cols-2">
               <Field
                 label="ID do Dataset (antigo Pixel)"
@@ -429,7 +432,7 @@ export function ClientCreateForm({ campaigns }: ClientCreateFormProps) {
               </Field>
 
               <Field
-                label="WABA ID"
+                label="WABA ID da Meta (não é do WAHA)"
                 htmlFor="metaWabaId"
                 error={fieldErrors.metaWabaId}
               >
@@ -440,6 +443,9 @@ export function ClientCreateForm({ campaigns }: ClientCreateFormProps) {
                   pattern="[0-9]{5,30}"
                   placeholder="987654321098765"
                 />
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Não use o número do telefone nem o ID da sessão do WAHA.
+                </p>
               </Field>
 
               <Field

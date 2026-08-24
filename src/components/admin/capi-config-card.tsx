@@ -8,6 +8,7 @@ import {
   type CapiConfigState,
 } from "@/app/admin/conversoes/capi-actions";
 import { Field } from "@/components/admin/client-form-fields";
+import { WabaHelp } from "@/components/admin/waba-help";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormPendingButton } from "@/components/ui/form-pending-button";
 import { Input } from "@/components/ui/input";
@@ -71,6 +72,8 @@ export function CapiConfigCard({ config }: { config: CapiConfig }) {
       </CardHeader>
 
       <CardContent className="min-w-0 space-y-4">
+        <WabaHelp />
+
         <form action={save} className="space-y-4">
           <input type="hidden" name="clientId" value={config.clientId} />
 
@@ -90,7 +93,7 @@ export function CapiConfigCard({ config }: { config: CapiConfig }) {
               </p>
             </Field>
 
-            <Field label="WABA ID (conta do WhatsApp Business)" htmlFor="capi_waba">
+            <Field label="WABA ID da Meta (não é do WAHA)" htmlFor="capi_waba">
               <Input
                 id="capi_waba"
                 name="wabaId"
@@ -100,7 +103,8 @@ export function CapiConfigCard({ config }: { config: CapiConfig }) {
                 inputMode="numeric"
               />
               <p className="text-xs leading-5 text-muted-foreground">
-                ID da conta do WhatsApp Business vinculada ao Dataset deste cliente.
+                Use o ID da conta oficial do WhatsApp do próprio cliente na Meta,
+                nunca o número do telefone ou o nome da sessão do WAHA.
               </p>
             </Field>
           </div>

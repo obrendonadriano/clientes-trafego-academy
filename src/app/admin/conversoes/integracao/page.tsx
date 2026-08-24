@@ -112,7 +112,7 @@ async function CapiOverviewSection() {
                               {!client.datasetId
                                 ? "Falta o Dataset"
                                 : !client.wabaId
-                                  ? "Falta o WABA ID"
+                                  ? "Falta vincular a conta oficial na Meta"
                                   : "Falta o token"}
                             </span>
                           )}
