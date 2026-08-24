@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Download, LoaderCircle } from "lucide-react";
+import { Download, LoaderCircle, TriangleAlert } from "lucide-react";
 import { TaxInfo } from "@/components/dashboard/tax-info";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +25,28 @@ function money(value: number, currency = "BRL") {
 
 function integer(value: number) {
   return new Intl.NumberFormat("pt-BR").format(Math.round(value));
+}
+
+function diaCurto(iso: string) {
+  const [ano, mes, dia] = iso.split("-");
+  return `${dia}/${mes}/${ano}`;
+}
+
+function horario(iso: string | null) {
+  if (!iso) {
+    return null;
+  }
+
+  const data = new Date(iso);
+  if (Number.isNaN(data.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "America/Sao_Paulo",
+  }).format(data);
 }
 
 export function ClosingPage({
@@ -157,6 +179,26 @@ export function ClosingPage({
             · {data.periodLabel} ({data.dayCount}{" "}
             {data.dayCount === 1 ? "dia" : "dias"})
           </p>
+
+          {/* O último dia importado quase sempre está pela metade: a carga roda
+              no meio do dia. Avisar evita fechar um período incompleto. */}
+          {data.lastMetricDate && data.lastMetricDate < data.window.endDate ? (
+            <p className="flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-300">
+              <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+              <span>
+                Os dados vão até{" "}
+                <strong>{diaCurto(data.lastMetricDate)}</strong> e o período
+                escolhido termina em{" "}
+                <strong>{diaCurto(data.window.endDate)}</strong>. O último dia
+                importado costuma vir incompleto — use{" "}
+                <strong>Atualizar dados da Meta</strong> em Visão →
+                Sincronização antes de fechar.
+                {horario(data.syncedAt)
+                  ? ` Última importação: ${horario(data.syncedAt)}.`
+                  : ""}
+              </span>
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 

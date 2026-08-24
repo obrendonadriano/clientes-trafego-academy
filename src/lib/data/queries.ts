@@ -1198,6 +1198,9 @@ export async function getClosingSourceData(
   clientName: string;
   campaigns: CampaignWithMetrics[];
   metricRows: RawCampaignMetric[];
+  // Quando a Meta foi lida pela ultima vez. O fechamento usa para avisar que
+  // o periodo pode estar incompleto.
+  syncedAt: string | null;
 }> {
   if (user.role !== "admin") {
     const portal = await getClientPortalData(user, window);
@@ -1208,6 +1211,7 @@ export async function getClosingSourceData(
       clientName: user.clientName ?? user.name,
       campaigns: portal.campaigns,
       metricRows: portal.metricRows.filter((row) => allowedIds.has(row.campaignId)),
+      syncedAt: portal.syncStatus?.lastSuccessAt ?? null,
     };
   }
 
@@ -1231,12 +1235,16 @@ export async function getClosingSourceData(
           row.date >= window.startDate &&
           row.date <= window.endDate,
       ),
+      syncedAt:
+        snapshot.syncStatuses.find((status) => status.provider === "meta_ads")
+          ?.lastSuccessAt ?? null,
     };
   }
 
-  const [clients, allBases] = await Promise.all([
+  const [clients, allBases, syncStatuses] = await Promise.all([
     fetchClientsCached(),
     fetchCampaignBasesCached(),
+    fetchSyncStatusesCached(),
   ]);
 
   const allowedIds = clientId ? await getCampaignIdsForClient(clientId) : null;
@@ -1256,6 +1264,9 @@ export async function getClosingSourceData(
     clientName: client?.companyName ?? "Todos os clientes",
     campaigns: withWindowMetrics(bases, metricRows),
     metricRows,
+    syncedAt:
+      syncStatuses.find((status) => status.provider === "meta_ads")
+        ?.lastSuccessAt ?? null,
   };
 }
 

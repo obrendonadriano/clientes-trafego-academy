@@ -50,6 +50,10 @@ export type ClosingData = {
   // true quando o período junta contas em real e em moeda estrangeira: aí não
   // existe "total na moeda original", só a parcela estrangeira.
   mixedCurrencies: boolean;
+  // Último dia do período que já tem métrica gravada, e quando a Meta foi lida
+  // pela última vez. Servem para avisar que o fechamento pode estar incompleto.
+  lastMetricDate: string | null;
+  syncedAt: string | null;
   generatedAt: string;
 };
 
@@ -188,6 +192,16 @@ export async function getClosingData(
 
   const overall = summarizeRows(metricRows, currentRates);
   const currency = resolveCurrency(metricRows);
+  // Até que dia o período já tem métrica gravada. O dia mais recente costuma
+  // vir pela metade (a importação roda no meio do dia), por isso o fechamento
+  // avisa quando o período pedido vai além do que já foi sincronizado.
+  const lastMetricDate =
+    metricRows.length > 0
+      ? metricRows.reduce(
+          (maior, row) => (row.date > maior ? row.date : maior),
+          metricRows[0].date,
+        )
+      : null;
 
   return {
     window,
@@ -209,6 +223,8 @@ export async function getClosingData(
       overall.amountSpentOriginal > 0
         ? overall.foreignSpent / overall.amountSpentOriginal
         : 1,
+    lastMetricDate,
+    syncedAt: source.syncedAt,
     generatedAt: new Date().toISOString(),
   };
 }

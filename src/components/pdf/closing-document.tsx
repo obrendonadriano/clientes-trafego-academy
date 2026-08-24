@@ -284,6 +284,17 @@ export function ClosingDocument({ data }: { data: ClosingData }) {
           </Text>
         )}
 
+        {data.lastMetricDate && data.lastMetricDate < data.window.endDate ? (
+          <Text style={[styles.note, { color: "#a8620b" }]}>
+            Atenção: os dados importados vão até{" "}
+            {data.lastMetricDate.split("-").reverse().join("/")}, e o período
+            deste fechamento termina em{" "}
+            {data.window.endDate.split("-").reverse().join("/")}. O último dia
+            importado costuma vir incompleto — vale rodar a atualização da Meta
+            e gerar o documento de novo antes de enviar ao cliente.
+          </Text>
+        ) : null}
+
         <Text style={styles.note}>
           Explicação oficial da Meta sobre os impostos: {META_TAX_INFO_URL}
         </Text>
