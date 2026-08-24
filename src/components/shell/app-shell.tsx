@@ -9,6 +9,7 @@ import type { SearchEntry } from "@/components/shell/global-search";
 import { MobileBottomNav } from "@/components/shell/mobile-bottom-nav";
 import { SubTabs } from "@/components/shell/sub-tabs";
 import { RevalidateOnFocus } from "@/components/dashboard/revalidate-on-focus";
+import { ToastProvider } from "@/components/ui/toast";
 import { findActiveSection } from "@/lib/navigation";
 import type { SyncStatus, User } from "@/lib/types";
 
@@ -42,6 +43,7 @@ export function AppShell({
   }, [pathname]);
 
   return (
+    <ToastProvider>
     <div className="fixed inset-x-0 bottom-[env(safe-area-inset-bottom)] top-[env(safe-area-inset-top)] min-h-0 w-full overflow-hidden bg-[#ececf2] lg:px-4 lg:py-4 dark:bg-[#161826]">
       <div className="app-shell-frame flex h-full min-h-0 w-full overflow-hidden bg-background lg:rounded-[0.875rem] lg:border lg:border-border lg:shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
         <RevalidateOnFocus />
@@ -74,5 +76,6 @@ export function AppShell({
         </div>
       </div>
     </div>
+    </ToastProvider>
   );
 }

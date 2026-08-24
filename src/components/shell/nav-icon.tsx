@@ -7,6 +7,7 @@ import {
   Menu,
   Receipt,
   Settings,
+  Sparkles,
   User,
   Users,
 } from "lucide-react";
@@ -20,6 +21,7 @@ const ICONS = {
   config: Settings,
   perfil: User,
   fechamento: Receipt,
+  conversoes: Sparkles,
   mais: Menu,
 } as const satisfies Record<NavIconKey, unknown>;
 

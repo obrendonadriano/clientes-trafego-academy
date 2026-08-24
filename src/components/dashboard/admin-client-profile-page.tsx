@@ -36,6 +36,7 @@ import {
   formatWhatsapp,
 } from "@/components/admin/client-form-fields";
 import { FormStepper, type WizardStep } from "@/components/admin/form-stepper";
+import { CapiConfigCard, type CapiConfig } from "@/components/admin/capi-config-card";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { TaxInfo } from "@/components/dashboard/tax-info";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +50,7 @@ import { summarizeMetrics } from "@/lib/dashboard-metrics";
 import type { CampaignWithMetrics, Client, RawCampaignMetric, User as UserType } from "@/lib/types";
 
 type AdminClientProfilePageProps = {
+  capiConfig: CapiConfig;
   client: Client;
   linkedUser: UserType | null;
   selectedCampaignIds: string[];
@@ -96,6 +98,7 @@ function formatMultiplier(value: number) {
 }
 
 export function AdminClientProfilePage({
+  capiConfig,
   client,
   linkedUser,
   selectedCampaignIds,
@@ -569,6 +572,8 @@ export function AdminClientProfilePage({
         </Card>
 
         <div className="space-y-6">
+          <CapiConfigCard config={capiConfig} />
+
           <Card className="border-border/60 bg-background/60">
             <CardHeader>
               <CardTitle className="font-display text-2xl">Resumo do perfil</CardTitle>

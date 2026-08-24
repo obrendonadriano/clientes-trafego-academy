@@ -5,6 +5,7 @@ import { FormPageSkeleton } from "@/components/dashboard/skeletons";
 import { PageHeader } from "@/components/shell/page-header";
 import { resolveMetricsWindow } from "@/lib/data/date-range";
 import { getAdminClientProfileData } from "@/lib/data/queries";
+import { getClientCapiConfig } from "@/lib/data/capi";
 
 type AdminClientProfileRouteProps = {
   params: Promise<{
@@ -25,7 +26,9 @@ async function AdminClientProfileSection({
     notFound();
   }
 
-  return <AdminClientProfilePage {...data} />;
+  const capiConfig = await getClientCapiConfig(clientId);
+
+  return <AdminClientProfilePage {...data} capiConfig={capiConfig} />;
 }
 
 export default function AdminClientProfileRoute({

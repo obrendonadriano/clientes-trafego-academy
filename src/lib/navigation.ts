@@ -10,6 +10,7 @@ export type NavIconKey =
   | "config"
   | "perfil"
   | "fechamento"
+  | "conversoes"
   | "mais";
 
 export type NavSubTab = {
@@ -88,6 +89,18 @@ const ADMIN_SECTIONS: NavSection[] = [
     subTabs: ADMIN_CAMPAIGN_TABS,
   },
   {
+    key: "conversoes",
+    label: "Conversões",
+    title: "Conversões",
+    href: "/admin/conversoes",
+    icon: "conversoes",
+    group: "Oper",
+    subTabs: [
+      { label: "Leads", href: "/admin/conversoes", exact: true },
+      { label: "Integração com o Meta", href: "/admin/conversoes/integracao" },
+    ],
+  },
+  {
     key: "fechamento",
     label: "Fechamento",
     title: "Fechamento",
@@ -143,6 +156,15 @@ const CLIENT_SECTIONS: NavSection[] = [
     icon: "campanhas",
     group: "Oper",
     subTabs: CLIENT_CAMPAIGN_TABS,
+  },
+  {
+    key: "conversoes",
+    label: "Conversões",
+    title: "Conversões",
+    href: "/dashboard/conversoes",
+    icon: "conversoes",
+    group: "Oper",
+    subTabs: [{ label: "Leads", href: "/dashboard/conversoes", exact: true }],
   },
   {
     key: "fechamento",
