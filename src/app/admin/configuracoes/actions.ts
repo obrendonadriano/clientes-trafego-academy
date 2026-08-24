@@ -1,13 +1,16 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import { revalidatePath, updateTag } from "next/cache";
 import { z } from "zod";
+import { getOptionalCurrentUser } from "@/lib/auth/session";
 import {
   createMetaAdAccount,
   deleteMetaAdAccount,
   updateMetaAdAccount,
 } from "@/lib/meta/accounts";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { normalizeWahaBaseUrl, testWahaCredentials } from "@/lib/waha";
 
 export type SettingsActionState = {
   success?: string;
@@ -30,6 +33,13 @@ const metaAccountSchema = z.object({
   accessToken: z.string().optional(),
 });
 
+async function requireAdminMessage() {
+  const user = await getOptionalCurrentUser();
+  return user?.role === "admin" && user.active
+    ? null
+    : "Você não tem permissão para alterar estas configurações.";
+}
+
 function normalizeAdAccountId(value: string) {
   const digits = value.replace(/^act_/i, "");
   return `act_${digits}`;
@@ -39,6 +49,11 @@ export async function addMetaAccountAction(
   _prevState: MetaAccountActionState,
   formData: FormData,
 ): Promise<MetaAccountActionState> {
+  const authError = await requireAdminMessage();
+  if (authError) {
+    return { error: authError };
+  }
+
   const parsed = metaAccountSchema.safeParse({
     label: formData.get("label"),
     adAccountId: formData.get("adAccountId"),
@@ -74,6 +89,11 @@ export async function toggleMetaAccountAction(
   _prevState: MetaAccountActionState,
   formData: FormData,
 ): Promise<MetaAccountActionState> {
+  const authError = await requireAdminMessage();
+  if (authError) {
+    return { error: authError };
+  }
+
   const id = String(formData.get("id") ?? "");
   const enabled = formData.get("enabled") === "true";
 
@@ -95,6 +115,11 @@ export async function removeMetaAccountAction(
   _prevState: MetaAccountActionState,
   formData: FormData,
 ): Promise<MetaAccountActionState> {
+  const authError = await requireAdminMessage();
+  if (authError) {
+    return { error: authError };
+  }
+
   const id = String(formData.get("id") ?? "");
 
   if (!id) {
@@ -113,7 +138,7 @@ export async function removeMetaAccountAction(
 }
 
 const integrationSchema = z.object({
-  provider: z.enum(["meta_ads", "gemini"]),
+  provider: z.enum(["meta_ads", "gemini", "waha"]),
   enabled: z.string().optional(),
   fields: z.record(z.string(), z.string()),
 });
@@ -122,6 +147,11 @@ export async function saveIntegrationSettingsAction(
   _prevState: SettingsActionState,
   formData: FormData,
 ): Promise<SettingsActionState> {
+  const authError = await requireAdminMessage();
+  if (authError) {
+    return { error: authError };
+  }
+
   const adminClient = createSupabaseAdminClient();
 
   if (!adminClient) {
@@ -150,22 +180,66 @@ export async function saveIntegrationSettingsAction(
     return { error: "Não foi possível validar a configuração enviada." };
   }
 
-  const payload = {
-    provider: parsed.data.provider,
-    enabled,
-    config: parsed.data.fields,
-    updated_at: new Date().toISOString(),
-  };
-
   const existing = await adminClient
     .from("integration_settings")
-    .select("id")
+    .select("id, config")
     .eq("provider", parsed.data.provider)
     .maybeSingle();
 
   if (existing.error) {
     return { error: existing.error.message };
   }
+
+  const previousConfig = (existing.data?.config ?? {}) as Record<string, string>;
+  const secretFields: Record<typeof parsed.data.provider, string[]> = {
+    meta_ads: ["app_secret", "access_token"],
+    gemini: ["api_key"],
+    waha: ["api_key", "webhook_secret"],
+  };
+  const config = { ...previousConfig, ...parsed.data.fields };
+
+  for (const field of secretFields[parsed.data.provider]) {
+    if (!parsed.data.fields[field]?.trim() && previousConfig[field]) {
+      config[field] = previousConfig[field];
+    }
+  }
+
+  if (parsed.data.provider === "waha") {
+    try {
+      config.base_url = normalizeWahaBaseUrl(config.base_url ?? "");
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : "URL do WAHA inválida." };
+    }
+
+    if (!config.api_key?.trim()) {
+      return { error: "Informe a WAHA_API_KEY." };
+    }
+
+    config.api_key = config.api_key.trim();
+    config.webhook_secret = previousConfig.webhook_secret || randomBytes(32).toString("hex");
+
+    if (enabled) {
+      try {
+        await testWahaCredentials({
+          baseUrl: config.base_url,
+          apiKey: config.api_key,
+        });
+      } catch (error) {
+        return {
+          error: error instanceof Error
+            ? error.message
+            : "Não foi possível validar a conexão com o WAHA.",
+        };
+      }
+    }
+  }
+
+  const payload = {
+    provider: parsed.data.provider,
+    enabled,
+    config,
+    updated_at: new Date().toISOString(),
+  };
 
   const { error } = existing.data
     ? await adminClient
@@ -181,7 +255,9 @@ export async function saveIntegrationSettingsAction(
   revalidatePath("/admin/configuracoes");
   return {
     success: enabled
-      ? "Credenciais salvas e integração ativada com sucesso."
+      ? parsed.data.provider === "waha"
+        ? "Conexão com o WAHA testada, salva e ativada com segurança."
+        : "Credenciais salvas e integração ativada com sucesso."
       : "Credenciais salvas com sucesso. A integração permanece desativada até você ativar.",
   };
 }

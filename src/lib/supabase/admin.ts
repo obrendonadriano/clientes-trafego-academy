@@ -1,3 +1,5 @@
+import "server-only";
+
 import { createClient } from "@supabase/supabase-js";
 import { isSupabaseAdminConfigured } from "@/lib/env";
 import { getSupabaseUrl } from "@/lib/supabase/env";

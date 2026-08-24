@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { Brain, Database, PlugZap } from "lucide-react";
+import { Brain, Database, MessageCircle, PlugZap } from "lucide-react";
 import { saveIntegrationSettingsAction, type SettingsActionState } from "@/app/admin/configuracoes/actions";
 import { MetaAccountsManager } from "@/components/admin/meta-accounts-manager";
 import { Badge } from "@/components/ui/badge";
@@ -32,12 +32,18 @@ const geminiModels = [
   { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash" },
 ] as const;
 
-function SaveButton() {
+function SaveButton({ testConnection = false }: { testConnection?: boolean }) {
   const { pending } = useFormStatus();
 
   return (
     <Button type="submit" className="w-full" size="lg" disabled={pending}>
-      {pending ? "Salvando..." : "Salvar credenciais"}
+      {pending
+        ? testConnection
+          ? "Testando conexão..."
+          : "Salvando..."
+        : testConnection
+          ? "Salvar e testar conexão"
+          : "Salvar credenciais"}
     </Button>
   );
 }
@@ -50,6 +56,8 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
       <PlugZap className="size-5" />
     ) : integration.provider === "gemini" ? (
       <Brain className="size-5" />
+    ) : integration.provider === "waha" ? (
+      <MessageCircle className="size-5" />
     ) : (
       <Database className="size-5" />
     );
@@ -106,7 +114,9 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
                   <Input
                     id="meta_app_secret"
                     name="config_app_secret"
-                    defaultValue={integration.config.app_secret ?? ""}
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={integration.config.app_secret_configured === "true" ? "Chave salva — deixe vazio para manter" : "Cole o App Secret"}
                   />
                 </div>
                 <div className="space-y-2">
@@ -114,7 +124,9 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
                   <Input
                     id="meta_access_token"
                     name="config_access_token"
-                    defaultValue={integration.config.access_token ?? ""}
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={integration.config.access_token_configured === "true" ? "Token salvo — deixe vazio para manter" : "Cole o Access Token"}
                   />
                 </div>
               </div>
@@ -168,11 +180,45 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
                 <Input
                   id="gemini_key_hint"
                   name="config_api_key"
-                  defaultValue={integration.config.api_key ?? integration.config.api_key_hint ?? ""}
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder={integration.config.api_key_configured === "true" ? "Chave salva — deixe vazio para manter" : "Cole a API Key"}
                 />
               </div>
               <div className="rounded-2xl border border-border/60 bg-card px-4 py-3 text-sm text-muted-foreground md:col-span-2">
                 O modelo selecionado sera usado na geracao dos relatorios da pagina de IA.
+              </div>
+            </div>
+          ) : null}
+
+          {integration.provider === "waha" ? (
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="waha_base_url">URL da API WAHA</Label>
+                  <Input
+                    id="waha_base_url"
+                    name="config_base_url"
+                    type="url"
+                    required
+                    placeholder="https://waha.seudominio.com"
+                    defaultValue={integration.config.base_url ?? ""}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="waha_api_key">WAHA_API_KEY</Label>
+                  <Input
+                    id="waha_api_key"
+                    name="config_api_key"
+                    type="password"
+                    autoComplete="new-password"
+                    required={integration.config.api_key_configured !== "true"}
+                    placeholder={integration.config.api_key_configured === "true" ? "Chave salva — deixe vazio para manter" : "Cole a WAHA_API_KEY"}
+                  />
+                </div>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3 text-sm leading-6 text-muted-foreground">
+                A chave fica salva no banco e só é lida pelo servidor. Ela não é exibida novamente nem enviada ao navegador dos clientes.
               </div>
             </div>
           ) : null}
@@ -208,7 +254,9 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
             </label>
           ) : null}
 
-          {integration.provider !== "supabase" ? <SaveButton /> : null}
+          {integration.provider !== "supabase" ? (
+            <SaveButton testConnection={integration.provider === "waha"} />
+          ) : null}
 
           {state.error ? (
             <p className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">

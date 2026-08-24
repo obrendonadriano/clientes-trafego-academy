@@ -1,3 +1,5 @@
+import "server-only";
+
 import type { IntegrationProvider, IntegrationSetting } from "@/lib/types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 

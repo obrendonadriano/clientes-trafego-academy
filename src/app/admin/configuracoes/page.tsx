@@ -16,7 +16,7 @@ export default async function AdminSettingsRoute() {
       <PageHeader
         eyebrow="Área administrativa"
         title="Conexões e integrações"
-        description="Credenciais das conexões do sistema: Meta Ads, Gemini e a base principal do projeto."
+        description="Credenciais das conexões do sistema: Meta Ads, Gemini, WhatsApp via WAHA e a base principal do projeto."
       />
 
       <AdminSettingsPage

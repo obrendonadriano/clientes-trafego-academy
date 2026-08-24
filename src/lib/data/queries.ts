@@ -1140,7 +1140,45 @@ function getDefaultIntegrations(): IntegrationSetting[] {
       description: "Geração de análises consultivas e relatórios para clientes.",
       config: {},
     },
+    {
+      provider: "waha",
+      enabled: false,
+      status: "not_configured",
+      title: "WhatsApp (WAHA)",
+      description: "Conexão segura dos WhatsApps dos clientes por QR Code.",
+      config: {},
+    },
   ];
+}
+
+function sanitizeIntegrationConfig(
+  provider: IntegrationSetting["provider"],
+  config: Record<string, string>,
+) {
+  if (provider === "meta_ads") {
+    return {
+      app_id: config.app_id ?? "",
+      ad_account_id: config.ad_account_id ?? "",
+      app_secret_configured: String(Boolean(config.app_secret)),
+      access_token_configured: String(Boolean(config.access_token)),
+    };
+  }
+
+  if (provider === "gemini") {
+    return {
+      model: config.model ?? "",
+      api_key_configured: String(Boolean(config.api_key)),
+    };
+  }
+
+  if (provider === "waha") {
+    return {
+      base_url: config.base_url ?? "",
+      api_key_configured: String(Boolean(config.api_key)),
+    };
+  }
+
+  return config;
 }
 
 // Resolve as campanhas de um cliente. O vinculo NAO vem de campaigns.client_id
@@ -1379,7 +1417,7 @@ export async function getIntegrationSettings() {
       status: saved.enabled ? "connected" : "pending",
       config: {
         ...item.config,
-        ...(saved.config ?? {}),
+        ...sanitizeIntegrationConfig(item.provider, saved.config ?? {}),
       },
     } satisfies IntegrationSetting;
   });

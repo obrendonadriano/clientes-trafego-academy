@@ -128,6 +128,7 @@ export type AppDataSnapshot = {
 export type IntegrationProvider =
   | "meta_ads"
   | "gemini"
+  | "waha"
   | "supabase";
 
 export type IntegrationSetting = {
