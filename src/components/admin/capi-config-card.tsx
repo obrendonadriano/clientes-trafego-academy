@@ -16,7 +16,7 @@ import { Switch } from "@/components/ui/switch";
 export type CapiConfig = {
   clientId: string;
   datasetId: string;
-  pageId: string;
+  wabaId: string;
   capiAtivo: boolean;
   tokenConfigurado: boolean;
 };
@@ -48,7 +48,7 @@ export function CapiConfigCard({ config }: { config: CapiConfig }) {
   const [clearState, clear] = useActionState(clearCapiTokenAction, initialState);
 
   const [datasetId, setDatasetId] = useState(config.datasetId);
-  const [pageId, setPageId] = useState(config.pageId);
+  const [wabaId, setWabaId] = useState(config.wabaId);
   const [token, setToken] = useState("");
   const [ativo, setAtivo] = useState(config.capiAtivo);
 
@@ -56,7 +56,7 @@ export function CapiConfigCard({ config }: { config: CapiConfig }) {
   // estar guardado de antes — daí não precisa digitar de novo.
   const temToken = config.tokenConfigurado || token.trim().length > 0;
   const podeAtivar =
-    datasetId.trim().length > 0 && pageId.trim().length > 0 && temToken;
+    datasetId.trim().length > 0 && wabaId.trim().length > 0 && temToken;
 
   return (
     <Card className="min-w-0 border-border/60 bg-background/60">
@@ -90,17 +90,17 @@ export function CapiConfigCard({ config }: { config: CapiConfig }) {
               </p>
             </Field>
 
-            <Field label="ID da Página do Facebook" htmlFor="capi_page">
+            <Field label="WABA ID (conta do WhatsApp Business)" htmlFor="capi_waba">
               <Input
-                id="capi_page"
-                name="pageId"
-                value={pageId}
-                onChange={(event) => setPageId(event.target.value)}
+                id="capi_waba"
+                name="wabaId"
+                value={wabaId}
+                onChange={(event) => setWabaId(event.target.value)}
                 placeholder="987654321098765"
                 inputMode="numeric"
               />
               <p className="text-xs leading-5 text-muted-foreground">
-                Página vinculada ao WhatsApp Business deste cliente.
+                ID da conta do WhatsApp Business vinculada ao Dataset deste cliente.
               </p>
             </Field>
           </div>
@@ -156,7 +156,7 @@ export function CapiConfigCard({ config }: { config: CapiConfig }) {
               <span className="mt-1 block text-xs text-muted-foreground">
                 {podeAtivar
                   ? "Os leads qualificados entram na fila de envio."
-                  : "Preencha Dataset, Página e Token para poder ativar."}
+                  : "Preencha Dataset, WABA ID e Token para poder ativar."}
               </span>
             </span>
           </div>

@@ -1174,7 +1174,9 @@ function sanitizeIntegrationConfig(
   if (provider === "waha") {
     return {
       base_url: config.base_url ?? "",
+      leads_webhook_url: config.leads_webhook_url ?? "",
       api_key_configured: String(Boolean(config.api_key)),
+      webhook_secret_configured: String(Boolean(config.webhook_secret)),
     };
   }
 

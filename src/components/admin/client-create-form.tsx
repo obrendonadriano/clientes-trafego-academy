@@ -11,6 +11,7 @@ import {
   Lock,
   Mail,
   Megaphone,
+  RadioTower,
   Phone,
   ShieldCheck,
   User,
@@ -35,6 +36,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { FormPendingButton } from "@/components/ui/form-pending-button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { CampaignWithMetrics } from "@/lib/types";
 
@@ -65,6 +68,13 @@ const STEPS: (WizardStep & { fields: string[] })[] = [
     description: "Selecione o que este cliente poderá acompanhar.",
     icon: Megaphone,
     fields: ["campaignIds"],
+  },
+  {
+    id: "meta-capi",
+    title: "Meta CAPI",
+    description: "Dataset e WhatsApp Business usados nas conversões.",
+    icon: RadioTower,
+    fields: ["metaDatasetId", "metaWabaId", "metaAccessToken", "capiActive"],
   },
 ];
 
@@ -393,6 +403,78 @@ export function ClientCreateForm({ campaigns }: ClientCreateFormProps) {
             ) : (
               <CampaignMultiSelect campaigns={campaigns} showSelectionSummary />
             )}
+          </div>
+
+          {/* PASSO 4 — Destino das conversões deste cliente */}
+          <div
+            ref={(node) => {
+              panelRefs.current[3] = node;
+            }}
+            hidden={current !== 3}
+            className="min-w-0 space-y-4"
+          >
+            <div className="grid min-w-0 gap-4 md:grid-cols-2">
+              <Field
+                label="ID do Dataset (antigo Pixel)"
+                htmlFor="metaDatasetId"
+                error={fieldErrors.metaDatasetId}
+              >
+                <Input
+                  id="metaDatasetId"
+                  name="metaDatasetId"
+                  inputMode="numeric"
+                  pattern="[0-9]{5,30}"
+                  placeholder="123456789012345"
+                />
+              </Field>
+
+              <Field
+                label="WABA ID"
+                htmlFor="metaWabaId"
+                error={fieldErrors.metaWabaId}
+              >
+                <Input
+                  id="metaWabaId"
+                  name="metaWabaId"
+                  inputMode="numeric"
+                  pattern="[0-9]{5,30}"
+                  placeholder="987654321098765"
+                />
+              </Field>
+
+              <Field
+                label="Token de acesso da CAPI"
+                htmlFor="metaAccessToken"
+                optional
+                className="md:col-span-2"
+                error={fieldErrors.metaAccessToken}
+              >
+                <Input
+                  id="metaAccessToken"
+                  name="metaAccessToken"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="Cole o token gerado no Gerenciador de Eventos"
+                />
+                <p className="text-xs leading-5 text-muted-foreground">
+                  O token é salvo no schema privado e nunca volta para o navegador.
+                </p>
+              </Field>
+            </div>
+
+            <div className="flex items-start gap-3 rounded-2xl border border-border/60 bg-card px-4 py-3">
+              <Switch name="capiActive" aria-label="Ativar envio de conversões ao criar" />
+              <span className="text-sm text-foreground">
+                <span className="block font-medium">Ativar envio ao criar</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Marque somente quando Dataset, WABA ID e token estiverem preenchidos.
+                </span>
+              </span>
+            </div>
+
+            {fieldErrors.capiActive ? (
+              <p className="text-sm text-destructive">{fieldErrors.capiActive}</p>
+            ) : null}
           </div>
 
           {state.error ? (

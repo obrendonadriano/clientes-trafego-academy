@@ -10,7 +10,11 @@ import {
   updateMetaAdAccount,
 } from "@/lib/meta/accounts";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { normalizeWahaBaseUrl, testWahaCredentials } from "@/lib/waha";
+import {
+  normalizeWahaBaseUrl,
+  normalizeWahaWebhookUrl,
+  testWahaCredentials,
+} from "@/lib/waha";
 
 export type SettingsActionState = {
   success?: string;
@@ -207,6 +211,9 @@ export async function saveIntegrationSettingsAction(
   if (parsed.data.provider === "waha") {
     try {
       config.base_url = normalizeWahaBaseUrl(config.base_url ?? "");
+      config.leads_webhook_url = normalizeWahaWebhookUrl(
+        config.leads_webhook_url ?? "",
+      );
     } catch (error) {
       return { error: error instanceof Error ? error.message : "URL do WAHA inválida." };
     }
@@ -216,7 +223,10 @@ export async function saveIntegrationSettingsAction(
     }
 
     config.api_key = config.api_key.trim();
-    config.webhook_secret = previousConfig.webhook_secret || randomBytes(32).toString("hex");
+    config.webhook_secret =
+      config.webhook_secret?.trim() ||
+      previousConfig.webhook_secret ||
+      randomBytes(32).toString("hex");
 
     if (enabled) {
       try {

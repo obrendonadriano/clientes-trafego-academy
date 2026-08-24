@@ -11,6 +11,7 @@ export type WahaCredentials = {
 
 export type WahaConfig = WahaCredentials & {
   webhookSecret: string;
+  leadsWebhookUrl: string | null;
 };
 
 export type WahaSessionStatus =
@@ -61,6 +62,33 @@ export function normalizeWahaBaseUrl(value: string) {
   url.search = "";
   url.hash = "";
   return url.toString().replace(/\/$/, "");
+}
+
+export function normalizeWahaWebhookUrl(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  let url: URL;
+
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw new Error("Informe uma URL válida do webhook de produção do n8n.");
+  }
+
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+    throw new Error("O webhook do n8n deve usar HTTP/HTTPS e não pode conter usuário ou senha.");
+  }
+
+  const isLoopback = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  if (process.env.NODE_ENV === "production" && url.protocol !== "https:" && !isLoopback) {
+    throw new Error("Em produção, o webhook do n8n precisa usar HTTPS.");
+  }
+
+  return url.toString();
 }
 
 function messageForStatus(status: number) {
@@ -140,6 +168,7 @@ export async function getWahaConfig(): Promise<WahaConfig> {
   const baseUrl = integration?.config?.base_url ?? "";
   const apiKey = integration?.config?.api_key ?? "";
   const webhookSecret = integration?.config?.webhook_secret ?? "";
+  const leadsWebhookUrl = integration?.config?.leads_webhook_url ?? "";
 
   if (!integration?.enabled || !baseUrl || !apiKey || !webhookSecret) {
     throw new WahaRequestError(
@@ -151,6 +180,9 @@ export async function getWahaConfig(): Promise<WahaConfig> {
     baseUrl: normalizeWahaBaseUrl(baseUrl),
     apiKey,
     webhookSecret,
+    leadsWebhookUrl: leadsWebhookUrl
+      ? normalizeWahaWebhookUrl(leadsWebhookUrl)
+      : null,
   };
 }
 

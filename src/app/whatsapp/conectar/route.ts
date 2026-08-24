@@ -48,6 +48,51 @@ export async function POST(request: Request) {
     const config = await getWahaConfig();
     const existing = await getWhatsappSessionRecord(clientId);
     let remoteExists = false;
+    const webhookUrl = getWebhookUrl(request);
+
+    function sessionPayload(sessionName: string) {
+      const webhooks = [
+        {
+          url: webhookUrl,
+          events: ["session.status"],
+          hmac: { key: config.webhookSecret },
+          retries: {
+            policy: "exponential",
+            delaySeconds: 2,
+            attempts: 10,
+          },
+        },
+      ];
+
+      if (config.leadsWebhookUrl) {
+        webhooks.push({
+          url: config.leadsWebhookUrl,
+          events: ["message"],
+          hmac: { key: config.webhookSecret },
+          customHeaders: [
+            {
+              name: "X-TrafegoAcademy-Secret",
+              value: config.webhookSecret,
+            },
+          ],
+          retries: {
+            policy: "exponential",
+            delaySeconds: 2,
+            attempts: 10,
+          },
+        } as (typeof webhooks)[number] & {
+          customHeaders: { name: string; value: string }[];
+        });
+      }
+
+      return {
+        name: sessionName,
+        config: {
+          metadata: { source: "trafegoacademy" },
+          webhooks,
+        },
+      };
+    }
 
     if (existing?.session_name) {
       try {
@@ -57,6 +102,11 @@ export async function POST(request: Request) {
           { method: "GET" },
         );
         remoteExists = true;
+        const sessionPath = `/api/sessions/${encodeURIComponent(existing.session_name)}`;
+        await wahaFetchJson<WahaSession>(config, sessionPath, {
+          method: "PUT",
+          body: JSON.stringify(sessionPayload(existing.session_name)),
+        });
         const remoteStatus = toWahaSessionStatus(remote.status);
         await updateWhatsappSessionRecord(clientId, {
           status: remoteStatus,
@@ -81,30 +131,16 @@ export async function POST(request: Request) {
 
     const record = await ensureWhatsappSessionRecord(clientId);
 
+    if (!record.session_name) {
+      throw new WahaRequestError("Não foi possível gerar o identificador da sessão WAHA.");
+    }
+
     await updateWhatsappSessionRecord(clientId, {
       status: "STARTING",
       ultimo_erro: null,
     });
 
-    const webhookUrl = getWebhookUrl(request);
-    const sessionPayload = {
-      name: record.session_name,
-      config: {
-        metadata: { source: "trafegoacademy" },
-        webhooks: [
-          {
-            url: webhookUrl,
-            events: ["session.status"],
-            hmac: { key: config.webhookSecret },
-            retries: {
-              policy: "exponential",
-              delaySeconds: 2,
-              attempts: 10,
-            },
-          },
-        ],
-      },
-    };
+    const payload = sessionPayload(record.session_name);
 
     let session: WahaSession;
 
@@ -112,7 +148,7 @@ export async function POST(request: Request) {
       const sessionPath = `/api/sessions/${encodeURIComponent(record.session_name!)}`;
       await wahaFetchJson<WahaSession>(config, sessionPath, {
         method: "PUT",
-        body: JSON.stringify(sessionPayload),
+        body: JSON.stringify(payload),
       });
       session = await wahaFetchJson<WahaSession>(
         config,
@@ -122,7 +158,7 @@ export async function POST(request: Request) {
     } else {
       session = await wahaFetchJson<WahaSession>(config, "/api/sessions", {
         method: "POST",
-        body: JSON.stringify(sessionPayload),
+        body: JSON.stringify(payload),
       });
     }
 

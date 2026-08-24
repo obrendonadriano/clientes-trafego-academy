@@ -244,6 +244,10 @@ export async function createClientWorkspaceAction(
     username: formData.get("username"),
     email: formData.get("email"),
     password: formData.get("password"),
+    metaDatasetId: formData.get("metaDatasetId"),
+    metaWabaId: formData.get("metaWabaId"),
+    metaAccessToken: formData.get("metaAccessToken"),
+    capiActive: formData.get("capiActive"),
   });
 
   if (!parsed.success) {
@@ -291,6 +295,31 @@ export async function createClientWorkspaceAction(
 
   if (clientInsert.error || !clientInsert.data) {
     return { error: clientInsert.error?.message ?? "Falha ao criar cliente." };
+  }
+
+  const hasCapiConfig = Boolean(
+    parsed.data.metaDatasetId ||
+      parsed.data.metaWabaId ||
+      parsed.data.metaAccessToken ||
+      parsed.data.capiActive,
+  );
+
+  if (hasCapiConfig) {
+    const { error: capiError } = await adminClient.rpc(
+      "admin_set_client_capi_config",
+      {
+        p_client_id: clientInsert.data.id,
+        p_dataset_id: parsed.data.metaDatasetId || null,
+        p_waba_id: parsed.data.metaWabaId || null,
+        p_access_token: parsed.data.metaAccessToken || null,
+        p_capi_ativo: parsed.data.capiActive === "on",
+      },
+    );
+
+    if (capiError) {
+      await adminClient.from("clients").delete().eq("id", clientInsert.data.id);
+      return { error: capiError.message };
+    }
   }
 
   const authResult = await adminClient.auth.admin.createUser({

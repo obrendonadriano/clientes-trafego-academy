@@ -216,6 +216,43 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
                     placeholder={integration.config.api_key_configured === "true" ? "Chave salva — deixe vazio para manter" : "Cole a WAHA_API_KEY"}
                   />
                 </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="waha_leads_webhook_url">
+                    Webhook de produção do n8n para leads
+                  </Label>
+                  <Input
+                    id="waha_leads_webhook_url"
+                    name="config_leads_webhook_url"
+                    type="url"
+                    placeholder="https://n8n.seudominio.com/webhook/waha-eventos"
+                    defaultValue={integration.config.leads_webhook_url ?? ""}
+                  />
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Use a URL de produção do workflow WAHA. Sem ela, a conexão
+                    continua funcionando, mas mensagens não entram na fila de leads.
+                  </p>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="waha_webhook_secret">
+                    Segredo compartilhado com o n8n
+                  </Label>
+                  <Input
+                    id="waha_webhook_secret"
+                    name="config_webhook_secret"
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={32}
+                    placeholder={
+                      integration.config.webhook_secret_configured === "true"
+                        ? "Segredo salvo — deixe vazio para manter"
+                        : "Use uma chave aleatória com pelo menos 32 caracteres"
+                    }
+                  />
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Salve o mesmo valor como WAHA_WEBHOOK_SECRET no n8n. Ele é
+                    enviado em um header HTTPS e também assina o payload com HMAC.
+                  </p>
+                </div>
               </div>
               <div className="rounded-2xl border border-border/60 bg-card px-4 py-3 text-sm leading-6 text-muted-foreground">
                 A chave fica salva no banco e só é lida pelo servidor. Ela não é exibida novamente nem enviada ao navegador dos clientes.

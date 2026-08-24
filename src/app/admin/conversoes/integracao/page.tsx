@@ -87,7 +87,7 @@ async function CapiOverviewSection() {
                   {clients.map((client) => {
                     const completo =
                       Boolean(client.datasetId) &&
-                      Boolean(client.pageId) &&
+                      Boolean(client.wabaId) &&
                       client.tokenConfigurado;
 
                     return (
@@ -111,8 +111,8 @@ async function CapiOverviewSection() {
                               <CircleAlert className="size-4" />
                               {!client.datasetId
                                 ? "Falta o Dataset"
-                                : !client.pageId
-                                  ? "Falta a Página"
+                                : !client.wabaId
+                                  ? "Falta o WABA ID"
                                   : "Falta o token"}
                             </span>
                           )}

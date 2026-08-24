@@ -1,17 +1,17 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getOptionalCurrentUser } from "@/lib/auth/session";
 import { isDevelopmentAuthFallbackEnabled } from "@/lib/auth/mode";
 import { isSupabaseAdminConfigured } from "@/lib/env";
 
-// Diagnóstico da integração por cliente. Vem da RPC `admin_client_capi_status`,
-// que exige um admin autenticado — o token em si nunca é devolvido, só o
-// indicador de que existe.
+// Diagnóstico da integração por cliente. A página autentica o admin e chama a
+// RPC com o client server-only; o token nunca é devolvido, só o indicador de
+// que existe.
 
 export type ClientCapiStatus = {
   clientId: string;
   clientName: string;
   datasetId: string | null;
-  pageId: string | null;
+  wabaId: string | null;
   capiAtivo: boolean;
   tokenConfigurado: boolean;
   leadsPendentes: number;
@@ -27,7 +27,7 @@ type StatusRow = {
   client_id: string;
   nome_empresa: string | null;
   meta_dataset_id: string | null;
-  meta_page_id: string | null;
+  meta_waba_id: string | null;
   capi_ativo: boolean | null;
   token_configurado: boolean | null;
   leads_pendentes: number | null;
@@ -39,7 +39,7 @@ function mapRow(row: StatusRow): ClientCapiStatus {
     clientId: row.client_id,
     clientName: row.nome_empresa ?? "Sem nome",
     datasetId: row.meta_dataset_id,
-    pageId: row.meta_page_id,
+    wabaId: row.meta_waba_id,
     capiAtivo: Boolean(row.capi_ativo),
     tokenConfigurado: Boolean(row.token_configurado),
     leadsPendentes: Number(row.leads_pendentes ?? 0),
@@ -48,20 +48,17 @@ function mapRow(row: StatusRow): ClientCapiStatus {
 }
 
 export async function getCapiOverview(): Promise<CapiOverview> {
-  const client = await createSupabaseServerClient();
+  const user = await getOptionalCurrentUser();
+  const adminClient = createSupabaseAdminClient();
 
-  if (client) {
-    const { data: session } = await client.auth.getUser();
+  if (user?.role === "admin" && user.active && adminClient) {
+    const { data, error } = await adminClient.rpc("admin_client_capi_status");
 
-    if (session.user) {
-      const { data, error } = await client.rpc("admin_client_capi_status");
-
-      if (error) {
-        return { clients: [], notice: error.message };
-      }
-
-      return { clients: ((data as StatusRow[] | null) ?? []).map(mapRow) };
+    if (error) {
+      return { clients: [], notice: error.message };
     }
+
+    return { clients: ((data as StatusRow[] | null) ?? []).map(mapRow) };
   }
 
   // Sem sessão Supabase a RPC recusa (ela identifica o admin pelo usuário
@@ -69,13 +66,11 @@ export async function getCapiOverview(): Promise<CapiOverview> {
   // visão equivalente a partir das colunas públicas — o token continua
   // inacessível, então aqui ele aparece como desconhecido.
   if (isDevelopmentAuthFallbackEnabled() && isSupabaseAdminConfigured()) {
-    const adminClient = createSupabaseAdminClient();
-
     if (adminClient) {
       const [{ data: clients }, { data: leads }] = await Promise.all([
         adminClient
           .from("clients")
-          .select("id, nome_empresa, meta_dataset_id, meta_page_id, capi_ativo")
+          .select("id, nome_empresa, meta_dataset_id, meta_waba_id, capi_ativo")
           .order("nome_empresa"),
         adminClient
           .from("conversion_leads")
@@ -102,7 +97,7 @@ export async function getCapiOverview(): Promise<CapiOverview> {
           clientId: row.id,
           clientName: row.nome_empresa ?? "Sem nome",
           datasetId: row.meta_dataset_id,
-          pageId: row.meta_page_id,
+          wabaId: row.meta_waba_id,
           capiAtivo: Boolean(row.capi_ativo),
           tokenConfigurado: false,
           leadsPendentes: pendentes.get(row.id) ?? 0,
@@ -127,7 +122,7 @@ export async function getClientCapiConfig(clientId: string) {
   return {
     clientId,
     datasetId: found?.datasetId ?? "",
-    pageId: found?.pageId ?? "",
+    wabaId: found?.wabaId ?? "",
     capiAtivo: found?.capiAtivo ?? false,
     tokenConfigurado: found?.tokenConfigurado ?? false,
   };

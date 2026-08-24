@@ -16,6 +16,12 @@ export const whatsappField = z
   .min(8, "Informe o WhatsApp com DDD.")
   .regex(/^[+0-9()\s-]+$/, "O WhatsApp deve conter apenas números, +, ( ) e -.");
 
+const metaIdField = z
+  .string()
+  .trim()
+  .regex(/^\d{5,30}$/, "Use somente o ID numérico informado pela Meta.")
+  .or(z.literal(""));
+
 export const clientWorkspaceSchema = z.object({
   companyName: z.string().min(2, "Informe o nome da empresa."),
   contactName: z.string().min(2, "Informe o responsável."),
@@ -30,6 +36,21 @@ export const clientWorkspaceSchema = z.object({
   username: usernameField,
   email: z.string().email("Informe um email válido."),
   password: z.string().min(6, "A senha deve ter ao menos 6 caracteres."),
+  metaDatasetId: metaIdField.optional().default(""),
+  metaWabaId: metaIdField.optional().default(""),
+  metaAccessToken: z.string().trim().optional().default(""),
+  capiActive: z.string().nullish(),
+}).superRefine((data, context) => {
+  if (
+    data.capiActive === "on" &&
+    (!data.metaDatasetId || !data.metaWabaId || !data.metaAccessToken)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["capiActive"],
+      message: "Para ativar, preencha Dataset, WABA ID e token.",
+    });
+  }
 });
 
 export const updateClientWorkspaceSchema = z.object({
