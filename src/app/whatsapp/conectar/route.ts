@@ -47,20 +47,16 @@ export async function POST(request: Request) {
     console.info("[whatsapp/conectar] solicitação autenticada");
     const config = await getWahaConfig();
     const existing = await getWhatsappSessionRecord(clientId);
-    const currentStatus = toWahaSessionStatus(existing?.status);
+    let remoteExists = false;
 
-    if (
-      existing?.session_name &&
-      (currentStatus === "STARTING" ||
-        currentStatus === "SCAN_QR_CODE" ||
-        currentStatus === "WORKING")
-    ) {
+    if (existing?.session_name) {
       try {
         const remote = await wahaFetchJson<WahaSession>(
           config,
           `/api/sessions/${encodeURIComponent(existing.session_name)}`,
           { method: "GET" },
         );
+        remoteExists = true;
         const remoteStatus = toWahaSessionStatus(remote.status);
         await updateWhatsappSessionRecord(clientId, {
           status: remoteStatus,
@@ -91,31 +87,44 @@ export async function POST(request: Request) {
     });
 
     const webhookUrl = getWebhookUrl(request);
-    const session = await wahaFetchJson<WahaSession>(
-      config,
-      "/api/sessions/start",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          name: record.session_name,
-          config: {
-            metadata: { source: "trafegoacademy" },
-            webhooks: [
-              {
-                url: webhookUrl,
-                events: ["session.status"],
-                hmac: { key: config.webhookSecret },
-                retries: {
-                  policy: "exponential",
-                  delaySeconds: 2,
-                  attempts: 10,
-                },
-              },
-            ],
+    const sessionPayload = {
+      name: record.session_name,
+      config: {
+        metadata: { source: "trafegoacademy" },
+        webhooks: [
+          {
+            url: webhookUrl,
+            events: ["session.status"],
+            hmac: { key: config.webhookSecret },
+            retries: {
+              policy: "exponential",
+              delaySeconds: 2,
+              attempts: 10,
+            },
           },
-        }),
+        ],
       },
-    );
+    };
+
+    let session: WahaSession;
+
+    if (remoteExists) {
+      const sessionPath = `/api/sessions/${encodeURIComponent(record.session_name!)}`;
+      await wahaFetchJson<WahaSession>(config, sessionPath, {
+        method: "PUT",
+        body: JSON.stringify(sessionPayload),
+      });
+      session = await wahaFetchJson<WahaSession>(
+        config,
+        `${sessionPath}/restart`,
+        { method: "POST" },
+      );
+    } else {
+      session = await wahaFetchJson<WahaSession>(config, "/api/sessions", {
+        method: "POST",
+        body: JSON.stringify(sessionPayload),
+      });
+    }
 
     const status = session.status
       ? toWahaSessionStatus(session.status)
