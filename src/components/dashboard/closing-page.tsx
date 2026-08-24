@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Download, LoaderCircle, TriangleAlert } from "lucide-react";
+import { ClosingCampaignFilter } from "@/components/dashboard/closing-campaign-filter";
 import { TaxInfo } from "@/components/dashboard/tax-info";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -98,6 +99,11 @@ export function ClosingPage({
   if (clientId) {
     pdfParams.set("cliente", clientId);
   }
+  for (const id of searchParams.getAll("campanha")) {
+    if (id) {
+      pdfParams.append("campanha", id);
+    }
+  }
 
   return (
     <div className="min-w-0 space-y-5">
@@ -174,10 +180,18 @@ export function ClosingPage({
             </a>
           </div>
 
+          <ClosingCampaignFilter
+            key={`${data.window.startDate}:${data.window.endDate}:${data.clientName}:${data.selectedCampaignIds.join(",")}`}
+            campaigns={data.campaignOptions}
+            selectedIds={data.selectedCampaignIds}
+            hasFilter={data.hasCampaignFilter}
+          />
+
           <p className="text-sm text-muted-foreground">
             Fechamento de <strong className="text-foreground">{data.clientName}</strong>{" "}
             · {data.periodLabel} ({data.dayCount}{" "}
-            {data.dayCount === 1 ? "dia" : "dias"})
+            {data.dayCount === 1 ? "dia" : "dias"}) · {data.selectedCampaignIds.length}{" "}
+            {data.selectedCampaignIds.length === 1 ? "campanha" : "campanhas"}
           </p>
 
           {/* O último dia importado quase sempre está pela metade: a carga roda
@@ -235,7 +249,7 @@ export function ClosingPage({
       <Card>
         <CardHeader>
           <CardTitle className="font-display text-2xl">
-            Campanhas do período
+            Campanhas incluídas no fechamento
           </CardTitle>
         </CardHeader>
         <CardContent>

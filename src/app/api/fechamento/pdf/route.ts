@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { ClosingDocument } from "@/components/pdf/closing-document";
 import { getOptionalCurrentUser } from "@/lib/auth/session";
-import { getClosingData } from "@/lib/data/closing";
+import {
+  getClosingData,
+  parseClosingCampaignIds,
+} from "@/lib/data/closing";
 import { resolveClosingWindow } from "@/lib/data/closing-window";
 
 // A geração do PDF é sob demanda e depende da sessão: nunca pode ser estática.
@@ -34,9 +37,10 @@ export async function GET(request: NextRequest) {
   // Só o admin escolhe de qual cliente é o fechamento; o cliente sempre
   // recebe o próprio (getClosingData já filtra pelas permissões dele).
   const clientId = user.role === "admin" ? params.get("cliente") : null;
+  const campaignIds = parseClosingCampaignIds(params.getAll("campanha"));
 
   try {
-    const data = await getClosingData(user, window, clientId);
+    const data = await getClosingData(user, window, clientId, campaignIds);
     const buffer = await renderToBuffer(ClosingDocument({ data }));
     const fileName = `fechamento-${slugify(data.clientName)}-${window.startDate}-a-${window.endDate}.pdf`;
 

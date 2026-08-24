@@ -3,7 +3,10 @@ import { ClosingPage } from "@/components/dashboard/closing-page";
 import { FormPageSkeleton } from "@/components/dashboard/skeletons";
 import { PageHeader } from "@/components/shell/page-header";
 import { getCurrentUser } from "@/lib/auth/session";
-import { getClosingData } from "@/lib/data/closing";
+import {
+  getClosingData,
+  parseClosingCampaignIds,
+} from "@/lib/data/closing";
 import {
   DEFAULT_CLOSING_PRESET,
   resolveClosingWindow,
@@ -15,6 +18,7 @@ type ClosingRouteProps = {
     inicio?: string;
     fim?: string;
     cliente?: string;
+    campanha?: string | string[];
   }>;
 };
 
@@ -30,10 +34,12 @@ async function ClosingSection({
     user,
     window,
     user.role === "admin" ? params.cliente : null,
+    parseClosingCampaignIds(params.campanha),
   );
 
   return (
     <ClosingPage
+      key={`${data.window.startDate}:${data.window.endDate}:${data.clientName}:${data.selectedCampaignIds.join(",")}`}
       data={data}
       activePreset={params.preset ?? DEFAULT_CLOSING_PRESET}
     />

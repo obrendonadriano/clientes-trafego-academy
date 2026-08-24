@@ -30,11 +30,21 @@ export type ClosingCampaignRow = {
   impressions: number;
 };
 
+export type ClosingCampaignOption = {
+  id: string;
+  name: string;
+  clientName?: string;
+  platform?: string;
+};
+
 export type ClosingData = {
   window: MetricsWindow;
   periodLabel: string;
   dayCount: number;
   clientName: string;
+  campaignOptions: ClosingCampaignOption[];
+  selectedCampaignIds: string[];
+  hasCampaignFilter: boolean;
   campaigns: ClosingCampaignRow[];
   taxes: TaxBreakdown;
   results: number;
@@ -78,6 +88,21 @@ function saoPauloIsoDay() {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
+}
+
+export function parseClosingCampaignIds(
+  value: string | string[] | null | undefined,
+) {
+  const values = Array.isArray(value) ? value : value ? [value] : [];
+
+  return [
+    ...new Set(
+      values
+        .flatMap((item) => item.split(","))
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0 && item.length <= 100),
+    ),
+  ].slice(0, 100);
 }
 
 function summarizeRows(
@@ -128,6 +153,7 @@ export async function getClosingData(
   user: User,
   requestedWindow: MetricsWindow,
   clientId?: string | null,
+  requestedCampaignIds: readonly string[] = [],
 ): Promise<ClosingData> {
   // Cliente nunca recebe mais do que o limite do papel dele, mesmo pela URL.
   const window = clampMetricsWindowForRole(user.role, requestedWindow);
@@ -139,9 +165,32 @@ export async function getClosingData(
   // valores intradiários no endpoint "Hoje", mas ainda não os inclui no total
   // consolidado do Gerenciador; somá-los aqui fazia o fechamento ficar maior.
   const currentDay = saoPauloIsoDay();
-  const metricRows = dedupeMetricRowsByDay(source.metricRows).filter(
+  const allMetricRows = dedupeMetricRowsByDay(source.metricRows).filter(
     (row) => row.date < currentDay,
   );
+  const campaignsWithSpend = new Set(
+    allMetricRows
+      .filter((row) => row.amountSpent > 0)
+      .map((row) => row.campaignId),
+  );
+  const campaignOptions: ClosingCampaignOption[] = source.campaigns
+    .filter((campaign) => campaignsWithSpend.has(campaign.id))
+    .map((campaign) => ({
+      id: campaign.id,
+      name: campaign.name,
+      clientName: campaign.clientName,
+      platform: campaign.platform,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const availableIds = new Set(campaignOptions.map((campaign) => campaign.id));
+  const hasCampaignFilter = requestedCampaignIds.length > 0;
+  const selectedCampaignIds = hasCampaignFilter
+    ? [...new Set(requestedCampaignIds)].filter((id) => availableIds.has(id))
+    : campaignOptions.map((campaign) => campaign.id);
+  const selectedIds = new Set(selectedCampaignIds);
+  const metricRows = hasCampaignFilter
+    ? allMetricRows.filter((row) => selectedIds.has(row.campaignId))
+    : allMetricRows;
   const foreignCurrencies = [
     ...new Set(
       metricRows
@@ -208,6 +257,9 @@ export async function getClosingData(
     periodLabel: `${formatDay(window.startDate)} a ${formatDay(window.endDate)}`,
     dayCount: countDays(window),
     clientName: source.clientName,
+    campaignOptions,
+    selectedCampaignIds,
+    hasCampaignFilter,
     campaigns,
     taxes: breakdownMetaTaxes(overall.amountSpent),
     results: overall.results,

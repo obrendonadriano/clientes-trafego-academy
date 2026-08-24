@@ -3,16 +3,22 @@
 import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import type { CampaignWithMetrics } from "@/lib/types";
+
+export type CampaignSelectionOption = {
+  id: string;
+  name: string;
+  clientName?: string;
+  platform?: string;
+};
 
 type CampaignMultiSelectProps = {
-  campaigns: CampaignWithMetrics[];
+  campaigns: CampaignSelectionOption[];
   // Modo não-controlado: seleção inicial gerenciada internamente.
   selectedIds?: string[];
   // Modo controlado: o pai é dono da seleção (value + onChange).
   value?: string[];
   onChange?: (ids: string[]) => void;
-  inputName?: string;
+  inputName?: string | null;
   showSelectionSummary?: boolean;
   // Lista mais baixa para painéis estreitos (ex.: gerar relatório).
   dense?: boolean;
@@ -92,9 +98,11 @@ export function CampaignMultiSelect({
 
       {/* A seleção é submetida via hidden inputs para não depender dos
           checkboxes visíveis (a busca desmonta os que não correspondem). */}
-      {selected.map((id) => (
-        <input key={id} type="hidden" name={inputName} value={id} />
-      ))}
+      {inputName
+        ? selected.map((id) => (
+            <input key={id} type="hidden" name={inputName} value={id} />
+          ))
+        : null}
 
       <div className="dashboard-row min-w-0 rounded-[1.35rem] border p-2">
         <div
@@ -125,9 +133,13 @@ export function CampaignMultiSelect({
                   />
                   <div className="min-w-0 flex-1">
                     <p className="break-words font-medium text-foreground">{campaign.name}</p>
-                    <p className="break-words text-sm text-muted-foreground">
-                      {campaign.clientName || "Sem cliente"} • {campaign.platform}
-                    </p>
+                    {campaign.clientName || campaign.platform ? (
+                      <p className="break-words text-sm text-muted-foreground">
+                        {[campaign.clientName, campaign.platform]
+                          .filter(Boolean)
+                          .join(" • ")}
+                      </p>
+                    ) : null}
                   </div>
                 </label>
               );
