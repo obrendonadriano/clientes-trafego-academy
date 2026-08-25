@@ -21,12 +21,12 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/capi_fetch_queue",
+        "url": "https://jqvwhonmtpopvldguiln.supabase.co/rest/v1/rpc/capi_fetch_queue",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
             { "name": "Content-Type", "value": "application/json" }
           ]
         },
@@ -147,12 +147,12 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/capi_mark_result",
+        "url": "https://jqvwhonmtpopvldguiln.supabase.co/rest/v1/rpc/capi_mark_result",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
             { "name": "Content-Type", "value": "application/json" }
           ]
         },

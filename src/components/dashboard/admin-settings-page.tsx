@@ -249,8 +249,9 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
                     }
                   />
                   <p className="text-xs leading-5 text-muted-foreground">
-                    Salve o mesmo valor como WAHA_WEBHOOK_SECRET no n8n. Ele é
-                    enviado em um header HTTPS e também assina o payload com HMAC.
+                    No n8n, use o mesmo valor em uma credencial Header Auth com
+                    o nome x-trafegoacademy-secret. Ele é enviado em um header
+                    HTTPS e também assina o payload com HMAC.
                   </p>
                 </div>
               </div>

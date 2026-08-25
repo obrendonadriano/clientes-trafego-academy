@@ -5,6 +5,7 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "waha-eventos",
+        "authentication": "headerAuth",
         "responseMode": "responseNode",
         "options": {}
       },
@@ -26,28 +27,6 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [-680, 300]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": { "caseSensitive": true, "version": 2 },
-          "conditions": [
-            {
-              "id": "auth-webhook-waha",
-              "leftValue": "={{ $json.headers['x-trafegoacademy-secret'] }}",
-              "rightValue": "={{ $env.WAHA_WEBHOOK_SECRET }}",
-              "operator": { "type": "string", "operation": "equals" }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "b2000000-0000-4000-8000-000000000009",
-      "name": "Validar segredo do WAHA",
-      "type": "n8n-nodes-base.filter",
-      "typeVersion": 2.2,
-      "position": [-570, 300]
     },
     {
       "parameters": {
@@ -146,12 +125,12 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/waha_ingest_lead",
+        "url": "https://jqvwhonmtpopvldguiln.supabase.co/rest/v1/rpc/waha_ingest_lead",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
             { "name": "Content-Type", "value": "application/json" }
           ]
         },
@@ -182,12 +161,12 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/waha_update_session_status",
+        "url": "https://jqvwhonmtpopvldguiln.supabase.co/rest/v1/rpc/waha_update_session_status",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
             { "name": "Content-Type", "value": "application/json" }
           ]
         },
@@ -211,9 +190,6 @@
       "main": [[{ "node": "Responder 200 imediato", "type": "main", "index": 0 }]]
     },
     "Responder 200 imediato": {
-      "main": [[{ "node": "Validar segredo do WAHA", "type": "main", "index": 0 }]]
-    },
-    "Validar segredo do WAHA": {
       "main": [[{ "node": "Qual evento?", "type": "main", "index": 0 }]]
     },
     "Qual evento?": {
