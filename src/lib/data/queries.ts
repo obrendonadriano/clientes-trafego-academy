@@ -28,7 +28,6 @@ import {
 } from "@/lib/types";
 import { getSupabasePublishableKey, getSupabaseUrl } from "@/lib/supabase/env";
 import { withMetaTaxes } from "@/lib/taxes";
-import { getCurrentWhatsappSession } from "@/lib/data/whatsapp-sessions";
 import type { WhatsappSession } from "@/lib/whatsapp-session";
 
 export const CACHE_TAGS = {
@@ -1323,11 +1322,11 @@ export type AppShellData = {
 
 export async function getAppShellData(user: User): Promise<AppShellData> {
   if (user.role !== "admin") {
-    const [{ syncStatus }, whatsappSession] = await Promise.all([
-      getClientPortalShellData(user),
-      getCurrentWhatsappSession(),
-    ]);
-    return { clients: [], campaigns: [], syncStatus, whatsappSession };
+    const { syncStatus } = await getClientPortalShellData(user);
+
+    // O provider no navegador consulta/reassina o status imediatamente após a
+    // hidratação. Não bloquear a moldura nesta leitura deixa a entrada rápida.
+    return { clients: [], campaigns: [], syncStatus, whatsappSession: null };
   }
 
   if (!isSupabaseAdminConfigured()) {

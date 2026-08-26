@@ -6,27 +6,6 @@ import {
   type WhatsappSessionRow,
 } from "@/lib/whatsapp-session";
 
-export async function getCurrentWhatsappSession(): Promise<WhatsappSession | null> {
-  const supabase = await createSupabaseServerClient();
-
-  if (!supabase) {
-    return null;
-  }
-
-  // A sessão já foi validada pelo DAL antes de montar o shell. A RLS determina
-  // qual linha o cliente pode ler, sem repetir uma chamada de Auth pela rede.
-  const { data, error } = await supabase
-    .from("whatsapp_sessions")
-    .select(WHATSAPP_SESSION_COLUMNS)
-    .maybeSingle();
-
-  if (error || !data) {
-    return null;
-  }
-
-  return mapWhatsappSessionRow(data as WhatsappSessionRow);
-}
-
 export async function getAllWhatsappSessions(): Promise<{
   sessions: WhatsappSession[];
   notice?: string;
