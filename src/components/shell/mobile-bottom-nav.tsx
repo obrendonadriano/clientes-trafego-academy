@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRef, useState } from "react";
 import { LogOut } from "lucide-react";
 import { logoutAction } from "@/app/login/actions";
+import { IntentPrefetchLink } from "@/components/shell/intent-prefetch-link";
 import { NavIcon } from "@/components/shell/nav-icon";
 import { useScopedHref } from "@/components/shell/period-scope";
 import { useDismiss } from "@/components/shell/use-dismiss";
@@ -41,7 +41,7 @@ export function MobileBottomNav({ role }: { role: Role }) {
 
             <div className="flex flex-col gap-1">
               {overflow.map((section) => (
-                <Link
+                <IntentPrefetchLink
                   key={section.key}
                   href={scopedHref(section.href)}
                   onClick={() => setIsMoreOpen(false)}
@@ -54,7 +54,7 @@ export function MobileBottomNav({ role }: { role: Role }) {
                 >
                   <NavIcon name={section.icon} className="size-[1.15rem] shrink-0" />
                   {section.title ?? section.label}
-                </Link>
+                </IntentPrefetchLink>
               ))}
 
               <form action={logoutAction}>
@@ -80,7 +80,7 @@ export function MobileBottomNav({ role }: { role: Role }) {
           const isActive = section.key === activeKey;
 
           return (
-            <Link
+            <IntentPrefetchLink
               key={section.key}
               href={scopedHref(section.href)}
               aria-current={isActive ? "page" : undefined}
@@ -93,7 +93,7 @@ export function MobileBottomNav({ role }: { role: Role }) {
             >
               <NavIcon name={section.icon} className="size-5" />
               <span className="max-w-full truncate px-1">{section.label}</span>
-            </Link>
+            </IntentPrefetchLink>
           );
         })}
 

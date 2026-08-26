@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { IntentPrefetchLink } from "@/components/shell/intent-prefetch-link";
 import { useScopedHref } from "@/components/shell/period-scope";
 import { isSubTabActive, type NavSubTab } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
@@ -25,7 +25,7 @@ export function SubTabs({ tabs }: { tabs: NavSubTab[] }) {
         const isActive = isSubTabActive(tab, pathname, searchParams);
 
         return (
-          <Link
+          <IntentPrefetchLink
             key={tab.href}
             href={scopedHref(tab.href)}
             aria-current={isActive ? "page" : undefined}
@@ -37,7 +37,7 @@ export function SubTabs({ tabs }: { tabs: NavSubTab[] }) {
             )}
           >
             {tab.label}
-          </Link>
+          </IntentPrefetchLink>
         );
       })}
     </nav>

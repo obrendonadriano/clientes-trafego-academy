@@ -82,7 +82,25 @@ async function refreshSupabaseSession(request: NextRequest) {
 
   // Verifica o JWT localmente quando o projeto usa chaves assimétricas (com
   // JWKS em cache) e só cai para rede em projetos legados com chave simétrica.
-  await supabase.auth.getClaims();
+  const { data, error } = await supabase.auth.getClaims();
+
+  if (error || !data?.claims?.sub) {
+    const isProtected =
+      request.nextUrl.pathname.startsWith("/admin") ||
+      request.nextUrl.pathname.startsWith("/dashboard");
+    const target = isProtected ? redirectToLogin(request) : response;
+
+    // Remove tokens inválidos (inclusive cookies divididos em partes) para que
+    // cada navegação seguinte não tente renovar o mesmo refresh token antigo.
+    for (const cookie of request.cookies.getAll()) {
+      if (cookie.name.startsWith("sb-")) {
+        request.cookies.delete(cookie.name);
+        target.cookies.delete(cookie.name);
+      }
+    }
+
+    return target;
+  }
 
   return response;
 }

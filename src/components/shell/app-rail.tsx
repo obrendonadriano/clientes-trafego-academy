@@ -1,10 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { logoutAction } from "@/app/login/actions";
+import { IntentPrefetchLink } from "@/components/shell/intent-prefetch-link";
 import { NavIcon } from "@/components/shell/nav-icon";
 import { useScopedHref } from "@/components/shell/period-scope";
 import { findActiveSection, getSectionGroups } from "@/lib/navigation";
@@ -23,7 +23,7 @@ export function AppRail({ role }: { role: Role }) {
       aria-label="Navegação principal"
       className="relative z-30 hidden h-full min-h-0 w-[84px] shrink-0 flex-col items-center gap-[1.4rem] overflow-hidden border-r border-border bg-card py-[1.05rem] lg:flex"
     >
-      <Link
+      <IntentPrefetchLink
         href={role === "admin" ? "/admin" : "/dashboard"}
         aria-label="Tráfego Academy"
         className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-border bg-background p-0.5"
@@ -35,7 +35,7 @@ export function AppRail({ role }: { role: Role }) {
           height={48}
           className="h-full w-full scale-[1.15] object-contain"
         />
-      </Link>
+      </IntentPrefetchLink>
 
       {groups.map((group, index) => (
         <div key={group.label} className="flex w-full flex-col items-center gap-2">
@@ -51,7 +51,7 @@ export function AppRail({ role }: { role: Role }) {
             const isActive = section.key === activeKey;
 
             return (
-              <Link
+              <IntentPrefetchLink
                 key={section.key}
                 href={scopedHref(section.href)}
                 aria-current={isActive ? "page" : undefined}
@@ -64,7 +64,7 @@ export function AppRail({ role }: { role: Role }) {
               >
                 <NavIcon name={section.icon} className="size-[1.125rem]" />
                 <span className="w-full text-center leading-[1.15]">{section.label}</span>
-              </Link>
+              </IntentPrefetchLink>
             );
           })}
         </div>

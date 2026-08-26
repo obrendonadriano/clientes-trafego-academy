@@ -1,10 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ClientSwitcher, type ClientOption } from "@/components/shell/client-switcher";
 import { GlobalSearch, type SearchEntry } from "@/components/shell/global-search";
+import { IntentPrefetchLink } from "@/components/shell/intent-prefetch-link";
 import { PeriodPicker } from "@/components/shell/period-picker";
 import { SyncPill } from "@/components/shell/sync-pill";
 import { UserMenu } from "@/components/shell/user-menu";
@@ -44,7 +44,7 @@ export function AppTopbar({
           />
         ) : (
           <>
-            <Link
+            <IntentPrefetchLink
               href="/dashboard"
               className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-lg border border-border/70 bg-[#0c0a16] p-1.5 dark:border-white/10"
               aria-label="Tráfego Academy"
@@ -56,7 +56,7 @@ export function AppTopbar({
                 height={36}
                 className="h-full w-full object-contain"
               />
-            </Link>
+            </IntentPrefetchLink>
             <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
               {section.title ?? section.label}
             </span>

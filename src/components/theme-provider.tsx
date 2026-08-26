@@ -2,10 +2,11 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
-  useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { usePathname } from "next/navigation";
@@ -22,6 +23,7 @@ type ThemeContextValue = {
 // por área — trocar o tema no dashboard não muda o login e vice-versa.
 const APP_THEME_KEY = "ta-theme-app";
 const PUBLIC_THEME_KEY = "ta-theme-public";
+const THEME_CHANGE_EVENT = "ta-theme-change";
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
@@ -38,15 +40,43 @@ function readStored(key: string): Theme | null {
   return value === "light" || value === "dark" ? value : null;
 }
 
+function subscribeToStoredTheme(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(THEME_CHANGE_EVENT, onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(THEME_CHANGE_EVENT, onStoreChange);
+  };
+}
+
+function getAppThemeSnapshot() {
+  return readStored(APP_THEME_KEY);
+}
+
+function getPublicThemeSnapshot() {
+  return readStored(PUBLIC_THEME_KEY);
+}
+
+function getServerThemeSnapshot(): Theme | null {
+  return null;
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isApp = isAppPath(pathname);
 
-  const [appPref, setAppPref] = useState<Theme | null>(() =>
-    readStored(APP_THEME_KEY),
+  // useSyncExternalStore mantém o primeiro snapshot do servidor estável e só
+  // lê o localStorage depois da hidratação, sem renderização divergente.
+  const appPref = useSyncExternalStore(
+    subscribeToStoredTheme,
+    getAppThemeSnapshot,
+    getServerThemeSnapshot,
   );
-  const [publicPref, setPublicPref] = useState<Theme | null>(() =>
-    readStored(PUBLIC_THEME_KEY),
+  const publicPref = useSyncExternalStore(
+    subscribeToStoredTheme,
+    getPublicThemeSnapshot,
+    getServerThemeSnapshot,
   );
 
   // Sem escolha salva, usa o padrão da área (app = escuro, público = claro).
@@ -57,21 +87,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     applyTheme(resolvedTheme);
   }, [resolvedTheme]);
 
-  function setTheme(next: Theme) {
+  const setTheme = useCallback((next: Theme) => {
     if (isApp) {
       window.localStorage.setItem(APP_THEME_KEY, next);
-      setAppPref(next);
     } else {
       window.localStorage.setItem(PUBLIC_THEME_KEY, next);
-      setPublicPref(next);
     }
-  }
+    window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+  }, [isApp]);
 
   const value = useMemo<ThemeContextValue>(
     () => ({ resolvedTheme, setTheme }),
-    // setTheme depende de isApp (qual área salvar/atualizar).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [resolvedTheme, isApp],
+    [resolvedTheme, setTheme],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

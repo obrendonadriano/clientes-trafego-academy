@@ -13,13 +13,8 @@ export async function getCurrentWhatsappSession(): Promise<WhatsappSession | nul
     return null;
   }
 
-  const { data: authData } = await supabase.auth.getUser();
-
-  if (!authData.user) {
-    return null;
-  }
-
-  // A RLS determina qual linha o cliente pode ler. Não enviamos client_id.
+  // A sessão já foi validada pelo DAL antes de montar o shell. A RLS determina
+  // qual linha o cliente pode ler, sem repetir uma chamada de Auth pela rede.
   const { data, error } = await supabase
     .from("whatsapp_sessions")
     .select(WHATSAPP_SESSION_COLUMNS)
@@ -42,13 +37,8 @@ export async function getAllWhatsappSessions(): Promise<{
     return { sessions: [] };
   }
 
-  const { data: authData } = await supabase.auth.getUser();
-
-  if (!authData.user) {
-    return { sessions: [], notice: "Entre novamente para consultar as conexões." };
-  }
-
-  // Para o admin, a própria policy libera todas as linhas.
+  // Para o admin, a própria policy libera todas as linhas. O DAL já validou a
+  // sessão antes desta consulta, e a RLS segue sendo a barreira de segurança.
   const { data, error } = await supabase
     .from("whatsapp_sessions")
     .select(WHATSAPP_SESSION_COLUMNS);
@@ -63,4 +53,3 @@ export async function getAllWhatsappSessions(): Promise<{
     ),
   };
 }
-

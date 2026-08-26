@@ -99,9 +99,17 @@ async function resolveReadClient(user: User) {
   const serverClient = await createSupabaseServerClient();
 
   if (serverClient) {
-    const { data } = await serverClient.auth.getUser();
+    // Em produção, getCurrentUser já validou as claims e o Postgres aplica RLS
+    // usando o JWT dos cookies. Evita uma segunda chamada de Auth pela rede.
+    if (!isDevelopmentAuthFallbackEnabled()) {
+      return { client: serverClient, enforceClientFilter: false };
+    }
 
-    if (data.user) {
+    // O fallback mock só existe em desenvolvimento; aqui precisamos distinguir
+    // uma sessão Supabase real antes de recorrer ao client de serviço.
+    const { data } = await serverClient.auth.getClaims();
+
+    if (data?.claims?.sub) {
       return { client: serverClient, enforceClientFilter: false };
     }
   }
@@ -194,24 +202,31 @@ export async function getConversionLeads(
     return scoped;
   };
 
-  // Contagens do cabeçalho: uma consulta por status, só com o total.
-  const [totalCount, pendingCount, qualifiedCount, discardedCount] =
-    await Promise.all(
-      [null, "pendente", "qualificado", "desqualificado"].map(async (status) => {
-        let query = client
-          .from("conversion_leads")
-          .select("id", { count: "exact", head: true });
-        query = applyScope(query);
+  let listQuery = client.from("conversion_leads").select(SELECT_COLUMNS);
+  listQuery = applyScope(listQuery);
 
-        if (status) {
-          query = query.eq("qualificacao", status);
-        }
+  if (options.tab !== "todos") {
+    listQuery = listQuery.eq("qualificacao", options.tab);
+  }
 
-        const { count, error } = await query;
-        return error ? 0 : (count ?? 0);
-      }),
-    );
+  const from = (page - 1) * LEADS_PAGE_SIZE;
+  const [summaryResult, listResult] = await Promise.all([
+    client.rpc("conversion_leads_summary", {
+      p_start_date: startDate,
+      p_client_id: clientFilter,
+    }),
+    listQuery
+      .order("criado_em", { ascending: false })
+      .range(from, from + LEADS_PAGE_SIZE),
+  ]);
 
+  const summaryRow = Array.isArray(summaryResult.data)
+    ? summaryResult.data[0]
+    : summaryResult.data;
+  const totalCount = Number(summaryRow?.total ?? 0);
+  const pendingCount = Number(summaryRow?.pending ?? 0);
+  const qualifiedCount = Number(summaryRow?.qualified ?? 0);
+  const discardedCount = Number(summaryRow?.discarded ?? 0);
   const evaluated = qualifiedCount + discardedCount;
   const summary: ConversionSummary = {
     total: totalCount,
@@ -221,20 +236,14 @@ export async function getConversionLeads(
     qualificationRate: evaluated > 0 ? (qualifiedCount / evaluated) * 100 : 0,
   };
 
-  let listQuery = client.from("conversion_leads").select(SELECT_COLUMNS);
-  listQuery = applyScope(listQuery);
-
-  if (options.tab !== "todos") {
-    listQuery = listQuery.eq("qualificacao", options.tab);
-  }
-
-  const from = (page - 1) * LEADS_PAGE_SIZE;
-  const { data, error } = await listQuery
-    .order("criado_em", { ascending: false })
-    .range(from, from + LEADS_PAGE_SIZE);
+  const { data, error } = listResult;
 
   if (error) {
     return { ...empty, summary, notice: error.message };
+  }
+
+  if (summaryResult.error) {
+    return { ...empty, notice: summaryResult.error.message };
   }
 
   const rows = (data as LeadRow[] | null) ?? [];

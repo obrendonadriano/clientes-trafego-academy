@@ -46,10 +46,20 @@ export async function loginAction(
 }
 
 export async function logoutAction() {
+  const cookieStore = await cookies();
+
   if (isSupabaseConfigured()) {
     await signOutFromSupabase();
   }
 
-  (await cookies()).delete("ta_session");
+  // Limpa também cookies fragmentados/antigos. Isso evita que um refresh token
+  // inválido continue chegando ao proxy depois de o usuário clicar em sair.
+  for (const cookie of cookieStore.getAll()) {
+    if (cookie.name.startsWith("sb-")) {
+      cookieStore.delete(cookie.name);
+    }
+  }
+
+  cookieStore.delete("ta_session");
   redirect("/login");
 }
