@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  Bot,
   FileText,
   LayoutDashboard,
   Menu,
@@ -22,6 +23,7 @@ const ICONS = {
   perfil: User,
   fechamento: Receipt,
   conversoes: Sparkles,
+  "atendimento-ia": Bot,
   mais: Menu,
 } as const satisfies Record<NavIconKey, unknown>;
 

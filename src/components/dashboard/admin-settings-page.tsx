@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { Brain, Database, MessageCircle, PlugZap } from "lucide-react";
+import { Bot, Brain, Database, MessageCircle, PlugZap } from "lucide-react";
 import { saveIntegrationSettingsAction, type SettingsActionState } from "@/app/admin/configuracoes/actions";
 import { MetaAccountsManager } from "@/components/admin/meta-accounts-manager";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { DEEPSEEK_MODELS } from "@/lib/services/deepseek-models";
 import type { IntegrationSetting, MetaAdAccount } from "@/lib/types";
 
 export type SettingsView = "integracoes" | "contas";
@@ -56,6 +57,8 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
       <PlugZap className="size-5" />
     ) : integration.provider === "gemini" ? (
       <Brain className="size-5" />
+    ) : integration.provider === "deepseek" ? (
+      <Bot className="size-5" />
     ) : integration.provider === "waha" ? (
       <MessageCircle className="size-5" />
     ) : (
@@ -191,6 +194,45 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
             </div>
           ) : null}
 
+          {integration.provider === "deepseek" ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="deepseek_model">Modelo</Label>
+                <Select
+                  id="deepseek_model"
+                  name="config_model"
+                  defaultValue={integration.config.model ?? "deepseek-chat"}
+                >
+                  {DEEPSEEK_MODELS.map((model) => (
+                    <option key={model.value} value={model.value}>
+                      {model.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="deepseek_key">API Key</Label>
+                <Input
+                  id="deepseek_key"
+                  name="config_api_key"
+                  type="password"
+                  autoComplete="new-password"
+                  required={integration.config.api_key_configured !== "true"}
+                  placeholder={
+                    integration.config.api_key_configured === "true"
+                      ? "Chave salva — deixe vazio para manter"
+                      : "Cole a API Key do DeepSeek"
+                  }
+                />
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3 text-sm text-muted-foreground md:col-span-2">
+                Este modelo conduz as conversas do Atendimento IA no WhatsApp
+                dos clientes com Plano Completo. A chave fica no servidor e
+                nunca vai para o navegador.
+              </div>
+            </div>
+          ) : null}
+
           {integration.provider === "waha" ? (
             <div className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
@@ -230,6 +272,24 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
                   <p className="text-xs leading-5 text-muted-foreground">
                     Use a URL de produção do workflow WAHA. Sem ela, a conexão
                     continua funcionando, mas mensagens não entram na fila de leads.
+                  </p>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="waha_ai_webhook_url">
+                    Webhook de produção do n8n para o Atendimento IA
+                  </Label>
+                  <Input
+                    id="waha_ai_webhook_url"
+                    name="config_ai_webhook_url"
+                    type="url"
+                    placeholder="https://n8n.seudominio.com/webhook/waha-atendimento-ia"
+                    defaultValue={integration.config.ai_webhook_url ?? ""}
+                  />
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    URL de produção do workflow de Atendimento IA. É ele que
+                    aplica o debounce e as esperas humanizadas. Depois de
+                    salvar, peça ao cliente para clicar em conectar de novo —
+                    a sessão é atualizada sem pedir um novo QR.
                   </p>
                 </div>
                 <div className="space-y-2 md:col-span-2">
@@ -293,7 +353,12 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
           ) : null}
 
           {integration.provider !== "supabase" ? (
-            <SaveButton testConnection={integration.provider === "waha"} />
+            <SaveButton
+              testConnection={
+                integration.provider === "waha" ||
+                integration.provider === "deepseek"
+              }
+            />
           ) : null}
 
           {state.error ? (

@@ -9,6 +9,7 @@ import {
   deleteMetaAdAccount,
   updateMetaAdAccount,
 } from "@/lib/meta/accounts";
+import { testDeepseekCredentials } from "@/lib/services/deepseek";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   normalizeWahaBaseUrl,
@@ -142,7 +143,7 @@ export async function removeMetaAccountAction(
 }
 
 const integrationSchema = z.object({
-  provider: z.enum(["meta_ads", "gemini", "waha"]),
+  provider: z.enum(["meta_ads", "gemini", "deepseek", "waha"]),
   enabled: z.string().optional(),
   fields: z.record(z.string(), z.string()),
 });
@@ -198,6 +199,7 @@ export async function saveIntegrationSettingsAction(
   const secretFields: Record<typeof parsed.data.provider, string[]> = {
     meta_ads: ["app_secret", "access_token"],
     gemini: ["api_key"],
+    deepseek: ["api_key"],
     waha: ["api_key", "webhook_secret"],
   };
   const config = { ...previousConfig, ...parsed.data.fields };
@@ -213,6 +215,9 @@ export async function saveIntegrationSettingsAction(
       config.base_url = normalizeWahaBaseUrl(config.base_url ?? "");
       config.leads_webhook_url = normalizeWahaWebhookUrl(
         config.leads_webhook_url ?? "",
+      );
+      config.ai_webhook_url = normalizeWahaWebhookUrl(
+        config.ai_webhook_url ?? "",
       );
     } catch (error) {
       return { error: error instanceof Error ? error.message : "URL do WAHA inválida." };
@@ -244,6 +249,28 @@ export async function saveIntegrationSettingsAction(
     }
   }
 
+  if (parsed.data.provider === "deepseek") {
+    if (!config.api_key?.trim()) {
+      return { error: "Informe a API Key do DeepSeek." };
+    }
+
+    config.api_key = config.api_key.trim();
+    config.model = config.model?.trim() || "deepseek-chat";
+
+    if (enabled) {
+      try {
+        await testDeepseekCredentials(config.api_key);
+      } catch (error) {
+        return {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Não foi possível validar a API Key do DeepSeek.",
+        };
+      }
+    }
+  }
+
   const payload = {
     provider: parsed.data.provider,
     enabled,
@@ -267,7 +294,9 @@ export async function saveIntegrationSettingsAction(
     success: enabled
       ? parsed.data.provider === "waha"
         ? "Conexão com o WAHA testada, salva e ativada com segurança."
-        : "Credenciais salvas e integração ativada com sucesso."
+        : parsed.data.provider === "deepseek"
+          ? "API Key do DeepSeek testada, salva e ativada."
+          : "Credenciais salvas e integração ativada com sucesso."
       : "Credenciais salvas com sucesso. A integração permanece desativada até você ativar.",
   };
 }

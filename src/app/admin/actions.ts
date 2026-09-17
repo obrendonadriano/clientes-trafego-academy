@@ -240,6 +240,7 @@ export async function createClientWorkspaceAction(
     notes: formData.get("notes"),
     segment: formData.get("segment"),
     segmentDescription: formData.get("segmentDescription"),
+    planType: formData.get("planType"),
     accountName: formData.get("accountName"),
     username: formData.get("username"),
     email: formData.get("email"),
@@ -288,6 +289,7 @@ export async function createClientWorkspaceAction(
       observacoes: parsed.data.notes || null,
       segmento: parsed.data.segment || null,
       segmento_descricao: parsed.data.segmentDescription || null,
+      plan_type: parsed.data.planType,
       ativo: true,
     })
     .select("id")
@@ -449,6 +451,7 @@ export async function updateClientWorkspaceAction(
     notes: formData.get("notes"),
     segment: formData.get("segment"),
     segmentDescription: formData.get("segmentDescription"),
+    planType: formData.get("planType"),
     clientActive: formData.get("clientActive"),
     accountName: formData.get("accountName"),
     username: formData.get("username"),
@@ -498,6 +501,9 @@ export async function updateClientWorkspaceAction(
       observacoes: parsed.data.notes || null,
       segmento: parsed.data.segment || null,
       segmento_descricao: parsed.data.segmentDescription || null,
+      // Rebaixar para Essencial dispara o trigger que desliga a IA na hora,
+      // preservando prompt, numero de notificacao e historico.
+      plan_type: parsed.data.planType,
       ativo: activeClient,
     })
     .eq("id", parsed.data.clientId);
@@ -611,7 +617,9 @@ export async function updateClientWorkspaceAction(
   revalidatePath("/admin");
   revalidatePath("/admin/clientes");
   revalidatePath(`/admin/clientes/${parsed.data.clientId}`);
+  revalidatePath("/admin/atendimento-ia");
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/atendimento-ia");
 
   return { success: "Cliente atualizado com sucesso." };
 }

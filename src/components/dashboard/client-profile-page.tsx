@@ -12,12 +12,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormPendingButton } from "@/components/ui/form-pending-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CLIENT_PLAN_LABELS, type ClientPlanType } from "@/lib/ai-agent/shared";
 import type { User } from "@/lib/types";
 
 type ClientProfilePageProps = {
   user: User;
   allowedCampaignCount: number;
   totalCampaignCount: number;
+  planType: ClientPlanType;
 };
 
 const initialState: ProfileActionState = {};
@@ -55,6 +57,7 @@ export function ClientProfilePage({
   user,
   allowedCampaignCount,
   totalCampaignCount,
+  planType,
 }: ClientProfilePageProps) {
   const [profileState, saveProfile] = useActionState(
     updateOwnProfileAction,
@@ -175,6 +178,7 @@ export function ClientProfilePage({
           <CardContent className="space-y-4">
             <div className="overflow-hidden rounded-2xl border border-border/60 dark:border-white/10">
               <InfoRow label="Usuário" value={user.username} />
+              <InfoRow label="Plano" value={CLIENT_PLAN_LABELS[planType]} />
               <InfoRow
                 label="Campanhas liberadas"
                 value={`${allowedCampaignCount} de ${totalCampaignCount}`}

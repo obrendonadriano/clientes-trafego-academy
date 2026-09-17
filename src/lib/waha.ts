@@ -12,6 +12,8 @@ export type WahaCredentials = {
 export type WahaConfig = WahaCredentials & {
   webhookSecret: string;
   leadsWebhookUrl: string | null;
+  // Webhook do fluxo n8n que cuida do tempo do atendimento por IA.
+  aiWebhookUrl: string | null;
 };
 
 export type WahaSessionStatus =
@@ -169,6 +171,7 @@ export async function getWahaConfig(): Promise<WahaConfig> {
   const apiKey = integration?.config?.api_key ?? "";
   const webhookSecret = integration?.config?.webhook_secret ?? "";
   const leadsWebhookUrl = integration?.config?.leads_webhook_url ?? "";
+  const aiWebhookUrl = integration?.config?.ai_webhook_url ?? "";
 
   if (!integration?.enabled || !baseUrl || !apiKey || !webhookSecret) {
     throw new WahaRequestError(
@@ -183,6 +186,7 @@ export async function getWahaConfig(): Promise<WahaConfig> {
     leadsWebhookUrl: leadsWebhookUrl
       ? normalizeWahaWebhookUrl(leadsWebhookUrl)
       : null,
+    aiWebhookUrl: aiWebhookUrl ? normalizeWahaWebhookUrl(aiWebhookUrl) : null,
   };
 }
 
@@ -202,4 +206,57 @@ export function toWahaSessionStatus(value: unknown): WahaSessionStatus {
 
 export function wahaPhoneNumber(session: WahaSession) {
   return session.me?.id?.replace(/@.+$/, "").replace(/\D/g, "") || null;
+}
+
+// ---------------------------------------------------------------------------
+// Envio de mensagens e presença.
+//
+// Endpoints do WAHA usados aqui (todos existentes na API Core):
+//   POST /api/sendText        { session, chatId, text }
+//   POST /api/startTyping     { session, chatId }
+//   POST /api/stopTyping      { session, chatId }
+//
+// `sendText` já encerra o "digitando..." do lado do WhatsApp, então stopTyping
+// só é chamado quando o envio falha e é preciso limpar o estado.
+// ---------------------------------------------------------------------------
+
+export type WahaSentMessage = {
+  id?: string | { id?: string; _serialized?: string };
+};
+
+export async function sendWahaText(
+  credentials: WahaCredentials,
+  input: { session: string; chatId: string; text: string },
+) {
+  return wahaFetchJson<WahaSentMessage>(credentials, "/api/sendText", {
+    method: "POST",
+    body: JSON.stringify({
+      session: input.session,
+      chatId: input.chatId,
+      text: input.text,
+    }),
+  });
+}
+
+export async function setWahaTyping(
+  credentials: WahaCredentials,
+  input: { session: string; chatId: string; typing: boolean },
+) {
+  const path = input.typing ? "/api/startTyping" : "/api/stopTyping";
+
+  await wahaFetchJson<unknown>(credentials, path, {
+    method: "POST",
+    body: JSON.stringify({ session: input.session, chatId: input.chatId }),
+  });
+}
+
+/** Normaliza o id que o WAHA devolve (string ou objeto) para texto. */
+export function wahaMessageId(message: WahaSentMessage | null | undefined) {
+  const id = message?.id;
+
+  if (typeof id === "string") {
+    return id;
+  }
+
+  return id?._serialized || id?.id || null;
 }

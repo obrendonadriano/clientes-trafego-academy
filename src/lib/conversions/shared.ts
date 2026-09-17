@@ -3,14 +3,19 @@
 // As consultas ficam em `src/lib/data/conversions.ts`, que usa `next/headers`
 // e por isso não pode ser puxado para o bundle do navegador.
 
-export type LeadQualification = "pendente" | "qualificado" | "desqualificado";
+export type LeadQualification =
+  | "pendente"
+  | "qualificado"
+  | "desqualificado"
+  | "fechado";
 export type CapiStatus = "nao_enviado" | "enviado" | "erro" | "ignorado";
 
 export const QUALIFICATION_TABS = [
+  { key: "todos", label: "Todos" },
   { key: "pendente", label: "Pendentes" },
   { key: "qualificado", label: "Qualificados" },
-  { key: "desqualificado", label: "Descartados" },
-  { key: "todos", label: "Todos" },
+  { key: "desqualificado", label: "Desqualificados" },
+  { key: "fechado", label: "Negócios fechados" },
 ] as const;
 
 export type QualificationTab = (typeof QUALIFICATION_TABS)[number]["key"];
@@ -37,6 +42,8 @@ export type ConversionLead = {
   hasClickId: boolean;
   qualification: LeadQualification;
   note: string | null;
+  value: number | null;
+  currency: string;
   capiStatus: CapiStatus;
   capiSentAt: string | null;
   // Só é entregue ao admin: mensagem crua de erro da Meta.
@@ -49,7 +56,8 @@ export type ConversionSummary = {
   pending: number;
   qualified: number;
   discarded: number;
-  // Percentual de qualificados entre os já avaliados.
+  closed: number;
+  // Percentual de qualificados e fechados entre os já avaliados.
   qualificationRate: number;
 };
 

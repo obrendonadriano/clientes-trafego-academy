@@ -11,6 +11,7 @@ export type NavIconKey =
   | "perfil"
   | "fechamento"
   | "conversoes"
+  | "atendimento-ia"
   | "mais";
 
 export type NavSubTab = {
@@ -110,6 +111,17 @@ const ADMIN_SECTIONS: NavSection[] = [
     subTabs: [{ label: "Do período", href: "/admin/fechamento", exact: true }],
   },
   {
+    key: "atendimento-ia",
+    label: "Atendimento IA",
+    title: "Atendimento IA dos clientes",
+    href: "/admin/atendimento-ia",
+    icon: "atendimento-ia",
+    group: "IA",
+    subTabs: [
+      { label: "Clientes", href: "/admin/atendimento-ia", exact: true },
+    ],
+  },
+  {
     key: "relatorios",
     label: "Relatórios",
     title: "Relatórios IA",
@@ -174,6 +186,17 @@ const CLIENT_SECTIONS: NavSection[] = [
     icon: "fechamento",
     group: "Oper",
     subTabs: [{ label: "Do período", href: "/dashboard/fechamento", exact: true }],
+  },
+  {
+    key: "atendimento-ia",
+    label: "Atendimento IA",
+    title: "Atendimento IA",
+    href: "/dashboard/atendimento-ia",
+    icon: "atendimento-ia",
+    group: "IA",
+    subTabs: [
+      { label: "Visão geral", href: "/dashboard/atendimento-ia", exact: true },
+    ],
   },
   {
     key: "perfil",

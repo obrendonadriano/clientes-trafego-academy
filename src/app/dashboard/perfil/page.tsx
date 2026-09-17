@@ -5,12 +5,14 @@ import { PageHeader } from "@/components/shell/page-header";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getDefaultMetricsWindow } from "@/lib/data/date-range";
 import { getAppShellData, getClientPortalData } from "@/lib/data/queries";
+import { getAiAgentPageData } from "@/lib/data/ai-agent";
 import type { User } from "@/lib/types";
 
 async function ProfileSection({ user }: { user: User }) {
-  const [portal, shell] = await Promise.all([
+  const [portal, shell, ai] = await Promise.all([
     getClientPortalData(user, getDefaultMetricsWindow()),
     getAppShellData(user),
+    getAiAgentPageData(user),
   ]);
 
   return (
@@ -21,6 +23,7 @@ async function ProfileSection({ user }: { user: User }) {
         portal.campaigns.length,
         shell.campaigns.length,
       )}
+      planType={ai.plan}
     />
   );
 }

@@ -17,7 +17,11 @@ const QUALIFICATIONS: LeadQualification[] = [
   "pendente",
   "qualificado",
   "desqualificado",
+  "fechado",
 ];
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Escrita sempre pela sessão do usuário: é ela que o banco usa para preencher
 // `qualificado_por` e para aplicar as policies. O caminho de serviço existe só
@@ -38,6 +42,55 @@ async function resolveWriteClient() {
   }
 
   return null;
+}
+
+export async function closeLeadAction(
+  leadId: string,
+  value: number,
+  currency = "BRL",
+): Promise<ConversionActionState> {
+  const user = await getOptionalCurrentUser();
+
+  if (!user) {
+    return { error: "Sessão expirada. Entre no portal novamente." };
+  }
+
+  if (!UUID_PATTERN.test(leadId)) {
+    return { error: "Lead inválido." };
+  }
+
+  if (!Number.isFinite(value) || value <= 0 || value > 999_999_999) {
+    return { error: "Informe um valor de venda válido e maior que zero." };
+  }
+
+  const normalizedCurrency = currency.trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(normalizedCurrency)) {
+    return { error: "Moeda inválida." };
+  }
+
+  const client = await resolveWriteClient();
+  if (!client) {
+    return { error: "Não foi possível gravar com a sua sessão. Entre de novo." };
+  }
+
+  const { error } = await client
+    .from("conversion_leads")
+    .update({
+      qualificacao: "fechado" satisfies LeadQualification,
+      valor: value,
+      moeda: normalizedCurrency,
+    })
+    .eq("id", leadId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidateConversions();
+  return {
+    success:
+      "Negócio fechado registrado. Com o identificador do anúncio, a compra entra na fila da Meta.",
+  };
 }
 
 function revalidateConversions() {
@@ -88,8 +141,10 @@ export async function qualifyLeadsAction(
     qualification === "qualificado"
       ? "qualificado"
       : qualification === "desqualificado"
-        ? "descartado"
-        : "voltou para pendente";
+        ? "desqualificado"
+        : qualification === "fechado"
+          ? "marcado como negócio fechado"
+          : "voltou para pendente";
 
   return {
     success:

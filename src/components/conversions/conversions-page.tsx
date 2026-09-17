@@ -2,8 +2,17 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState, useTransition } from "react";
-import { LoaderCircle, ThumbsDown, ThumbsUp } from "lucide-react";
-import { qualifyLeadsAction } from "@/app/conversoes/actions";
+import {
+  BadgeDollarSign,
+  LoaderCircle,
+  ThumbsDown,
+  ThumbsUp,
+  X,
+} from "lucide-react";
+import {
+  closeLeadAction,
+  qualifyLeadsAction,
+} from "@/app/conversoes/actions";
 import {
   AlreadySentWarning,
   CapiErrorBadge,
@@ -55,6 +64,14 @@ function dateTime(iso: string) {
   return formatted.replace(", ", " às ");
 }
 
+function parseSaleValue(raw: string) {
+  const compact = raw.trim().replace(/\s/g, "");
+  const normalized = compact.includes(",")
+    ? compact.replace(/\./g, "").replace(",", ".")
+    : compact;
+  return Number(normalized);
+}
+
 export function ConversionsPage({
   data,
   tab,
@@ -77,6 +94,8 @@ export function ConversionsPage({
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
+  const [closingLead, setClosingLead] = useState<ConversionLead | null>(null);
+  const [saleValue, setSaleValue] = useState("");
 
   const leads = useMemo(
     () =>
@@ -94,10 +113,15 @@ export function ConversionsPage({
   );
 
   const updateParams = useCallback(
-    (mutate: (params: URLSearchParams) => void) => {
+    (
+      mutate: (params: URLSearchParams) => void,
+      { resetPage = true }: { resetPage?: boolean } = {},
+    ) => {
       const params = new URLSearchParams(searchParams.toString());
       mutate(params);
-      params.delete("pagina");
+      if (resetPage) {
+        params.delete("pagina");
+      }
 
       startNavigation(() => {
         router.replace(`${pathname}?${params.toString()}`, { scroll: false });
@@ -203,6 +227,45 @@ export function ConversionsPage({
     void applyQualification(ids, qualification, previous);
   };
 
+  const openCloseDialog = (lead: ConversionLead) => {
+    setClosingLead(lead);
+    setSaleValue(lead.value ? String(lead.value).replace(".", ",") : "");
+  };
+
+  const confirmClose = async () => {
+    if (!closingLead) {
+      return;
+    }
+
+    const value = parseSaleValue(saleValue);
+    if (!Number.isFinite(value) || value <= 0) {
+      showToast({
+        message: "Informe o valor da venda, maior que zero.",
+        tone: "erro",
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    const result = await closeLeadAction(closingLead.id, value, "BRL");
+    setIsSaving(false);
+
+    if (result.error) {
+      showToast({ message: result.error, tone: "erro", duration: 8000 });
+      return;
+    }
+
+    setOverrides((current) => {
+      const next = new Map(current);
+      next.set(closingLead.id, "fechado");
+      return next;
+    });
+    setClosingLead(null);
+    setSaleValue("");
+    showToast({ message: result.success ?? "Negócio fechado registrado." });
+    router.refresh();
+  };
+
   const toggleSelected = (id: string) => {
     setSelected((current) => {
       const next = new Set(current);
@@ -222,6 +285,7 @@ export function ConversionsPage({
     { label: "Leads no período", value: String(data.summary.total) },
     { label: "Pendentes de avaliação", value: String(data.summary.pending) },
     { label: "Qualificados", value: String(data.summary.qualified) },
+    { label: "Negócios fechados", value: String(data.summary.closed) },
     {
       label: "Taxa de qualificação",
       value: `${data.summary.qualificationRate.toFixed(0)}%`,
@@ -236,7 +300,7 @@ export function ConversionsPage({
         </p>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {cards.map((card) => (
           <Card key={card.label}>
             <CardContent className="py-5">
@@ -265,11 +329,17 @@ export function ConversionsPage({
                 )}
               >
                 {item.label}
-                {item.key === "pendente" && data.summary.pending > 0 ? (
-                  <span className="ml-1.5 text-xs opacity-80">
-                    {data.summary.pending}
-                  </span>
-                ) : null}
+                <span className="ml-1.5 text-xs opacity-80">
+                  {item.key === "todos"
+                    ? data.summary.total
+                    : item.key === "pendente"
+                      ? data.summary.pending
+                      : item.key === "qualificado"
+                        ? data.summary.qualified
+                        : item.key === "desqualificado"
+                          ? data.summary.discarded
+                          : data.summary.closed}
+                </span>
               </button>
             ))}
 
@@ -359,7 +429,7 @@ export function ConversionsPage({
           <Card className="hidden lg:block">
             <CardContent className="p-0">
               <div className="min-w-0 overflow-x-auto">
-                <table className="w-full min-w-[52rem] border-collapse text-sm">
+                <table className="w-full min-w-[64rem] border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-border/60 text-left text-xs uppercase tracking-[0.08em] text-muted-foreground dark:border-white/10">
                       <th className="w-10 px-4 py-3">
@@ -450,6 +520,7 @@ export function ConversionsPage({
                             lead={lead}
                             disabled={isSaving}
                             onQualify={qualifyOne}
+                            onClose={openCloseDialog}
                           />
                         </td>
                       </tr>
@@ -512,6 +583,7 @@ export function ConversionsPage({
                     lead={lead}
                     disabled={isSaving}
                     onQualify={qualifyOne}
+                    onClose={openCloseDialog}
                     full
                   />
                 </CardContent>
@@ -525,15 +597,117 @@ export function ConversionsPage({
             total={data.totalInTab}
             pageSize={data.pageSize}
             onGo={(next) =>
-              updateParams((p) => {
-                if (next > 1) {
-                  p.set("pagina", String(next));
-                }
-              })
+              updateParams(
+                (p) => {
+                  if (next > 1) {
+                    p.set("pagina", String(next));
+                  } else {
+                    p.delete("pagina");
+                  }
+                },
+                { resetPage: false },
+              )
             }
           />
         </>
       )}
+
+      {closingLead ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isSaving) {
+              setClosingLead(null);
+            }
+          }}
+        >
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="close-lead-title"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void confirmClose();
+            }}
+            className="w-full max-w-md rounded-2xl border border-border/70 bg-background p-5 shadow-2xl dark:border-white/10"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  id="close-lead-title"
+                  className="font-display text-xl font-semibold text-foreground"
+                >
+                  Registrar negócio fechado
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {closingLead.name || "Lead sem nome"} ·{" "}
+                  {maskPhone(closingLead.phone)}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => setClosingLead(null)}
+                aria-label="Fechar"
+                className="rounded-full p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
+              >
+                <X className="size-4" aria-hidden />
+              </button>
+            </div>
+
+            <label className="mt-5 block text-sm font-medium text-foreground">
+              Valor da venda
+              <span className="mt-2 flex h-11 items-center rounded-xl border border-border/70 bg-background px-3 focus-within:border-primary dark:border-white/10">
+                <span className="mr-2 text-sm text-muted-foreground">R$</span>
+                <input
+                  autoFocus
+                  required
+                  inputMode="decimal"
+                  value={saleValue}
+                  onChange={(event) => setSaleValue(event.target.value)}
+                  placeholder="0,00"
+                  className="min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground"
+                />
+              </span>
+            </label>
+
+            {!closingLead.hasClickId ? (
+              <p className="mt-3 rounded-xl bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-700 dark:text-amber-300">
+                Este lead não tem o identificador do anúncio. A venda será salva,
+                mas não poderá ser atribuída com segurança à campanha na Meta.
+              </p>
+            ) : (
+              <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                A Meta receberá o evento Purchase com o valor e a moeda BRL.
+              </p>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => setClosingLead(null)}
+                className="h-10 rounded-full border border-border/70 px-4 text-sm text-foreground disabled:opacity-50 dark:border-white/10"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="inline-flex h-10 items-center gap-2 rounded-full bg-primary px-4 text-sm font-medium text-white transition hover:bg-primary/90 disabled:opacity-60"
+              >
+                {isSaving ? (
+                  <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  <BadgeDollarSign className="size-4" aria-hidden />
+                )}
+                Confirmar venda
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -542,11 +716,13 @@ function LeadActions({
   lead,
   disabled,
   onQualify,
+  onClose,
   full,
 }: {
   lead: ConversionLead;
   disabled: boolean;
   onQualify: (lead: ConversionLead, q: LeadQualification) => void;
+  onClose: (lead: ConversionLead) => void;
   full?: boolean;
 }) {
   return (
@@ -584,7 +760,24 @@ function LeadActions({
         )}
       >
         <ThumbsDown className="size-4" />
-        Descartar
+        Desqualificar
+      </button>
+
+      <button
+        type="button"
+        disabled={disabled || lead.qualification === "fechado"}
+        onClick={() => onClose(lead)}
+        aria-pressed={lead.qualification === "fechado"}
+        className={cn(
+          "inline-flex h-10 items-center justify-center gap-1.5 rounded-full border px-3 text-sm transition disabled:opacity-60",
+          full && "flex-1",
+          lead.qualification === "fechado"
+            ? "border-primary/40 bg-primary/15 text-primary"
+            : "border-border/70 text-muted-foreground hover:border-primary/40 hover:text-primary dark:border-white/10",
+        )}
+      >
+        <BadgeDollarSign className="size-4" aria-hidden />
+        Fechado
       </button>
     </div>
   );
@@ -645,8 +838,10 @@ function EmptyState({ tab }: { tab: QualificationTab }) {
       : tab === "qualificado"
         ? "Nenhum lead marcado como qualificado neste período."
         : tab === "desqualificado"
-          ? "Nenhum lead descartado neste período."
-          : "Quando chegarem leads das suas campanhas, eles aparecem aqui para você marcar quais foram bons. Isso ensina o Meta a buscar mais pessoas parecidas.";
+          ? "Nenhum lead desqualificado neste período."
+          : tab === "fechado"
+            ? "Nenhum negócio fechado neste período."
+            : "Quando chegarem leads das suas campanhas, eles aparecem aqui para você avaliar e registrar as vendas.";
 
   return (
     <Card>

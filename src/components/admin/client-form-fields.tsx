@@ -2,11 +2,16 @@
 
 import type { ComponentProps, ComponentType, ReactNode } from "react";
 import { useState } from "react";
-import { Briefcase } from "lucide-react";
+import { Briefcase, Sparkles } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  CLIENT_PLAN_LABELS,
+  CLIENT_PLAN_TYPES,
+  type ClientPlanType,
+} from "@/lib/ai-agent/shared";
 import { CLIENT_SEGMENTS } from "@/lib/segments";
 import { cn } from "@/lib/utils";
 
@@ -151,6 +156,45 @@ export function SegmentField({
           />
         </Field>
       ) : null}
+    </div>
+  );
+}
+
+// Plano do cliente. Escolher "Completo" libera a area de Atendimento IA;
+// voltar para "Essencial" bloqueia na hora e desliga a IA, sem apagar nada.
+export function PlanTypeField({
+  defaultValue = "essential",
+}: {
+  defaultValue?: ClientPlanType;
+}) {
+  const [plan, setPlan] = useState<ClientPlanType>(defaultValue);
+
+  return (
+    <div className="min-w-0 space-y-2 md:col-span-2">
+      <Field label="Plano do cliente" htmlFor="planType">
+        <div className="relative min-w-0">
+          <Sparkles className="pointer-events-none absolute left-4 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Select
+            id="planType"
+            name="planType"
+            value={plan}
+            onChange={(event) => setPlan(event.target.value as ClientPlanType)}
+            className="pl-11"
+          >
+            {CLIENT_PLAN_TYPES.map((option) => (
+              <option key={option} value={option}>
+                {CLIENT_PLAN_LABELS[option]}
+              </option>
+            ))}
+          </Select>
+        </div>
+      </Field>
+
+      <p className="text-xs leading-5 text-muted-foreground">
+        {plan === "complete"
+          ? "Libera o Atendimento IA: ativacao, prompt, WhatsApp de notificacao, historico e leads qualificados."
+          : "O cliente ve a area de Atendimento IA bloqueada, com o convite para upgrade."}
+      </p>
     </div>
   );
 }

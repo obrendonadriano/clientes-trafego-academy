@@ -27,6 +27,7 @@ import {
   User,
 } from "@/lib/types";
 import { getSupabasePublishableKey, getSupabaseUrl } from "@/lib/supabase/env";
+import { toClientPlanType } from "@/lib/ai-agent/shared";
 import { withMetaTaxes } from "@/lib/taxes";
 import type { WhatsappSession } from "@/lib/whatsapp-session";
 
@@ -63,6 +64,7 @@ type DbClientRow = {
   observacoes: string | null;
   segmento?: string | null;
   segmento_descricao?: string | null;
+  plan_type?: string | null;
   ativo: boolean;
 };
 
@@ -200,6 +202,7 @@ function mapClient(row: DbClientRow, campaignCode?: string): Client {
     campaignCode,
     segment: row.segmento ?? undefined,
     segmentDescription: row.segmento_descricao ?? undefined,
+    planType: toClientPlanType(row.plan_type),
   };
 }
 
@@ -471,17 +474,17 @@ const fetchClientsCached = unstable_cache(
     const admin = requireAdminClient();
     const baseColumns = "id, nome_empresa, responsavel, whatsapp, observacoes, ativo";
 
-    // Tenta com as colunas de segmento; se ainda não existirem (migração não
-    // aplicada), refaz sem elas para não derrubar o painel.
+    // Tenta com as colunas de segmento e plano; se ainda não existirem
+    // (migração não aplicada), refaz sem elas para não derrubar o painel.
     const withSegments = await admin
       .from("clients")
-      .select(`${baseColumns}, segmento, segmento_descricao`)
+      .select(`${baseColumns}, segmento, segmento_descricao, plan_type`)
       .order("created_at", { ascending: true });
 
     let rows = withSegments.data as DbClientRow[] | null;
     let error = withSegments.error;
 
-    if (error && /segmento/i.test(error.message)) {
+    if (error && /segmento|plan_type/i.test(error.message)) {
       const fallback = await admin
         .from("clients")
         .select(baseColumns)
@@ -1140,6 +1143,15 @@ function getDefaultIntegrations(): IntegrationSetting[] {
       config: {},
     },
     {
+      provider: "deepseek",
+      enabled: Boolean(process.env.DEEPSEEK_API_KEY),
+      status: process.env.DEEPSEEK_API_KEY ? "connected" : "pending",
+      title: "DeepSeek",
+      description:
+        "Modelo que conversa e qualifica os leads no atendimento por IA.",
+      config: {},
+    },
+    {
       provider: "waha",
       enabled: false,
       status: "not_configured",
@@ -1170,10 +1182,18 @@ function sanitizeIntegrationConfig(
     };
   }
 
+  if (provider === "deepseek") {
+    return {
+      model: config.model ?? "",
+      api_key_configured: String(Boolean(config.api_key)),
+    };
+  }
+
   if (provider === "waha") {
     return {
       base_url: config.base_url ?? "",
       leads_webhook_url: config.leads_webhook_url ?? "",
+      ai_webhook_url: config.ai_webhook_url ?? "",
       api_key_configured: String(Boolean(config.api_key)),
       webhook_secret_configured: String(Boolean(config.webhook_secret)),
     };

@@ -74,3 +74,80 @@ https://dashboard.trafegoacademy.online/exclusao-de-dados
 - clientes usam **Atualizar métricas** quando precisarem dos números mais recentes;
 - `public.sync_statuses` guarda somente a última tentativa, o último sucesso e
   o estado atual para impedir execuções simultâneas.
+
+## Conversões de leads por WhatsApp
+
+- **Desqualificado** é uma etapa interna do dashboard; a Conversions API para
+  mensagens não oferece um evento negativo equivalente e nada é enviado.
+- **Qualificado** coloca `QualifiedLead` na fila da Meta quando o lead possui
+  `ctwa_clid`.
+- **Negócio fechado** exige o valor da venda e coloca `Purchase` na fila com
+  `currency: BRL` e `value`.
+- O workflow importável e atualizado está em
+  `n8n/n8n_capi_conversoes.json`.
+
+## Planos dos clientes
+
+`public.clients.plan_type` define o que o cliente enxerga:
+
+- **Essencial** (`essential`, padrão) — todas as funções atuais. A área
+  **Atendimento IA** aparece no menu, mas esmaecida, sem clique e com o convite
+  de upgrade.
+- **Completo** (`complete`) — libera ativação da IA, prompt, WhatsApp de
+  notificação, configurações, histórico e leads qualificados.
+
+O campo está no cadastro e na edição do cliente (Admin → Clientes). Rebaixar
+para Essencial **desativa a IA na hora** e preserva prompt, número de
+notificação e todo o histórico; voltar para Completo é só religar.
+
+O bloqueio não é visual. Ele é aplicado em três camadas:
+
+1. a tela do Plano Essencial é `inert` (sem foco, sem clique, fora do tab);
+2. toda server action da área revalida sessão, papel, tenant e plano;
+3. um trigger no Postgres recusa `ai_agent_settings.enabled = true` quando o
+   plano não é Completo — vale inclusive para a `service_role`.
+
+## Atendimento e qualificação por IA no WhatsApp
+
+Usa a **mesma sessão WAHA** que o cliente já conecta em Conversões. Não há
+segunda integração de WhatsApp, nem novo QR, nem nova credencial.
+
+```text
+Anúncio -> lead chama o WhatsApp Business do cliente
+  -> WAHA dispara o evento "message"
+  -> n8n (debounce e esperas)  ->  dashboard (toda a regra)
+        plano Completo? IA ligada? sessão WORKING? não é fromMe?
+        -> carrega prompt do cliente + histórico + dados já coletados
+        -> DeepSeek devolve JSON (resposta + dados extraídos + status)
+        -> quebra em mensagens curtas, "digitando..." e delay sorteado
+        -> envia pela MESMA sessão WAHA
+        -> lead qualificado: avisa o WhatsApp pessoal do cliente (uma vez só)
+```
+
+Tabelas: `ai_agent_settings` (config por cliente), `ai_conversations` (lead e
+dados coletados) e `ai_messages` (histórico completo). O estado vive no banco,
+então reiniciar o servidor não perde contexto nem duplica resposta.
+
+Proteções implementadas:
+
+- **Idempotência** — `ai_messages.provider_message_id` é único; webhook
+  repetido não gera segunda resposta.
+- **Loop** — mensagens `fromMe`, de grupos e do próprio número de notificação
+  nunca viram lead.
+- **Concorrência** — `ai_claim_conversation` reserva a conversa; o relógio do
+  envio é `typing_started_at`, então nenhuma mensagem sai antes da hora mesmo
+  com dois fluxos disparados.
+- **Notificação única** — `notification_sent` é marcado antes do envio.
+- **Atendimento humano** — `human_takeover` para a IA; o botão "Retomar IA"
+  devolve a conversa para a automação.
+
+Configuração: Admin → Configurações → **DeepSeek** (modelo e API Key) e
+**WhatsApp (WAHA)** → webhook do Atendimento IA. O workflow do n8n está em
+`n8n/n8n_waha_atendimento_ia.json`.
+
+### Migração
+
+```bash
+# aplique no Supabase do projeto
+supabase/migrations/20260916120000_ai_agent_whatsapp.sql
+```

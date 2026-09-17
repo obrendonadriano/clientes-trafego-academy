@@ -9,7 +9,8 @@ import type { ConversionLead, LeadQualification } from "@/lib/conversions/shared
 const QUALIFICATION_LABEL: Record<LeadQualification, string> = {
   pendente: "Pendente",
   qualificado: "Qualificado",
-  desqualificado: "Descartado",
+  desqualificado: "Desqualificado",
+  fechado: "Negócio fechado",
 };
 
 export function QualificationBadge({
@@ -20,7 +21,7 @@ export function QualificationBadge({
   return (
     <Badge
       variant={
-        qualification === "qualificado"
+        qualification === "qualificado" || qualification === "fechado"
           ? "success"
           : qualification === "desqualificado"
             ? "outline"

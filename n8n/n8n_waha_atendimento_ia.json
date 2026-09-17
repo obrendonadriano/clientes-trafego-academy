@@ -1,0 +1,408 @@
+{
+  "name": "WAHA - Atendimento IA (Trafego Academy)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "waha-atendimento-ia",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "c3000000-0000-4000-8000-000000000001",
+      "name": "Webhook Atendimento IA",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -960,
+        300
+      ],
+      "webhookId": "waha-atendimento-ia-trafego-academy"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ok\": true}",
+        "options": {}
+      },
+      "id": "c3000000-0000-4000-8000-000000000002",
+      "name": "Responder 200 imediato",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -740,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Le o evento \"message\" do WAHA e reduz ao minimo necessario.\n// Nada de conteudo extra entra no historico de execucao do n8n.\nconst body = $json.body ?? $json;\nconst payload = body.payload ?? {};\nconst data = payload._data ?? {};\n\nconst chatId = payload.from ?? '';\nconst texto = payload.body ?? payload.caption ?? '';\n\nreturn [{\n  json: {\n    session: body.session ?? '',\n    chatId,\n    messageId: payload.id ?? '',\n    fromMe: payload.fromMe === true || data.fromMe === true,\n    body: texto,\n    notifyName: data.notifyName ?? null,\n    // So conversa individual vira lead: grupo, status e newsletter ficam fora.\n    ehContatoIndividual: typeof chatId === 'string' && chatId.endsWith('@c.us'),\n    temTexto: typeof texto === 'string' && texto.trim().length > 0,\n  },\n}];"
+      },
+      "id": "c3000000-0000-4000-8000-000000000003",
+      "name": "Preparar evento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f-nao-e-minha",
+              "leftValue": "={{ $json.fromMe }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "f-individual",
+              "leftValue": "={{ $json.ehContatoIndividual }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "f-tem-texto",
+              "leftValue": "={{ $json.temTexto }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "f-sessao",
+              "leftValue": "={{ $json.session }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c3000000-0000-4000-8000-000000000004",
+      "name": "Mensagem do lead?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        -300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dashboard.trafegoacademy.online/whatsapp/ia/evento",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ session: $json.session, chatId: $json.chatId, messageId: $json.messageId, fromMe: $json.fromMe, body: $json.body, notifyName: $json.notifyName }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "c3000000-0000-4000-8000-000000000005",
+      "name": "Registrar mensagem no dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -80,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "i-aguardar",
+              "leftValue": "={{ $json.acao }}",
+              "rightValue": "aguardar",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c3000000-0000-4000-8000-000000000006",
+      "name": "A IA deve responder?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        140,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "amount": "={{ ($json.esperarMs || 0) / 1000 }}",
+        "unit": "seconds"
+      },
+      "id": "c3000000-0000-4000-8000-000000000007",
+      "name": "Agrupar mensagens (debounce)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        360,
+        220
+      ],
+      "webhookId": "waha-ia-debounce"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dashboard.trafegoacademy.online/whatsapp/ia/passo",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ sessionName: $json.sessionName, chatId: $json.chatId }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "c3000000-0000-4000-8000-000000000008",
+      "name": "Avancar conversa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        580,
+        220
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "i-continuar",
+              "leftValue": "={{ $json.acao }}",
+              "rightValue": "aguardar",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "i-limite",
+              "leftValue": "={{ $runIndex }}",
+              "rightValue": 40,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c3000000-0000-4000-8000-000000000009",
+      "name": "Tem proximo passo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        800,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "amount": "={{ ($json.esperarMs || 0) / 1000 }}",
+        "unit": "seconds"
+      },
+      "id": "c3000000-0000-4000-8000-000000000010",
+      "name": "Esperar (delay humanizado)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        580,
+        400
+      ],
+      "webhookId": "waha-ia-delay"
+    }
+  ],
+  "connections": {
+    "Webhook Atendimento IA": {
+      "main": [
+        [
+          {
+            "node": "Responder 200 imediato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder 200 imediato": {
+      "main": [
+        [
+          {
+            "node": "Preparar evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar evento": {
+      "main": [
+        [
+          {
+            "node": "Mensagem do lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensagem do lead?": {
+      "main": [
+        [
+          {
+            "node": "Registrar mensagem no dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar mensagem no dashboard": {
+      "main": [
+        [
+          {
+            "node": "A IA deve responder?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A IA deve responder?": {
+      "main": [
+        [
+          {
+            "node": "Agrupar mensagens (debounce)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Agrupar mensagens (debounce)": {
+      "main": [
+        [
+          {
+            "node": "Avancar conversa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Avancar conversa": {
+      "main": [
+        [
+          {
+            "node": "Tem proximo passo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem proximo passo?": {
+      "main": [
+        [
+          {
+            "node": "Esperar (delay humanizado)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Esperar (delay humanizado)": {
+      "main": [
+        [
+          {
+            "node": "Avancar conversa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CLIENT_PLAN_TYPES } from "@/lib/ai-agent/shared";
 
 // Schemas compartilhados entre os formulários (client) e as server actions
 // (server revalida sempre — nunca confiar só no front).
@@ -16,6 +17,12 @@ export const whatsappField = z
   .min(8, "Informe o WhatsApp com DDD.")
   .regex(/^[+0-9()\s-]+$/, "O WhatsApp deve conter apenas números, +, ( ) e -.");
 
+// O plano decide se o Atendimento IA fica liberado — por isso e revalidado
+// no servidor em toda criacao/edicao, nunca so no <select>.
+export const planTypeField = z
+  .enum(CLIENT_PLAN_TYPES)
+  .catch("essential");
+
 const metaIdField = z
   .string()
   .trim()
@@ -32,6 +39,7 @@ export const clientWorkspaceSchema = z.object({
   // então formData.get pode vir null.
   segment: z.string().nullish(),
   segmentDescription: z.string().nullish(),
+  planType: planTypeField,
   accountName: z.string().min(2, "Informe o nome do acesso."),
   username: usernameField,
   email: z.string().email("Informe um email válido."),
@@ -63,6 +71,7 @@ export const updateClientWorkspaceSchema = z.object({
   notes: z.string().optional(),
   segment: z.string().nullish(),
   segmentDescription: z.string().nullish(),
+  planType: planTypeField,
   // Checkbox/switch desmarcado não é enviado → vem null. nullish aceita
   // null/undefined; "on" quando marcado.
   clientActive: z.string().nullish(),

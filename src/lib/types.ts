@@ -1,3 +1,5 @@
+import type { ClientPlanType } from "@/lib/ai-agent/shared";
+
 export type Role = "admin" | "client";
 
 export type User = {
@@ -26,6 +28,8 @@ export type Client = {
   // "outro". Alimenta o contexto da IA nos relatórios.
   segment?: string;
   segmentDescription?: string;
+  // Plano contratado: define se a area de Atendimento IA fica liberada.
+  planType?: ClientPlanType;
 };
 
 export type CampaignMetric = {
@@ -128,6 +132,7 @@ export type AppDataSnapshot = {
 export type IntegrationProvider =
   | "meta_ads"
   | "gemini"
+  | "deepseek"
   | "waha"
   | "supabase";
 

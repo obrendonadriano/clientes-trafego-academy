@@ -44,6 +44,8 @@ type LeadRow = {
   ctwa_clid: string | null;
   qualificacao: LeadQualification;
   observacao: string | null;
+  valor: number | null;
+  moeda: string;
   capi_status: CapiStatus;
   capi_enviado_em: string | null;
   capi_resposta: string | null;
@@ -53,7 +55,7 @@ type LeadRow = {
 };
 
 const SELECT_COLUMNS =
-  "id, client_id, campaign_id, telefone, nome, email, ctwa_clid, qualificacao, observacao, capi_status, capi_enviado_em, capi_resposta, criado_em, campaigns(nome), clients(nome_empresa)";
+  "id, client_id, campaign_id, telefone, nome, email, ctwa_clid, qualificacao, observacao, valor, moeda, capi_status, capi_enviado_em, capi_resposta, criado_em, campaigns(nome), clients(nome_empresa)";
 
 function mapLead(row: LeadRow, canSeeCapiError: boolean): ConversionLead {
   return {
@@ -69,6 +71,8 @@ function mapLead(row: LeadRow, canSeeCapiError: boolean): ConversionLead {
     hasClickId: Boolean(row.ctwa_clid),
     qualification: row.qualificacao,
     note: row.observacao,
+    value: row.valor === null ? null : Number(row.valor),
+    currency: row.moeda,
     capiStatus: row.capi_status,
     capiSentAt: row.capi_enviado_em,
     capiResponse: canSeeCapiError ? row.capi_resposta : null,
@@ -147,6 +151,7 @@ export async function getConversionLeads(
       pending: 0,
       qualified: 0,
       discarded: 0,
+      closed: 0,
       qualificationRate: 0,
     },
     totalInTab: 0,
@@ -227,13 +232,16 @@ export async function getConversionLeads(
   const pendingCount = Number(summaryRow?.pending ?? 0);
   const qualifiedCount = Number(summaryRow?.qualified ?? 0);
   const discardedCount = Number(summaryRow?.discarded ?? 0);
-  const evaluated = qualifiedCount + discardedCount;
+  const closedCount = Number(summaryRow?.closed ?? 0);
+  const evaluated = qualifiedCount + discardedCount + closedCount;
   const summary: ConversionSummary = {
     total: totalCount,
     pending: pendingCount,
     qualified: qualifiedCount,
     discarded: discardedCount,
-    qualificationRate: evaluated > 0 ? (qualifiedCount / evaluated) * 100 : 0,
+    closed: closedCount,
+    qualificationRate:
+      evaluated > 0 ? ((qualifiedCount + closedCount) / evaluated) * 100 : 0,
   };
 
   const { data, error } = listResult;
@@ -257,7 +265,9 @@ export async function getConversionLeads(
         ? summary.pending
         : options.tab === "qualificado"
           ? summary.qualified
-          : summary.discarded;
+          : options.tab === "desqualificado"
+            ? summary.discarded
+            : summary.closed;
 
   return {
     leads: rows.slice(0, LEADS_PAGE_SIZE).map((row) => mapLead(row, isAdmin)),
