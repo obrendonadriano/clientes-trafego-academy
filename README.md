@@ -155,9 +155,9 @@ agora envolve a página **Atendimento IA** — é a mesma sessão WAHA de sempre
 o mesmo componente, sem QR novo. Enquanto não houver conexão, a página mostra
 o onboarding; conectado, aparece a barra de status e o conteúdo da IA.
 
-Isso vale para os dois planos: o cliente **Essencial também conecta**, porque o
-pipeline de leads/CAPI depende dessa sessão. O que ele vê bloqueado é só a
-área de IA, abaixo da barra de status.
+A tela de conexão aparece **somente no Plano Completo** — conectar o WhatsApp
+só faz sentido para quem vai usar a IA. O cliente Essencial vê a área inteira
+desfocada, sem clique, com o convite de upgrade, e nenhuma tela de conexão.
 
 ### Migração
 

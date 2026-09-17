@@ -10,7 +10,6 @@ import {
   CircleEllipsis,
   Link2,
   LoaderCircle,
-  MessageCircle,
   MonitorSmartphone,
   RefreshCw,
   ScanLine,
@@ -27,28 +26,17 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react";
-import { ConversionsPage } from "@/components/conversions/conversions-page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useWhatsappSession } from "@/components/whatsapp/whatsapp-session-provider";
+import { WhatsappLogo } from "@/components/whatsapp/whatsapp-logo";
 import {
   formatWhatsappPhone,
   type WhatsappSessionStatus,
 } from "@/lib/whatsapp-session";
-import type {
-  ConversionLeadsResult,
-  PeriodOption,
-  QualificationTab,
-} from "@/lib/conversions/shared";
 
 const QR_RENEW_MS = 20_000;
 const CONNECTION_TIMEOUT_MS = 5 * 60_000;
-
-type WhatsappConversionsExperienceProps = {
-  data: ConversionLeadsResult;
-  tab: QualificationTab;
-  period: PeriodOption;
-};
 
 type ApiPayload = {
   status?: unknown;
@@ -332,22 +320,6 @@ export function WhatsappConnectionExperience({
   );
 }
 
-/** Conversoes do cliente: conexao + lista de leads, como sempre foi. */
-export function WhatsappConversionsExperience(
-  props: WhatsappConversionsExperienceProps,
-) {
-  return (
-    <WhatsappConnectionExperience>
-      <ConversionsPage
-        {...props}
-        isAdmin={false}
-        clients={[]}
-        selectedClientId={null}
-      />
-    </WhatsappConnectionExperience>
-  );
-}
-
 function ConnectionLoading() {
   return (
     <Card aria-busy="true">
@@ -380,23 +352,25 @@ function ConnectionOnboarding({
         <div className="grid min-h-[32rem] lg:grid-cols-[1.15fr_0.85fr]">
           <div className="flex flex-col justify-center p-6 sm:p-9 lg:p-12">
             <span className="mb-5 flex size-14 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
-              <MessageCircle className="size-7" aria-hidden="true" />
+              <WhatsappLogo className="size-7" />
             </span>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-              Seus leads, em um só lugar
+              Atendimento automático por IA
             </p>
             <h2 className="mt-2 max-w-2xl font-display text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Conecte seu WhatsApp para ver seus leads aqui
+              Conecte seu WhatsApp para a IA começar a atender
             </h2>
             <div className="mt-5 max-w-2xl space-y-3 text-[0.95rem] leading-7 text-muted-foreground">
               <p>
-                Quando alguém clica no seu anúncio e manda mensagem no WhatsApp,
-                essa pessoa aparece automaticamente nesta tela.
+                Quando alguém chamar no seu WhatsApp, a IA responde na hora —
+                conversando de verdade, uma pergunta por vez, sem parecer
+                mensagem automática.
               </p>
               <p>
-                Aí você marca quais foram bons clientes de verdade — e o Facebook
-                aprende a buscar mais pessoas parecidas. Na prática: menos curioso,
-                mais gente querendo fechar.
+                Ela vai coletando as informações que importam e separa quem
+                realmente serve para o seu negócio. Quando o lead é qualificado,
+                você recebe um resumo no seu WhatsApp pessoal e assume a conversa
+                já sabendo tudo.
               </p>
               <p>
                 A conexão é igual à do WhatsApp Web, aquela que você usa no
@@ -406,30 +380,50 @@ function ConnectionOnboarding({
 
             {error ? <div className="mt-5"><InlineError message={error} /></div> : null}
 
+            <div
+              role="alert"
+              className="mt-6 flex max-w-2xl gap-3 rounded-2xl border border-red-500/50 bg-red-500/10 px-4 py-3.5 text-sm leading-6 text-red-800 dark:border-red-500/40 dark:text-red-200"
+            >
+              <AlertCircle className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
+              <div>
+                <p className="font-semibold">
+                  Deixe o celular pronto ANTES de clicar no botão
+                </p>
+                <p className="mt-1">
+                  No celular, abra o WhatsApp →{" "}
+                  <strong>Aparelhos conectados</strong> →{" "}
+                  <strong>Conectar um aparelho</strong> e deixe a câmera aberta
+                  na tela de leitura do código. Se você clicar aqui antes disso,
+                  o código expira e a conexão falha.
+                </p>
+              </div>
+            </div>
+
             <Button
               size="lg"
-              className="mt-7 w-full gap-2 sm:w-fit sm:min-w-64"
+              className="mt-5 w-full gap-2 sm:w-fit sm:min-w-64"
               disabled={isRequesting}
               onClick={() => void onConnect()}
             >
               {isRequesting ? (
                 <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
               ) : (
-                <MessageCircle className="size-5" aria-hidden="true" />
+                <WhatsappLogo className="size-5" />
               )}
               {isRetry ? "Tentar conectar novamente" : "Conectar meu WhatsApp"}
             </Button>
 
             <details className="group mt-6 max-w-2xl rounded-2xl border border-border/70 bg-background/40 px-4 py-3 dark:border-white/10">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                O que vocês conseguem ver?
+                O que a IA faz com as conversas?
                 <ChevronDown className="size-4 transition group-open:rotate-180" aria-hidden="true" />
               </summary>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                Usamos essa conexão para identificar quem chegou até você através
-                dos anúncios. Registramos apenas o nome, o telefone e qual anúncio
-                a pessoa clicou. Você pode desconectar quando quiser, direto pelo
-                seu celular, em Aparelhos Conectados.
+                A IA responde apenas quem chama no número conectado e guarda a
+                conversa junto com as informações que o lead informou, para você
+                ver no histórico. Nada disso aparece para outro cliente. Você pode
+                desligar a IA a qualquer momento, ou desconectar direto pelo seu
+                celular, em Aparelhos Conectados.
               </p>
             </details>
           </div>
@@ -443,12 +437,12 @@ function ConnectionOnboarding({
             <OnboardingBenefit
               icon={ShieldCheck}
               title="Você mantém o controle"
-              text="Pode desconectar quando quiser pelo portal ou pelo celular."
+              text="Pode desligar a IA ou assumir a conversa quando quiser."
             />
             <OnboardingBenefit
               icon={CheckCircle2}
-              title="Os leads chegam sozinhos"
-              text="Depois da conexão, não é preciso copiar nomes ou telefones."
+              title="Atende 24 horas"
+              text="A IA responde a qualquer hora, sem você precisar estar online."
             />
           </div>
         </div>
@@ -547,7 +541,7 @@ function PreparingConnection({
             </h2>
             <p className="mt-3 max-w-lg leading-7 text-muted-foreground">
               A conexão demorou mais que o normal. Vamos reiniciar com um código
-              novo — você não perde nenhum lead que já estava salvo.
+              novo — nenhuma conversa já salva é perdida.
             </p>
             <Button
               className="mt-6 gap-2"
@@ -561,7 +555,7 @@ function PreparingConnection({
         ) : (
           <>
             <span className="relative flex size-20 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <MessageCircle className="size-9" aria-hidden="true" />
+              <WhatsappLogo className="size-9" />
               <LoaderCircle className="absolute -right-1 -top-1 size-6 animate-spin" aria-hidden="true" />
             </span>
             <h2 className="mt-6 font-display text-3xl font-semibold text-foreground">
@@ -723,7 +717,7 @@ function QrConnection({
 
   const steps: Array<{ icon: ComponentType<{ className?: string }>; text: ReactNode }> = [
     { icon: Smartphone, text: "Pegue o celular onde você usa o WhatsApp do escritório" },
-    { icon: MessageCircle, text: "Abra o WhatsApp" },
+    { icon: WhatsappLogo, text: "Abra o WhatsApp" },
     { icon: CircleEllipsis, text: <>Toque nos <strong>três pontinhos</strong> no alto (Android) ou em <strong>Ajustes</strong> embaixo (iPhone)</> },
     { icon: Link2, text: <>Toque em <strong>Aparelhos conectados</strong></> },
     { icon: Camera, text: <>Toque em <strong>Conectar um aparelho</strong></> },
@@ -836,11 +830,13 @@ function ConnectionSuccess({ phone }: { phone: string | null }) {
           <p className="mt-3 font-medium text-foreground">Conectado como {formattedPhone}</p>
         ) : null}
         <p className="mt-4 max-w-xl leading-7 text-muted-foreground">
-          A partir de agora, todo mundo que te chamar pelos anúncios vai aparecer aqui embaixo. Pode levar alguns minutos até o primeiro aparecer.
+          Agora ative o atendimento por IA e escolha o número que vai receber
+          os leads qualificados. A partir daí ela responde sozinha, a qualquer
+          hora do dia.
         </p>
         <p className="mt-5 flex items-center gap-2 text-sm text-muted-foreground">
           <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-          Abrindo sua lista de leads…
+          Abrindo as configurações do atendimento…
         </p>
       </CardContent>
     </Card>
@@ -877,7 +873,7 @@ function ConnectionStatusBar({
         <span className={connected ? "size-2.5 rounded-full bg-emerald-500" : connecting ? "size-2.5 animate-pulse rounded-full bg-amber-500" : "size-2.5 rounded-full bg-red-500"} />
         <strong>{connected ? "WhatsApp conectado" : connecting ? "Conectando…" : "WhatsApp desconectado"}</strong>
         {connected && formattedPhone ? <span className="text-current/75">— {formattedPhone}</span> : null}
-        {!connected && !connecting ? <span className="hidden text-current/75 md:inline">— Seus leads pararam de chegar. Reconecte para voltar a receber.</span> : null}
+        {!connected && !connecting ? <span className="hidden text-current/75 md:inline">— A IA parou de responder. Reconecte para voltar a atender.</span> : null}
       </span>
       {connected ? (
         <button type="button" onClick={onDisconnect} className="inline-flex h-9 items-center justify-center gap-2 rounded-full px-3 font-medium outline-none transition hover:bg-emerald-500/15 focus-visible:ring-2 focus-visible:ring-emerald-500">
