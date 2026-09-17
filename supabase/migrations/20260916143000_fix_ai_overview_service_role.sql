@@ -1,11 +1,16 @@
--- Correcao: a visao administrativa do Atendimento IA e lida pelo SERVIDOR do
--- dashboard, que usa a service_role. Com a service_role nao existe auth.uid(),
--- entao private.is_active_admin() retornava falso e a pagina recebia
--- "Acesso negado.".
+-- Corrige dois defeitos da visao administrativa do Atendimento IA.
 --
--- A funcao passa a aceitar os dois chamadores: o admin autenticado no
--- navegador e a service_role. A pagina /admin/atendimento-ia ja exige papel de
--- admin na sessao antes de chamar, entao a barreira continua de pe.
+-- 1) Acesso negado (42501): a pagina le esta visao pelo SERVIDOR, com a
+--    service_role, e nesse contexto nao existe auth.uid() — entao
+--    private.is_active_admin() retornava falso e barrava o proprio dashboard.
+--    Agora a funcao aceita os dois chamadores. A barreira continua de pe: a
+--    pagina /admin/atendimento-ia exige papel de admin na sessao antes de
+--    chamar.
+--
+-- 2) Tipos incompativeis (42804): whatsapp_sessions.status e o enum
+--    public.waha_session_status, e a funcao declara text. Faltavam os casts.
+--
+-- Pode rodar de novo com seguranca: e create or replace.
 
 create or replace function public.admin_ai_agent_overview()
 returns table(
@@ -36,16 +41,20 @@ begin
     raise exception 'Acesso negado.' using errcode = '42501';
   end if;
 
+  -- Os casts sao obrigatorios: whatsapp_sessions.status e o enum
+  -- public.waha_session_status, nao text. Sem o ::text o Postgres recusa a
+  -- consulta com 42804 (structure of query does not match function result
+  -- type). Os counts vao explicitos por bigint pelo mesmo motivo.
   return query
   select client.id,
-         client.nome_empresa,
+         client.nome_empresa::text,
          client.plan_type,
          coalesce(settings.enabled, false),
-         settings.notification_whatsapp,
-         session.status,
-         session.phone_number,
-         coalesce(stats.total, 0),
-         coalesce(stats.qualified, 0)
+         settings.notification_whatsapp::text,
+         session.status::text,
+         session.phone_number::text,
+         coalesce(stats.total, 0)::bigint,
+         coalesce(stats.qualified, 0)::bigint
   from public.clients as client
   left join public.ai_agent_settings as settings
     on settings.client_id = client.id
