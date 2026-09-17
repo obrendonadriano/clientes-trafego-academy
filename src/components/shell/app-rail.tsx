@@ -21,7 +21,7 @@ export function AppRail({ role }: { role: Role }) {
   return (
     <nav
       aria-label="Navegação principal"
-      className="relative z-30 hidden h-full min-h-0 w-[84px] shrink-0 flex-col items-center gap-[1.4rem] overflow-hidden border-r border-border bg-card py-[1.05rem] lg:flex"
+      className="relative z-30 hidden h-full min-h-0 w-[84px] shrink-0 flex-col items-center gap-3 overflow-hidden border-r border-border bg-card py-[1.05rem] lg:flex"
     >
       <IntentPrefetchLink
         href={role === "admin" ? "/admin" : "/dashboard"}
@@ -37,40 +37,46 @@ export function AppRail({ role }: { role: Role }) {
         />
       </IntentPrefetchLink>
 
-      {groups.map((group, index) => (
-        <div key={group.label} className="flex w-full flex-col items-center gap-2">
-          {index > 0 ? (
-            <div className="mb-[0.7rem] h-px w-10 bg-gradient-to-r from-transparent via-border to-transparent" />
-          ) : null}
+      {/* Area rolavel: com muitas secoes o trilho passa da altura da tela
+          e sem isto os ultimos itens ficavam inalcancaveis. */}
+      <div className="scrollbar-hidden flex min-h-0 w-full flex-1 flex-col items-center gap-[1.4rem] overflow-y-auto overscroll-contain py-1">
+        {groups.map((group, index) => (
+          <div key={group.label} className="flex w-full flex-col items-center gap-2">
+            {index > 0 ? (
+              <div className="mb-2 h-px w-10 bg-gradient-to-r from-transparent via-border to-transparent" />
+            ) : null}
 
-          <p className="mb-0.5 text-[0.56rem] font-medium uppercase tracking-[0.14em] text-muted-foreground/70">
-            {group.label}
-          </p>
+            <p className="mb-0.5 text-[0.56rem] font-medium uppercase tracking-[0.14em] text-muted-foreground/70">
+              {group.label}
+            </p>
 
-          {group.sections.map((section) => {
-            const isActive = section.key === activeKey;
+            {group.sections.map((section) => {
+              const isActive = section.key === activeKey;
 
-            return (
-              <IntentPrefetchLink
-                key={section.key}
-                href={scopedHref(section.href)}
-                aria-current={isActive ? "page" : undefined}
-                className={cn(
-                  "flex w-[64px] flex-col items-center gap-1 rounded-lg border px-0.5 py-2 text-[0.59rem] leading-tight transition active:scale-[0.97]",
-                  isActive
-                    ? "border-primary/30 bg-primary/[0.14] text-primary"
-                    : "border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-                )}
-              >
-                <NavIcon name={section.icon} className="size-[1.125rem]" />
-                <span className="w-full text-center leading-[1.15]">{section.label}</span>
-              </IntentPrefetchLink>
-            );
-          })}
-        </div>
-      ))}
+              return (
+                <IntentPrefetchLink
+                  key={section.key}
+                  href={scopedHref(section.href)}
+                  aria-current={isActive ? "page" : undefined}
+                  className={cn(
+                    "flex w-[64px] shrink-0 flex-col items-center gap-1 rounded-lg border px-0.5 py-2 text-[0.59rem] leading-tight transition active:scale-[0.97]",
+                    isActive
+                      ? "border-primary/30 bg-primary/[0.14] text-primary"
+                      : "border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                  )}
+                >
+                  <NavIcon name={section.icon} className="size-[1.125rem]" />
+                  <span className="w-full text-center leading-[1.15]">
+                    {section.label}
+                  </span>
+                </IntentPrefetchLink>
+              );
+            })}
+          </div>
+        ))}
+      </div>
 
-      <form action={logoutAction} className="mt-auto">
+      <form action={logoutAction} className="shrink-0 pt-1">
         <button
           type="submit"
           title="Sair"

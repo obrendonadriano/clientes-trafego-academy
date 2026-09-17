@@ -34,6 +34,7 @@ async function loadRows(): Promise<AdminAiAgentRow[] | null> {
 
   if (error) {
     console.error("[admin/ia] falha ao carregar visão geral", {
+      code: error.code,
       message: error.message,
     });
     return null;
@@ -64,8 +65,9 @@ async function AdminAiAgentSection() {
   if (!rows) {
     return (
       <p className="rounded-2xl border border-border/60 bg-card px-4 py-6 text-sm text-muted-foreground">
-        Não foi possível carregar o painel do Atendimento IA. Verifique se a
-        migração do banco foi aplicada.
+        Não foi possível carregar o painel do Atendimento IA. Confira se as
+        migrações do banco foram aplicadas — o detalhe do erro fica no log do
+        servidor.
       </p>
     );
   }

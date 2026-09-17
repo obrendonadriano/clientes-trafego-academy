@@ -145,6 +145,20 @@ Configuração: Admin → Configurações → **DeepSeek** (modelo e API Key) e
 **WhatsApp (WAHA)** → webhook do Atendimento IA. O workflow do n8n está em
 `n8n/n8n_waha_atendimento_ia.json`.
 
+### Onde o cliente conecta o WhatsApp
+
+A aba **Conversões** é área do admin. O cliente não a vê no menu e a rota
+`/dashboard/conversoes` redireciona para `/dashboard/atendimento-ia`.
+
+A conexão do WhatsApp (onboarding, QR, status e desconectar) mudou de casa e
+agora envolve a página **Atendimento IA** — é a mesma sessão WAHA de sempre,
+o mesmo componente, sem QR novo. Enquanto não houver conexão, a página mostra
+o onboarding; conectado, aparece a barra de status e o conteúdo da IA.
+
+Isso vale para os dois planos: o cliente **Essencial também conecta**, porque o
+pipeline de leads/CAPI depende dessa sessão. O que ele vê bloqueado é só a
+área de IA, abaixo da barra de status.
+
 ### Migração
 
 ```bash

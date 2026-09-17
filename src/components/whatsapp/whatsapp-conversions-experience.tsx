@@ -75,9 +75,18 @@ function responseError(response: Response, payload: ApiPayload) {
   return `Não foi possível continuar (erro ${response.status}).`;
 }
 
-export function WhatsappConversionsExperience(
-  props: WhatsappConversionsExperienceProps,
-) {
+/**
+ * Conexao do WhatsApp do cliente (onboarding, QR, status e desconexao).
+ *
+ * Nasceu dentro da tela de Conversoes, mas a conexao nao pertence aquela
+ * tela: e a mesma sessao WAHA usada pelo Atendimento IA. Por isso o que
+ * aparece DEPOIS de conectado vem por `children`.
+ */
+export function WhatsappConnectionExperience({
+  children,
+}: {
+  children?: ReactNode;
+}) {
   const {
     session,
     isLoading,
@@ -311,12 +320,7 @@ export function WhatsappConversionsExperience(
 
       {requestError ? <InlineError message={requestError} /> : null}
 
-      <ConversionsPage
-        {...props}
-        isAdmin={false}
-        clients={[]}
-        selectedClientId={null}
-      />
+      {children}
 
       <DisconnectDialog
         open={disconnectOpen}
@@ -325,6 +329,22 @@ export function WhatsappConversionsExperience(
         onConfirm={disconnect}
       />
     </div>
+  );
+}
+
+/** Conversoes do cliente: conexao + lista de leads, como sempre foi. */
+export function WhatsappConversionsExperience(
+  props: WhatsappConversionsExperienceProps,
+) {
+  return (
+    <WhatsappConnectionExperience>
+      <ConversionsPage
+        {...props}
+        isAdmin={false}
+        clients={[]}
+        selectedClientId={null}
+      />
+    </WhatsappConnectionExperience>
   );
 }
 

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { ConversionsPage } from "@/components/conversions/conversions-page";
-import { WhatsappConversionsExperience } from "@/components/whatsapp/whatsapp-conversions-experience";
 import { ListSkeleton } from "@/components/dashboard/skeletons";
 import { PageHeader } from "@/components/shell/page-header";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -30,13 +30,19 @@ async function ConversionsSection({
   const params = await searchParams;
   const user = await getCurrentUser();
 
+  // Conversoes e area administrativa. O cliente acompanha os leads da IA
+  // em Atendimento IA, e a conexao do WhatsApp mora la tambem.
+  if (user.role === "client") {
+    redirect("/dashboard/atendimento-ia");
+  }
+
   const tab = (QUALIFICATION_TABS.some((t) => t.key === params.aba)
     ? params.aba
     : "pendente") as QualificationTab;
   const period = (PERIOD_OPTIONS.some((p) => p.key === params.periodo)
     ? params.periodo
     : "30") as PeriodOption;
-  const clientId = user.role === "admin" ? (params.cliente ?? null) : null;
+  const clientId = params.cliente ?? null;
 
   const [data, shell] = await Promise.all([
     getConversionLeads(user, {
@@ -45,19 +51,8 @@ async function ConversionsSection({
       clientId,
       page: Number(params.pagina) || 1,
     }),
-    user.role === "admin"
-      ? getAppShellData(user)
-      : Promise.resolve({
-          clients: [],
-          campaigns: [],
-          syncStatus: null,
-          whatsappSession: null,
-        }),
+    getAppShellData(user),
   ]);
-
-  if (user.role === "client") {
-    return <WhatsappConversionsExperience data={data} tab={tab} period={period} />;
-  }
 
   return (
     <ConversionsPage

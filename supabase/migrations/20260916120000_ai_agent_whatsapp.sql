@@ -541,7 +541,15 @@ security definer
 set search_path = ''
 as $$
 begin
-  if not private.is_active_admin() then
+  -- Aceita o admin autenticado (chamada direta do navegador) E a service_role,
+  -- porque a pagina do painel le esta visao pelo servidor. Quem chama pelo
+  -- servidor ja confirmou o papel de admin na sessao antes de chegar aqui.
+  if coalesce(
+       nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role',
+       ''
+     ) <> 'service_role'
+     and not private.is_active_admin()
+  then
     raise exception 'Acesso negado.' using errcode = '42501';
   end if;
 

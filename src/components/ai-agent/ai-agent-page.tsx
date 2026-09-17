@@ -13,7 +13,6 @@ import {
   Sparkles,
   TriangleAlert,
 } from "lucide-react";
-import Link from "next/link";
 import {
   restoreAiPromptAction,
   saveAiAdvancedSettingsAction,
@@ -187,13 +186,7 @@ function StatusCard({
           <p className="flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/[0.12] px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
             <PlugZap className="mt-0.5 size-4 shrink-0" />
             <span>
-              Conecte seu WhatsApp antes de ativar o atendimento automático.{" "}
-              <Link
-                href="/dashboard/conversoes"
-                className="font-medium underline underline-offset-4"
-              >
-                Conectar agora
-              </Link>
+              Conecte seu WhatsApp antes de ativar o atendimento automático.
             </span>
           </p>
         ) : null}
