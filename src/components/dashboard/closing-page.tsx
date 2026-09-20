@@ -2,8 +2,9 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Download, LoaderCircle, TriangleAlert } from "lucide-react";
+import { LoaderCircle, TriangleAlert } from "lucide-react";
 import { ClosingCampaignFilter } from "@/components/dashboard/closing-campaign-filter";
+import { PdfDownloadButton } from "@/components/dashboard/pdf-download-button";
 import { TaxInfo } from "@/components/dashboard/tax-info";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +17,18 @@ import {
   PIS_COFINS_RATE,
 } from "@/lib/taxes";
 import { cn } from "@/lib/utils";
+
+// Mesmo slug usado em /api/fechamento/pdf, so como reserva: o nome que
+// vale e o do cabecalho Content-Disposition da resposta.
+function slugify(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 60);
+}
 
 function money(value: number, currency = "BRL") {
   return new Intl.NumberFormat("pt-BR", {
@@ -105,6 +118,10 @@ export function ClosingPage({
     }
   }
 
+  const pdfFileName = `fechamento-${slugify(data.clientName)}-${
+    data.window.startDate
+  }-a-${data.window.endDate}.pdf`;
+
   return (
     <div className="min-w-0 space-y-5">
       <Card>
@@ -171,13 +188,10 @@ export function ClosingPage({
               Aplicar dias
             </button>
 
-            <a
+            <PdfDownloadButton
               href={`/api/fechamento/pdf?${pdfParams.toString()}`}
-              className="ml-auto inline-flex h-11 items-center gap-2 rounded-full bg-primary px-5 text-sm font-medium text-white transition hover:bg-primary/90"
-            >
-              <Download className="size-4" />
-              Baixar PDF
-            </a>
+              fileName={pdfFileName}
+            />
           </div>
 
           <ClosingCampaignFilter
