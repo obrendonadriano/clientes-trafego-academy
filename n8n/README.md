@@ -16,7 +16,7 @@ Depois:
 
 Os workflows desativam a persistência de dados de execução para não gravar tokens ou payloads de WhatsApp no histórico do n8n. Mantenha o n8n em HTTPS e nunca coloque a `service_role` diretamente em nós, URLs, credenciais compartilhadas ou no navegador.
 
-O fluxo CAPI usa uma reserva atômica da fila, `event_id` determinístico e retentativas com backoff. O payload de WhatsApp envia `LeadSubmitted`, `ctwa_clid` sem hash e `whatsapp_business_account_id` para o Dataset do cliente correto.
+O fluxo CAPI exige a migração `20260924020710_conversion_event_outbox.sql` e usa uma fila por evento: `LeadSubmitted` e `QualifiedLead` são eventos de WhatsApp; `VehicleAcquired` é uma aquisição contratual fora da conversa, com telefone em hash e sem valor de receita. As datas originais são preservadas e respostas ambíguas exigem conciliação antes de reenvio. Pause o workflow antigo antes de atualizar banco e JSON. Consulte o [diagnóstico e roteiro de ativação](../docs/conversoes-whatsapp-meta.md).
 
 ## Workflow do Atendimento IA
 

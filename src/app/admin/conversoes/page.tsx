@@ -33,7 +33,7 @@ async function ConversionsSection({
 
   const tab = (QUALIFICATION_TABS.some((t) => t.key === params.aba)
     ? params.aba
-    : "pendente") as QualificationTab;
+    : "todos") as QualificationTab;
   const period = (PERIOD_OPTIONS.some((p) => p.key === params.periodo)
     ? params.periodo
     : "30") as PeriodOption;
@@ -84,7 +84,7 @@ export default function ConversionsRoute({
       <PageHeader
         eyebrow="Área administrativa"
         title="Conversões"
-        description="Leads que chegaram das campanhas. Marcar os bons ensina o Meta a buscar mais pessoas parecidas."
+        description="Acompanhe a qualificação dos leads e as compras de veículos de cada cliente."
       />
 
       <Suspense fallback={<ListSkeleton />}>

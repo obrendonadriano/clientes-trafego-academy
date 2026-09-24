@@ -143,7 +143,10 @@ export async function getConversionLeads(
     page?: number;
   },
 ): Promise<ConversionLeadsResult> {
-  const page = Math.max(1, options.page ?? 1);
+  const requestedPage = options.page ?? 1;
+  const page = Number.isFinite(requestedPage)
+    ? Math.max(1, Math.floor(requestedPage))
+    : 1;
   const empty: ConversionLeadsResult = {
     leads: [],
     summary: {
@@ -191,7 +194,12 @@ export async function getConversionLeads(
       ? (user.clientId ?? null)
       : null;
 
-  const applyScope = <T extends { gte: (c: string, v: string) => T; eq: (c: string, v: string) => T }>(
+  const applyScope = <
+    T extends {
+      gte: (c: string, v: string) => T;
+      eq: (c: string, v: string) => T;
+    },
+  >(
     query: T,
   ) => {
     let scoped = query;
@@ -207,22 +215,27 @@ export async function getConversionLeads(
     return scoped;
   };
 
-  let listQuery = client.from("conversion_leads").select(SELECT_COLUMNS);
-  listQuery = applyScope(listQuery);
-
-  if (options.tab !== "todos") {
-    listQuery = listQuery.eq("qualificacao", options.tab);
-  }
-
+  // Paginar por etapa evita que novos contatos escondam todo o restante do funil.
+  const stages: LeadQualification[] =
+    options.tab === "todos"
+      ? ["pendente", "qualificado", "fechado", "desqualificado"]
+      : [options.tab];
   const from = (page - 1) * LEADS_PAGE_SIZE;
-  const [summaryResult, listResult] = await Promise.all([
+  async function listStage(stage: LeadQualification) {
+    let query = client.from("conversion_leads").select(SELECT_COLUMNS);
+    query = applyScope(query);
+    return query
+      .eq("qualificacao", stage)
+      .order("criado_em", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + LEADS_PAGE_SIZE);
+  }
+  const [summaryResult, listResults] = await Promise.all([
     client.rpc("conversion_leads_summary", {
       p_start_date: startDate,
       p_client_id: clientFilter,
     }),
-    listQuery
-      .order("criado_em", { ascending: false })
-      .range(from, from + LEADS_PAGE_SIZE),
+    Promise.all(stages.map(listStage)),
   ]);
 
   const summaryRow = Array.isArray(summaryResult.data)
@@ -244,7 +257,7 @@ export async function getConversionLeads(
       evaluated > 0 ? ((qualifiedCount + closedCount) / evaluated) * 100 : 0,
   };
 
-  const { data, error } = listResult;
+  const error = listResults.find((result) => result.error)?.error;
 
   if (error) {
     return { ...empty, summary, notice: error.message };
@@ -254,9 +267,13 @@ export async function getConversionLeads(
     return { ...empty, notice: summaryResult.error.message };
   }
 
-  const rows = (data as LeadRow[] | null) ?? [];
+  const rows = listResults.flatMap((result) =>
+    ((result.data as LeadRow[] | null) ?? []).slice(0, LEADS_PAGE_SIZE),
+  );
   // Pediu-se uma linha a mais só para saber se existe próxima página.
-  const hasMore = rows.length > LEADS_PAGE_SIZE;
+  const hasMore = listResults.some(
+    (result) => (result.data?.length ?? 0) > LEADS_PAGE_SIZE,
+  );
 
   const totalInTab =
     options.tab === "todos"
@@ -270,7 +287,7 @@ export async function getConversionLeads(
             : summary.closed;
 
   return {
-    leads: rows.slice(0, LEADS_PAGE_SIZE).map((row) => mapLead(row, isAdmin)),
+    leads: rows.map((row) => mapLead(row, isAdmin)),
     summary,
     totalInTab,
     page,

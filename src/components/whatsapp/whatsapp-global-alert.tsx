@@ -24,7 +24,7 @@ export function WhatsappGlobalAlert() {
         </p>
       </div>
       <Link
-        href="/dashboard/atendimento-ia"
+        href="/dashboard/conversoes#whatsapp"
         className="inline-flex h-9 shrink-0 items-center justify-center rounded-full bg-red-700 px-4 font-medium text-white outline-none transition hover:bg-red-800 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
       >
         Reconectar

@@ -12,10 +12,10 @@ export type CapiStatus = "nao_enviado" | "enviado" | "erro" | "ignorado";
 
 export const QUALIFICATION_TABS = [
   { key: "todos", label: "Todos" },
-  { key: "pendente", label: "Pendentes" },
+  { key: "pendente", label: "Novos leads" },
   { key: "qualificado", label: "Qualificados" },
   { key: "desqualificado", label: "Desqualificados" },
-  { key: "fechado", label: "Negócios fechados" },
+  { key: "fechado", label: "Veículos comprados" },
 ] as const;
 
 export type QualificationTab = (typeof QUALIFICATION_TABS)[number]["key"];

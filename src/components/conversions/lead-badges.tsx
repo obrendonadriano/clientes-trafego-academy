@@ -7,10 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import type { ConversionLead, LeadQualification } from "@/lib/conversions/shared";
 
 const QUALIFICATION_LABEL: Record<LeadQualification, string> = {
-  pendente: "Pendente",
+  pendente: "Novo lead",
   qualificado: "Qualificado",
   desqualificado: "Desqualificado",
-  fechado: "Negócio fechado",
+  fechado: "Veículo comprado",
 };
 
 export function QualificationBadge({
@@ -55,12 +55,12 @@ function shortDate(iso: string | null) {
 export function NoClickIdWarning() {
   return (
     <span
-      title="Sem identificador de clique — a atribuição ao anúncio será parcial."
+      title="Sem identificador do anúncio: este lead não será enviado à Meta pela integração atual."
       className="inline-flex text-amber-600 dark:text-amber-400"
     >
       <TriangleAlert className="size-4" aria-hidden />
       <span className="sr-only">
-        Sem identificador de clique: a atribuição ao anúncio será parcial.
+        Sem identificador do anúncio: este lead não será enviado à Meta pela integração atual.
       </span>
     </span>
   );

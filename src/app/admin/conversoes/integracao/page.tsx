@@ -30,7 +30,7 @@ async function CapiOverviewSection() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardContent className="py-5">
-            <p className="text-sm text-muted-foreground">Clientes enviando</p>
+            <p className="text-sm text-muted-foreground">Clientes configurados</p>
             <p className="mt-2 font-display text-3xl font-semibold text-foreground">
               {prontos}
               <span className="text-base font-normal text-muted-foreground">
@@ -52,7 +52,7 @@ async function CapiOverviewSection() {
         </Card>
         <Card>
           <CardContent className="py-5">
-            <p className="text-sm text-muted-foreground">Na fila de envio</p>
+            <p className="text-sm text-muted-foreground">Eventos na fila de envio</p>
             <p className="mt-2 font-display text-3xl font-semibold text-foreground">
               {naFila}
             </p>

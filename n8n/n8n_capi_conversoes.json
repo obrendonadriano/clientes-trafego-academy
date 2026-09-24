@@ -16,7 +16,10 @@
       "name": "A cada 5 minutos",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-620, 300]
+      "position": [
+        -620,
+        300
+      ]
     },
     {
       "parameters": {
@@ -27,7 +30,10 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "sendBody": true,
@@ -35,28 +41,42 @@
         "jsonBody": "={\"p_limit\": 50}",
         "options": {
           "timeout": 30000,
-          "response": { "response": { "fullResponse": false } }
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
         }
       },
       "id": "a1000000-0000-4000-8000-000000000002",
       "name": "Buscar fila no Supabase",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-400, 300],
-      "retryOnFail": true,
+      "position": [
+        -400,
+        300
+      ],
+      "retryOnFail": false,
       "maxTries": 3,
       "waitBetweenTries": 3000
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "version": 2 },
+          "options": {
+            "caseSensitive": true,
+            "version": 2
+          },
           "conditions": [
             {
               "id": "cond-fila-vazia",
               "leftValue": "={{ $json.lead_id }}",
               "rightValue": "",
-              "operator": { "type": "string", "operation": "exists", "singleValue": true }
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
             }
           ],
           "combinator": "and"
@@ -67,27 +87,23 @@
       "name": "Tem lead na fila?",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
-      "position": [-180, 300]
+      "position": [
+        -180,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Monta o payload da Conversions API para cada lead da fila.\n//\n// Dois caminhos possiveis:\n//   1) COM ctwa_clid  -> atribuicao direta ao clique do anuncio (ideal)\n//   2) SEM ctwa_clid  -> Advanced Matching por telefone/email hasheados\n//                        (nao atribui ao clique, mas alimenta publico\n//                         personalizado e lookalike)\n//\n// Os hashes ja vem prontos do Postgres (SHA-256, minusculo, sem espaco).\n\nconst GRAPH_VERSION = 'v26.0';\nconst saida = [];\n\nfor (const item of $input.all()) {\n  const d = item.json;\n\n  // Meta rejeita eventos com mais de 7 dias.\n  const agora = Math.floor(Date.now() / 1000);\n  const seteDias = 7 * 24 * 60 * 60;\n  let eventTime = Number(d.event_time);\n  if (!eventTime || agora - eventTime > seteDias) {\n    eventTime = agora;\n  }\n\n  const userData = {\n    page_id: String(d.page_id)\n  };\n\n  const temClid = d.ctwa_clid && String(d.ctwa_clid).trim() !== '';\n\n  if (temClid) {\n    // NAO hashear o ctwa_clid.\n    userData.ctwa_clid = String(d.ctwa_clid).trim();\n  }\n\n  // Hashes sempre ajudam no match, com ou sem clid.\n  if (d.phone_hash) userData.ph = [d.phone_hash];\n  if (d.email_hash) userData.em = [d.email_hash];\n\n  const evento = {\n    event_name: d.event_name || 'QualifiedLead',\n    event_time: eventTime,\n    event_id: d.event_id,\n    action_source: 'business_messaging',\n    messaging_channel: 'whatsapp',\n    user_data: userData\n  };\n\n  // custom_data so faz sentido quando ha valor (ex.: evento Purchase).\n  if (d.valor !== null && d.valor !== undefined && Number(d.valor) > 0) {\n    evento.custom_data = {\n      currency: d.moeda || 'BRL',\n      value: Number(d.valor)\n    };\n  }\n\n  saida.push({\n    json: {\n      lead_id: d.lead_id,\n      event_id: d.event_id,\n      tem_clid: temClid,\n      url: `https://graph.facebook.com/${GRAPH_VERSION}/${d.dataset_id}/events`,\n      access_token: d.access_token,\n      corpo: {\n        data: [evento],\n        partner_agent: 'trafego_academy_n8n'\n      }\n    }\n  });\n}\n\nreturn saida;"
+        "jsCode": "// Embedded verbatim in the n8n Code node by scripts/sync-capi-workflow.mjs.\n// Dates come from the immutable event outbox. Never replace an old date with now.\nreturn $input.all().map((item, index) => {\n  const d = item.json;\n  const messaging = d.action_source === 'business_messaging';\n  const validEvent = messaging\n    ? ['LeadSubmitted', 'QualifiedLead'].includes(d.event_name)\n    : d.action_source === 'other' && d.event_name === 'VehicleAcquired';\n  if (!validEvent || !d.event_id || !d.dataset_id || !Number.isSafeInteger(Number(d.event_time))) {\n    throw new Error('Fila incompatível: instale a migração conversion_event_outbox antes de ativar este workflow.');\n  }\n  const source = d.user_data ?? {};\n  const userData = messaging\n    ? { ctwa_clid: source.ctwa_clid, whatsapp_business_account_id: source.whatsapp_business_account_id }\n    : { ph: source.ph };\n  if (messaging ? !userData.ctwa_clid || !userData.whatsapp_business_account_id\n    : !Array.isArray(userData.ph) || !userData.ph.every((hash) => /^[a-f0-9]{64}$/.test(hash)) || !userData.ph.length) {\n    throw new Error('Evento sem identificadores válidos.');\n  }\n  const event = {\n    event_name: d.event_name,\n    event_time: Number(d.event_time),\n    event_id: d.event_id,\n    action_source: d.action_source,\n    user_data: userData,\n  };\n  if (messaging) event.messaging_channel = 'whatsapp';\n  // Acquisition cost is not revenue. Never send debt, notes or vehicle details.\n  return { json: {\n    lead_id: d.lead_id,\n    event_id: d.event_id,\n    url: `https://graph.facebook.com/v26.0/${d.dataset_id}/events`,\n    access_token: d.access_token,\n    corpo: { data: [event] },\n  }, pairedItem: { item: index } };\n});\n"
       },
       "id": "a1000000-0000-4000-8000-000000000004",
       "name": "Montar payload CAPI",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [40, 300]
-    },
-    {
-      "parameters": {
-        "jsCode": "const fila = $('Buscar fila no Supabase').all().map((item) => item.json);\nconst saida = [];\nfor (const item of $input.all()) {\n  const origem = fila.find((lead) => lead.lead_id === item.json.lead_id);\n  if (!origem?.ctwa_clid || !origem?.waba_id) continue;\n  const evento = { ...item.json.corpo.data[0],\n    event_name: origem.event_name || 'QualifiedLead',\n    user_data: {\n      whatsapp_business_account_id: String(origem.waba_id),\n      ctwa_clid: String(origem.ctwa_clid).trim()\n    }\n  };\n  saida.push({ json: { ...item.json, corpo: { ...item.json.corpo, data: [evento] } } });\n}\nreturn saida;"
-      },
-      "id": "a1000000-0000-4000-8000-000000000009",
-      "name": "Aplicar identificadores WhatsApp",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [150, 300]
+      "position": [
+        40,
+        300
+      ]
     },
     {
       "parameters": {
@@ -98,7 +114,10 @@
       "name": "Um lead por vez",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [260, 300]
+      "position": [
+        260,
+        300
+      ]
     },
     {
       "parameters": {
@@ -107,8 +126,14 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "=Bearer {{ $json.access_token }}" },
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "sendBody": true,
@@ -128,21 +153,27 @@
       "name": "Enviar para Meta CAPI",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [480, 300],
-      "retryOnFail": true,
+      "position": [
+        480,
+        300
+      ],
+      "retryOnFail": false,
       "maxTries": 3,
       "waitBetweenTries": 5000,
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "// Interpreta a resposta do Meta e prepara o retorno para o Supabase.\n// Como 'neverError' esta ligado, erro HTTP tambem chega aqui em vez de\n// derrubar a execucao - o que permite gravar o motivo no banco.\n\nconst resp = $json;\nconst contexto = $('Um lead por vez').item.json;\n\nconst status = resp.statusCode ?? 0;\nconst corpo = resp.body ?? resp;\n\nlet ok = false;\nlet mensagem = '';\n\nif (status >= 200 && status < 300) {\n  const recebidos = corpo?.events_received ?? 0;\n  ok = recebidos > 0;\n  mensagem = ok\n    ? `OK events_received=${recebidos} fbtrace=${corpo?.fbtrace_id ?? '-'}`\n    : `HTTP 200 porem events_received=0 | ${JSON.stringify(corpo).slice(0, 500)}`;\n} else {\n  const err = corpo?.error ?? {};\n  mensagem = `HTTP ${status} | code=${err.code ?? '-'} sub=${err.error_subcode ?? '-'} | ${err.message ?? JSON.stringify(corpo).slice(0, 400)}`;\n}\n\nreturn [{\n  json: {\n    lead_id: contexto.lead_id,\n    event_id: contexto.event_id,\n    tem_clid: contexto.tem_clid,\n    ok,\n    mensagem\n  }\n}];"
+        "jsCode": "const response = $json;\nconst context = $('Um lead por vez').item.json;\nconst status = Number(response.statusCode ?? 0);\nconst body = response.body ?? response;\nconst ok = status >= 200 && status < 300 && Number(body.events_received) === 1 && !body.error;\n// Only an explicit rejection is safe to retry. A timeout / 5xx might have been\n// accepted before the response was lost. Do not blindly duplicate messaging events.\nconst retryable = !ok && status >= 400 && status < 500 && Boolean(body.error)\n  && (status === 429 || body.error.is_transient === true);\nreturn [{ json: {\n  lead_id: context.lead_id,\n  event_id: context.event_id,\n  ok,\n  retryable,\n  resposta: JSON.stringify({\n    status,\n    events_received: body.events_received ?? 0,\n    code: body.error?.code ?? null,\n    error_subcode: body.error?.error_subcode ?? null,\n    fbtrace_id: body.fbtrace_id ?? body.error?.fbtrace_id ?? null,\n    detail: ok ? 'Evento recebido pela Meta; atribuição ainda depende da Meta.'\n      : retryable ? 'Rejeição temporária; nova tentativa agendada.'\n      : 'Envio não confirmado. Conferir no Gerenciador de Eventos antes de reenviar.',\n  }),\n} }];\n"
       },
       "id": "a1000000-0000-4000-8000-000000000007",
       "name": "Ler resposta do Meta",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [700, 300]
+      "position": [
+        700,
+        300
+      ]
     },
     {
       "parameters": {
@@ -153,12 +184,15 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ p_lead_id: $json.lead_id, p_event_id: $json.event_id, p_ok: $json.ok, p_resposta: $json.mensagem }) }}",
+        "jsonBody": "={{ JSON.stringify({ p_lead_id: $json.lead_id, p_event_id: $json.event_id, p_ok: $json.ok, p_resposta: $json.resposta, p_retryable: $json.retryable }) }}",
         "options": {
           "timeout": 30000
         }
@@ -167,7 +201,10 @@
       "name": "Gravar resultado no Supabase",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [920, 300],
+      "position": [
+        920,
+        300
+      ],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000
@@ -175,34 +212,93 @@
   ],
   "connections": {
     "A cada 5 minutos": {
-      "main": [[{ "node": "Buscar fila no Supabase", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Buscar fila no Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Buscar fila no Supabase": {
-      "main": [[{ "node": "Tem lead na fila?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Tem lead na fila?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Tem lead na fila?": {
-      "main": [[{ "node": "Montar payload CAPI", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Montar payload CAPI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Montar payload CAPI": {
-      "main": [[{ "node": "Aplicar identificadores WhatsApp", "type": "main", "index": 0 }]]
-    },
-    "Aplicar identificadores WhatsApp": {
-      "main": [[{ "node": "Um lead por vez", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Um lead por vez",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Um lead por vez": {
       "main": [
         [],
-        [{ "node": "Enviar para Meta CAPI", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Enviar para Meta CAPI",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Enviar para Meta CAPI": {
-      "main": [[{ "node": "Ler resposta do Meta", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Ler resposta do Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Ler resposta do Meta": {
-      "main": [[{ "node": "Gravar resultado no Supabase", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Gravar resultado no Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Gravar resultado no Supabase": {
-      "main": [[{ "node": "Um lead por vez", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Um lead por vez",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
