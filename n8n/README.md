@@ -1,20 +1,39 @@
-# Workflow WAHA do Atendimento por IA
+# Workflows n8n
 
-Este diretório tem **um** workflow: o do Atendimento por IA.
+Três arquivos, em dois estados diferentes.
 
-Os fluxos de Conversões saíram daqui. A ingestão de leads passou a ser o webhook
-oficial da Meta e o envio à Conversions API virou uma fila dentro da própria
-aplicação. Veja [a documentação de Conversões](../docs/conversoes-whatsapp-meta.md).
+## Em transição (LEGADO)
 
-Se os workflows `WAHA - Ingestao de Leads e Status de Sessao` e
-`CAPI - Envio de Conversoes` ainda estiverem ativos no seu n8n, **pause os dois**
-depois de publicar a versão nova. O campo "Webhook de produção do n8n para
-leads" deixou de existir em Admin → Configurações, e a migração o remove da
-configuração salva do WAHA — o WAHA para de entregar mensagens para aquele
-endereço sozinho.
+`[LEGADO] n8n_waha_ingestao.json` e `[LEGADO] n8n_capi_conversoes.json` são o
+pipeline antigo de Conversões. Eles **continuam necessários** enquanto houver
+cliente em `conversion_ingest_mode = 'legacy_waha'`.
 
-O status da sessão WAHA continua chegando direto na aplicação, em
-`/whatsapp/webhook`; não dependia do n8n.
+**Não desative e não apague ainda.** Fazer isso agora interrompe a captação de
+leads de todos os clientes que ainda não conectaram o WhatsApp Business
+oficial. A ordem correta está no
+[roteiro de implantação](../docs/conversoes-whatsapp-meta.md).
+
+O que muda no comportamento deles: um cliente já migrado para `official_meta` é
+ignorado dentro de `waha_ingest_lead`, no banco — o workflow não precisa saber
+de nada. Isso evita que a mesma conversa entre duas vezes durante a fase
+híbrida.
+
+O `[LEGADO] CAPI` pode conviver com o worker da aplicação: os dois consomem a
+mesma fila com reserva atômica (`SKIP LOCKED`), então um evento nunca é enviado
+em duplicidade. Ao ligar `CONVERSIONS_DISPATCHER_ENABLED=true`, desative este
+workflow para simplificar o diagnóstico.
+
+Se editar os arquivos em `n8n/code`, rode `node scripts/sync-capi-workflow.mjs`
+antes de importar o JSON. Há teste garantindo que o workflow e os arquivos não
+divergem.
+
+Quando **todos** os clientes estiverem em `official_meta`, a segunda migração
+remove tudo isto do repositório.
+
+## Permanente
+
+`n8n_waha_atendimento_ia.json` é do Atendimento por IA e **não** é legado. Ele
+não tem relação com Conversões e continua ativo o tempo todo.
 
 ## Atendimento IA
 

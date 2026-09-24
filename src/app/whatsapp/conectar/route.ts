@@ -87,9 +87,16 @@ export async function POST(request: Request) {
         };
       }
 
-      // Único consumidor de "message": o Atendimento por IA. As Conversões
-      // recebem seus leads pelo webhook oficial da Meta, fora do WAHA.
-      if (config.aiWebhookUrl) {
+      // LEGADO / TRANSITÓRIO: captação de Conversões pelo WAHA. O banco
+      // ignora quem já migrou, então manter isto registrado não duplica lead
+      // e é o que evita apagão de captação durante a transição.
+      if (config.leadsWebhookUrl) {
+        webhooks.push(messageWebhook(config.leadsWebhookUrl));
+      }
+
+      // Fluxo do atendimento por IA: recebe o mesmo evento "message" num
+      // webhook separado, para não interferir na ingestão de leads que já roda.
+      if (config.aiWebhookUrl && config.aiWebhookUrl !== config.leadsWebhookUrl) {
         webhooks.push(messageWebhook(config.aiWebhookUrl));
       }
 

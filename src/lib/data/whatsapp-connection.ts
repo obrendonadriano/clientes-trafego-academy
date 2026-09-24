@@ -106,6 +106,8 @@ export type AdminConnectionRow = {
   leadsPendentes: number;
   leadsNaFila: number;
   eventosComErro: number;
+  // De onde vêm os leads deste cliente durante a migração.
+  ingestMode: "legacy_waha" | "official_meta";
 };
 
 export type AdminConnectionOverview = {
@@ -134,6 +136,7 @@ type StatusRow = {
   leads_pendentes: number | null;
   leads_na_fila: number | null;
   eventos_com_erro: number | null;
+  ingest_mode: string | null;
 };
 
 export async function getAdminConnectionOverview(): Promise<AdminConnectionOverview> {
@@ -179,6 +182,8 @@ export async function getAdminConnectionOverview(): Promise<AdminConnectionOverv
       leadsPendentes: Number(row.leads_pendentes ?? 0),
       leadsNaFila: Number(row.leads_na_fila ?? 0),
       eventosComErro: Number(row.eventos_com_erro ?? 0),
+      ingestMode:
+        row.ingest_mode === "official_meta" ? "official_meta" : "legacy_waha",
     })),
   };
 }

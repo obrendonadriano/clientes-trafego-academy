@@ -590,6 +590,10 @@ begin
   set last_webhook_at = now(), atualizado_em = now()
   where client_whatsapp_connections.client_id = v_client;
 
+  -- A Meta acabou de provar que entrega para este cliente. Só agora o fluxo
+  -- antigo pode ser desligado para ele, sem janela sem captação.
+  perform private.promote_client_to_official(v_client);
+
   -- Sem prova de origem em anúncio não existe conversão a registrar. Uma
   -- mensagem orgânica não pode entrar no funil como se viesse da Meta.
   if v_click is null then
@@ -804,7 +808,8 @@ returns table(
   is_on_biz_app boolean, platform_type text, webhook_subscribed boolean,
   last_webhook_at timestamptz, last_lead_at timestamptz, last_conversion_at timestamptz,
   last_error text, capi_ativo boolean, token_configurado boolean,
-  leads_pendentes bigint, leads_na_fila bigint, eventos_com_erro bigint
+  leads_pendentes bigint, leads_na_fila bigint, eventos_com_erro bigint,
+  ingest_mode text
 )
 language plpgsql security definer set search_path = '' as $$
 begin
@@ -836,7 +841,8 @@ begin
       where l.client_id = c.id and e.status in ('nao_enviado', 'erro') and e.attempts < 5),
     (select count(*) from private.conversion_events e
       join public.conversion_leads l on l.id = e.lead_id
-      where l.client_id = c.id and e.status = 'erro' and e.attempts >= 5)
+      where l.client_id = c.id and e.status = 'erro' and e.attempts >= 5),
+    c.conversion_ingest_mode
   from public.clients c
   left join public.client_whatsapp_connections connection on connection.client_id = c.id
   order by c.nome_empresa;
@@ -869,15 +875,285 @@ grant execute on function public.conversion_leads_summary(timestamptz, uuid)
   to authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
--- 9. Fim do caminho WAHA -> n8n -> Conversões. A ingestão de leads passa a ser
---    exclusivamente o webhook oficial. whatsapp_sessions e
---    waha_update_session_status NÃO são tocados: pertencem ao Atendimento IA.
+-- 9. Fase de compatibilidade. Esta migração é ADITIVA: nada é removido.
+--
+--    Durante a transição os dois caminhos de captação coexistem, um por
+--    cliente. Quem ainda não conectou o WhatsApp oficial continua entrando
+--    pelo WAHA/n8n exatamente como antes; quem já conectou entra pelo webhook
+--    oficial da Meta.
+--
+--    Sem isso, apagar waha_ingest_lead aqui interromperia a captação de leads
+--    de todos os clientes no instante em que a migração rodasse — e o fluxo
+--    novo só produz lead depois que cada cliente conclui o Embedded Signup.
+--
+--    A remoção definitiva de WAHA/n8n em Conversões fica para uma SEGUNDA
+--    migração, executada só quando todos os clientes estiverem em
+--    official_meta. Nada aqui toca o WAHA do Atendimento por IA.
 -- ---------------------------------------------------------------------------
 
-drop function if exists public.waha_ingest_lead(text, text, text, text, text, text, text);
-drop function if exists public.waha_ingest_lead(text, text, text, text, text, text);
+alter table public.clients
+  add column if not exists conversion_ingest_mode text not null default 'legacy_waha';
 
--- Remove o webhook de leads do WAHA, preservando o do Atendimento IA.
-update public.integration_settings
-set config = config - 'leads_webhook_url', updated_at = now()
-where provider = 'waha' and config ? 'leads_webhook_url';
+comment on column public.clients.conversion_ingest_mode is
+  'De onde vêm os leads de Conversões deste cliente: legacy_waha (WAHA/n8n) ou official_meta (webhook oficial). Sem relação com o Atendimento por IA.';
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'clients_conversion_ingest_mode_check'
+      and conrelid = 'public.clients'::regclass
+  ) then
+    alter table public.clients
+      add constraint clients_conversion_ingest_mode_check
+      check (conversion_ingest_mode in ('legacy_waha', 'official_meta'));
+  end if;
+end
+$$;
+
+create index if not exists clients_conversion_ingest_mode_idx
+  on public.clients (conversion_ingest_mode);
+
+-- A integração oficial de um cliente está saudável quando ela consegue, de
+-- fato, receber o lead e enviar a conversão: número e WABA conectados, Dataset
+-- resolvido, webhook assinado e credencial guardada.
+create or replace function private.official_integration_is_healthy(p_client_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.client_whatsapp_connections as connection
+    join private.client_whatsapp_credentials as credential
+      on credential.client_id = connection.client_id
+    where connection.client_id = p_client_id
+      and connection.status = 'active'
+      and connection.waba_id is not null
+      and connection.phone_number_id is not null
+      and connection.dataset_id is not null
+      and connection.webhook_subscribed
+  );
+$$;
+
+revoke all on function private.official_integration_is_healthy(uuid)
+  from public, anon, authenticated;
+
+-- Promoção automática. Só acontece depois que o webhook oficial daquele
+-- cliente realmente entregou alguma coisa: até a Meta provar que entrega, o
+-- WAHA continua captando. É isso que torna a virada sem perda de leads.
+create or replace function private.promote_client_to_official(p_client_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_changed integer := 0;
+begin
+  if not private.official_integration_is_healthy(p_client_id) then
+    return false;
+  end if;
+
+  update public.clients
+  set conversion_ingest_mode = 'official_meta'
+  where id = p_client_id
+    and conversion_ingest_mode <> 'official_meta';
+
+  get diagnostics v_changed = row_count;
+  return v_changed > 0;
+end;
+$$;
+
+revoke all on function private.promote_client_to_official(uuid)
+  from public, anon, authenticated;
+
+-- Controle manual do administrador: promover antes da primeira mensagem, ou
+-- voltar um cliente ao fluxo antigo se algo der errado do lado da Meta.
+create or replace function public.admin_set_conversion_ingest_mode(
+  p_client_id uuid,
+  p_mode text
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if coalesce(
+       nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role',
+       ''
+     ) <> 'service_role'
+     and not private.is_active_admin()
+  then
+    raise exception 'Apenas administradores podem alterar a origem dos leads.'
+      using errcode = '42501';
+  end if;
+
+  if p_mode not in ('legacy_waha', 'official_meta') then
+    raise exception 'Modo de captação inválido.' using errcode = '22023';
+  end if;
+
+  -- Migrar para o oficial sem a integração pronta deixaria o cliente sem
+  -- captação nenhuma: o WAHA para e a Meta ainda não entrega.
+  if p_mode = 'official_meta'
+     and not private.official_integration_is_healthy(p_client_id)
+  then
+    raise exception 'A integração oficial deste cliente ainda não está completa.'
+      using errcode = '22023';
+  end if;
+
+  update public.clients set conversion_ingest_mode = p_mode where id = p_client_id;
+
+  if not found then
+    raise exception 'Cliente não encontrado.' using errcode = 'P0002';
+  end if;
+end;
+$$;
+
+revoke all on function public.admin_set_conversion_ingest_mode(uuid, text)
+  from public, anon;
+grant execute on function public.admin_set_conversion_ingest_mode(uuid, text)
+  to authenticated, service_role;
+
+-- Ingestão antiga, preservada com a MESMA assinatura para que o workflow do
+-- n8n continue funcionando sem nenhuma alteração. A única mudança de
+-- comportamento: um cliente já migrado é ignorado, para que a mesma conversa
+-- não entre duas vezes durante a fase híbrida.
+--
+-- Isto NÃO afeta o WAHA do Atendimento por IA: aquele fluxo usa outro webhook
+-- e não passa por esta função.
+create or replace function public.waha_ingest_lead(
+  p_session_name text,
+  p_telefone text,
+  p_nome text default null,
+  p_ctwa_clid text default null,
+  p_ad_source_id text default null,
+  p_ad_entry_point text default null,
+  p_event_id text default null
+)
+returns table (lead_id uuid, novo boolean)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_client uuid;
+  v_mode text;
+  v_id uuid;
+  v_phone text;
+  v_click text := nullif(btrim(p_ctwa_clid), '');
+  v_event text := nullif(btrim(p_event_id), '');
+begin
+  if coalesce(
+       nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role',
+       ''
+     ) <> 'service_role'
+  then
+    raise exception 'Acesso negado.' using errcode = '42501';
+  end if;
+
+  v_phone := nullif(regexp_replace(coalesce(p_telefone, ''), '[^0-9]', '', 'g'), '');
+
+  if nullif(btrim(p_session_name), '') is null or v_phone is null then
+    raise exception 'Sessão e telefone são obrigatórios.' using errcode = '22023';
+  end if;
+
+  select session.client_id into v_client
+  from public.whatsapp_sessions as session
+  where session.session_name = btrim(p_session_name);
+
+  if v_client is null then
+    raise exception 'Sessão não vinculada a nenhum cliente.' using errcode = '22023';
+  end if;
+
+  select client.conversion_ingest_mode into v_mode
+  from public.clients as client
+  where client.id = v_client;
+
+  -- Cliente já migrado: as Conversões dele vêm do webhook oficial. Ignorar
+  -- aqui é o que garante que um contato não seja criado duas vezes.
+  if coalesce(v_mode, 'legacy_waha') = 'official_meta' then
+    return;
+  end if;
+
+  -- Deduplicação entre os dois pipelines. O message id não cruza (o do WAHA
+  -- não é o wamid da Cloud API), então a chave comum é o ctwa_clid.
+  if v_event is not null then
+    select lead.id into v_id from public.conversion_leads as lead
+    where lead.waha_event_id = v_event;
+
+    if v_id is not null then
+      return query select v_id, false;
+      return;
+    end if;
+  end if;
+
+  if v_click is not null then
+    select lead.id into v_id from public.conversion_leads as lead
+    where lead.ctwa_clid = v_click;
+
+    if v_id is not null then
+      -- Pode já ter entrado pelo caminho oficial. Completa o que falta sem
+      -- tocar no vínculo original com o anúncio.
+      update public.conversion_leads as lead
+      set nome = coalesce(lead.nome, nullif(btrim(p_nome), '')),
+          waha_event_id = coalesce(lead.waha_event_id, v_event),
+          atualizado_em = now()
+      where lead.id = v_id;
+
+      return query select v_id, false;
+      return;
+    end if;
+  end if;
+
+  -- Rede de segurança quando nenhum dos lados trouxe identificador de clique:
+  -- o mesmo telefone, no mesmo cliente, dentro de 24 horas.
+  select lead.id into v_id
+  from public.conversion_leads as lead
+  where lead.client_id = v_client
+    and lead.telefone = v_phone
+    and lead.criado_em > now() - interval '24 hours'
+  order by lead.criado_em desc
+  limit 1;
+
+  if v_id is not null then
+    update public.conversion_leads as lead
+    set ctwa_clid = coalesce(lead.ctwa_clid, v_click),
+        ad_source_id = coalesce(lead.ad_source_id, nullif(btrim(p_ad_source_id), '')),
+        ad_entry_point = coalesce(lead.ad_entry_point, nullif(btrim(p_ad_entry_point), '')),
+        nome = coalesce(lead.nome, nullif(btrim(p_nome), '')),
+        waha_event_id = coalesce(lead.waha_event_id, v_event),
+        origem = case
+          when coalesce(lead.ctwa_clid, v_click) is not null then 'anuncio'
+          else lead.origem
+        end,
+        atualizado_em = now()
+    where lead.id = v_id;
+
+    return query select v_id, false;
+    return;
+  end if;
+
+  insert into public.conversion_leads (
+    client_id, telefone, nome, ctwa_clid, ad_source_id, ad_entry_point,
+    waha_event_id, origem, capi_event_name
+  ) values (
+    v_client, v_phone, nullif(btrim(p_nome), ''), v_click,
+    nullif(btrim(p_ad_source_id), ''), nullif(btrim(p_ad_entry_point), ''),
+    v_event,
+    case when v_click is not null then 'anuncio' else 'organico' end,
+    'LeadSubmitted'
+  )
+  returning id into v_id;
+
+  return query select v_id, true;
+end;
+$$;
+
+revoke all on function public.waha_ingest_lead(text, text, text, text, text, text, text)
+  from public, anon, authenticated;
+grant execute on function public.waha_ingest_lead(text, text, text, text, text, text, text)
+  to service_role;

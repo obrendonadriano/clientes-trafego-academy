@@ -4,12 +4,13 @@ import { fileURLToPath } from 'node:url';
 import { join, relative } from 'node:path';
 import { test } from 'node:test';
 
-// TESTE 12/13/14: Conversões não pode depender de WAHA nem de n8n, e o
-// Atendimento por IA precisa continuar usando o WAHA normalmente.
+// TESTE 12/13/14: o caminho NOVO de Conversões não pode depender de WAHA nem
+// de n8n, e o Atendimento por IA precisa continuar usando o WAHA normalmente.
 //
-// Desligar o WAHA ou o workflow antigo do n8n não é testável aqui sem os
-// serviços reais; o que se verifica é a única coisa que torna isso possível:
-// que nenhum caminho de código de Conversões passa por eles.
+// Durante a fase híbrida o caminho ANTIGO continua existindo de propósito, para
+// os clientes ainda em legacy_waha. O que se verifica aqui é que ele está
+// isolado: nenhum arquivo do pipeline oficial o alcança, e ele está marcado
+// como legado para não ser confundido com a arquitetura final.
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const src = join(root, 'src');
@@ -50,15 +51,20 @@ const CONVERSIONS = [
   'src/components/conversions/conversions-page.tsx',
   'src/components/conversions/whatsapp-official-connection.tsx',
   'src/components/conversions/lead-badges.tsx',
-  'src/components/admin/conversions-diagnostics.tsx',
 ];
+
+// O painel do administrador PRECISA citar o WAHA: é ele que mostra quem ainda
+// não migrou. O que não pode é depender do código do WAHA.
+const DIAGNOSTICS = 'src/components/admin/conversions-diagnostics.tsx';
 
 test('TESTE 12/13: nenhum arquivo de Conversões depende de WAHA ou n8n', () => {
   for (const file of CONVERSIONS) {
     const path = join(root, file);
     assert.ok(existsSync(path), `${file} deveria existir`);
 
-    const source = stripComments(read(path));
+    // `legacy_waha` é o NOME do modo de captação, não uma dependência do WAHA:
+    // o pipeline oficial precisa saber quem ainda não migrou.
+    const source = stripComments(read(path)).replaceAll('legacy_waha', 'legacy_mode');
     assert.equal(/waha/i.test(source), false, `${file} ainda usa WAHA`);
     assert.equal(/n8n/i.test(source), false, `${file} ainda usa n8n`);
     assert.equal(
@@ -69,6 +75,18 @@ test('TESTE 12/13: nenhum arquivo de Conversões depende de WAHA ou n8n', () => 
   }
 });
 
+test('FASE HÍBRIDA: o painel do admin cita o WAHA como rótulo, sem depender dele', () => {
+  const source = read(join(root, DIAGNOSTICS));
+
+  // Nenhum import do módulo WAHA nem chamada à API dele.
+  assert.equal(/from ["'][^"']*waha/i.test(source), false);
+  assert.equal(/wahaFetchJson|getWahaConfig|whatsapp_sessions/.test(source), false);
+
+  // Só o rótulo que diferencia os dois modos para o gestor.
+  assert.equal(source.includes('WAHA (legado)'), true);
+  assert.equal(source.includes('official_meta'), true);
+});
+
 test('TESTE 14: o Atendimento por IA continua usando o WAHA', () => {
   const aiPipeline = read(join(root, 'src/lib/ai-agent/pipeline.ts'));
   assert.equal(/waha/i.test(aiPipeline), true, 'o pipeline da IA perdeu o WAHA');
@@ -76,8 +94,13 @@ test('TESTE 14: o Atendimento por IA continua usando o WAHA', () => {
   // A sessão WAHA continua sendo criada e o webhook da IA continua registrado.
   const connect = read(join(root, 'src/app/whatsapp/conectar/route.ts'));
   assert.equal(connect.includes('config.aiWebhookUrl'), true);
-  // ...e o webhook de leads das Conversões saiu de vez do WAHA.
-  assert.equal(connect.includes('leadsWebhookUrl'), false);
+
+  // Durante a fase híbrida o webhook de leads também continua registrado, para
+  // quem ainda não migrou. Quem o remover antes da hora derruba a captação —
+  // por isso ele precisa estar aqui e explicitamente marcado como legado.
+  assert.equal(connect.includes('config.leadsWebhookUrl'), true);
+  assert.match(connect, /LEGADO \/ TRANSITÓRIO/);
+  assert.match(read(join(root, 'src/lib/waha.ts')), /LEGADO \/ TRANSITÓRIO/);
 
   for (const file of [
     'src/lib/waha.ts',
@@ -93,17 +116,42 @@ test('TESTE 14: o Atendimento por IA continua usando o WAHA', () => {
   }
 });
 
-test('o workflow antigo de CAPI e a ingestão WAHA de leads saíram do repositório', () => {
-  for (const file of [
-    'n8n/n8n_capi_conversoes.json',
-    'n8n/n8n_waha_ingestao.json',
-    'scripts/sync-capi-workflow.mjs',
-  ]) {
-    assert.equal(existsSync(join(root, file)), false, `${file} ainda existe`);
+test('FASE HÍBRIDA: os workflows antigos continuam disponíveis, marcados como legado', () => {
+  // Removê-los agora interromperia a captação de quem ainda não migrou. Eles
+  // saem numa segunda migração, quando todos estiverem em official_meta.
+  for (const file of ['n8n/n8n_capi_conversoes.json', 'n8n/n8n_waha_ingestao.json']) {
+    const path = join(root, file);
+    assert.ok(existsSync(path), `${file} não pode ser removido durante a transição`);
+
+    const flow = JSON.parse(read(path));
+    assert.match(flow.name, /^\[LEGADO\]/, `${file} precisa estar marcado como legado`);
+    assert.ok(flow.meta?.trafegoacademy_status, `${file} precisa explicar seu status`);
   }
 
-  // O workflow do Atendimento IA permanece.
-  assert.ok(existsSync(join(root, 'n8n/n8n_waha_atendimento_ia.json')));
+  assert.ok(existsSync(join(root, 'scripts/sync-capi-workflow.mjs')));
+  // O workflow do Atendimento IA permanece, e NÃO é legado.
+  const ai = JSON.parse(read(join(root, 'n8n/n8n_waha_atendimento_ia.json')));
+  assert.equal(/^\[LEGADO\]/.test(ai.name), false);
+});
+
+test('FASE HÍBRIDA: a migração é aditiva e não derruba a captação antiga', () => {
+  const migration = read(
+    join(root, 'supabase/migrations/20260924210000_official_whatsapp_conversions.sql'),
+  );
+
+  // Nada de destrutivo neste deploy.
+  assert.equal(/drop function if exists public\.waha_ingest_lead/.test(migration), false);
+  assert.equal(/config - 'leads_webhook_url'/.test(migration), false);
+  assert.equal(/drop table/i.test(migration), false);
+
+  // E o modo por cliente existe, começando no legado.
+  assert.equal(migration.includes('conversion_ingest_mode'), true);
+  assert.equal(migration.includes("default 'legacy_waha'"), true);
+  assert.equal(migration.includes('promote_client_to_official'), true);
+
+  // A ingestão antiga continua existindo, agora ciente do modo.
+  assert.equal(migration.includes('create or replace function public.waha_ingest_lead'), true);
+  assert.equal(migration.includes("= 'official_meta' then"), true);
 });
 
 test('Conversões não é condicionada ao plano de Atendimento por IA', () => {

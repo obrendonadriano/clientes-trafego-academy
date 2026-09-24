@@ -213,6 +213,9 @@ export async function saveIntegrationSettingsAction(
   if (parsed.data.provider === "waha") {
     try {
       config.base_url = normalizeWahaBaseUrl(config.base_url ?? "");
+      config.leads_webhook_url = normalizeWahaWebhookUrl(
+        config.leads_webhook_url ?? "",
+      );
       config.ai_webhook_url = normalizeWahaWebhookUrl(
         config.ai_webhook_url ?? "",
       );

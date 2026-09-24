@@ -44,6 +44,9 @@ export function ConversionsDiagnostics({
 }) {
   const { clients, signup, notice } = overview;
   const active = clients.filter((client) => client.status === "active").length;
+  const migrated = clients.filter(
+    (client) => client.ingestMode === "official_meta",
+  ).length;
   const queued = clients.reduce((sum, client) => sum + client.leadsNaFila, 0);
   const failing = clients.reduce(
     (sum, client) => sum + client.eventosComErro,
@@ -72,7 +75,7 @@ export function ConversionsDiagnostics({
         </div>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardContent className="py-5">
             <p className="text-sm text-muted-foreground">
@@ -84,6 +87,23 @@ export function ConversionsDiagnostics({
                 {" "}
                 de {clients.length}
               </span>
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-5">
+            <p className="text-sm text-muted-foreground">
+              Migrados para a Meta oficial
+            </p>
+            <p className="mt-2 font-display text-3xl font-semibold">
+              {migrated}
+              <span className="text-base font-normal text-muted-foreground">
+                {" "}
+                de {clients.length}
+              </span>
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              O restante continua captando pelo fluxo antigo.
             </p>
           </CardContent>
         </Card>
@@ -146,6 +166,14 @@ export function ConversionsDiagnostics({
                     <div>
                       <dt className="text-muted-foreground">Conta de anúncios</dt>
                       <dd>Tráfego Academy</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Captação</dt>
+                      <dd>
+                        {client.ingestMode === "official_meta"
+                          ? "Meta oficial"
+                          : "WAHA (legado)"}
+                      </dd>
                     </div>
                     <div>
                       <dt className="text-muted-foreground">Número</dt>

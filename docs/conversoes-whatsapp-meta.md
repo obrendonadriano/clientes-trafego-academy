@@ -1,8 +1,50 @@
 # Conversões: WhatsApp Business oficial e Conversions API
 
-Esta área deixou de depender de WAHA e de n8n. O WAHA continua existindo e
-funcionando no **Atendimento por IA**, que é outro produto, com outro plano e
-outro fluxo. Os dois convivem sem um depender do outro.
+O destino final é Conversões 100% na API oficial da Meta, com o WAHA servindo
+**apenas** ao Atendimento por IA.
+
+Para chegar lá sem perder lead, a transição é feita em duas etapas. Esta
+entrega é a **fase híbrida**: os dois caminhos de captação coexistem, um por
+cliente, e nada do fluxo antigo é removido. A remoção fica para uma **segunda
+migração**, quando todos os clientes já estiverem migrados.
+
+## Fase híbrida: quem entra por onde
+
+Cada cliente tem um modo em `clients.conversion_ingest_mode`:
+
+| Modo | Captação | Quando |
+| --- | --- | --- |
+| `legacy_waha` | WAHA → n8n → `waha_ingest_lead` | Padrão. Todo cliente existente começa aqui. |
+| `official_meta` | Webhook oficial da Meta | Depois que a integração daquele cliente prova que funciona. |
+
+Os dois rodam ao mesmo tempo, em clientes diferentes:
+
+```text
+Cliente A (migrado)     anúncio -> WhatsApp -> webhook oficial -> lead
+Cliente B (não migrado) anúncio -> WhatsApp -> WAHA -> n8n     -> lead
+```
+
+**A promoção é automática, mas conservadora.** Um cliente só vai para
+`official_meta` quando as duas coisas forem verdade:
+
+1. a integração está completa — WABA, `phone_number_id`, Dataset, webhook
+   assinado e credencial guardada; e
+2. o webhook oficial **já entregou alguma coisa** para aquele cliente.
+
+Até a Meta provar que entrega, o WAHA continua captando. É isso que elimina a
+janela sem lead. O administrador também pode promover ou **reverter** um
+cliente manualmente (`admin_set_conversion_ingest_mode`) — e reverter para
+`legacy_waha` volta a captação antiga imediatamente.
+
+**Deduplicação entre os dois caminhos.** Enquanto um cliente está em
+`legacy_waha` com o WhatsApp oficial já conectado, os dois lados podem ver a
+mesma conversa. O `ctwa_clid` é a chave que cruza os pipelines (o message id
+não cruza: o do WAHA não é o `wamid` da Cloud API), e ele tem índice único.
+Quando o cliente passa para `official_meta`, `waha_ingest_lead` simplesmente
+ignora aquele cliente — a defesa primária. Há testes cobrindo os dois casos.
+
+Nada disso toca o Atendimento por IA: ele usa outro webhook e não passa por
+`waha_ingest_lead`.
 
 ## Fluxo
 
@@ -19,7 +61,9 @@ Meta Ads (conta da Tráfego Academy)
   -> Conversions API                     POST /{dataset_id}/events
 ```
 
-Não há n8n em nenhum ponto deste caminho, e nenhuma chamada ao WAHA.
+Não há n8n em nenhum ponto deste caminho, e nenhuma chamada ao WAHA. É o fluxo
+de quem já está em `official_meta`; quem ainda está em `legacy_waha` continua
+no caminho antigo, descrito acima.
 
 ## Funil
 
@@ -312,46 +356,78 @@ curl -fsS -X POST https://dashboard.trafegoacademy.online/api/conversions/dispat
   -H "x-sync-key: $SYNC_SECRET_KEY"
 ```
 
-### 9. Ordem de implantação
+### 9. Ordem de implantação (progressiva, sem downtime)
 
-A ordem importa. Cada passo depende do anterior, e o envio real à Meta é o
-**último** a ser ligado — de propósito.
+Nenhum passo interrompe a captação. O fluxo antigo continua funcionando até o
+último cliente migrar, e a remoção dele é uma migração separada, depois.
 
 | # | Passo | Onde | Como saber que deu certo |
 | --- | --- | --- | --- |
-| 1 | App, verificação do negócio, Tech Provider, App Review (passos 1–3) | Meta | Permissões dos grupos A e B aparecem como concedidas |
-| 2 | Configuração do Embedded Signup com Coexistence (passo 4) | Meta | Você tem o Configuration ID |
-| 3 | Atribuição de anúncios ativada **em cada WABA** | WhatsApp Manager | Toggle ligado por cliente |
-| 4 | Variáveis de ambiente, com `CONVERSIONS_DISPATCHER_ENABLED=false` | Vercel | Deploy sobe sem erro |
-| 5 | Migração `20260924210000` | Supabase (**staging primeiro**) | Roda sem erro; `select conversion_pipeline_version()` = 3 |
-| 6 | Deploy da aplicação | Vercel | Admin → Integração com o Meta sem aviso de pendência |
-| 7 | Webhook cadastrado e campo `messages` assinado (passo 5) | Meta | O desafio `hub.challenge` é aceito |
-| 8 | Teste do Embedded Signup com um número elegível | Dashboard | "Conectado" + "Rastreamento ativo"; `Coexistence: Ativo` no admin |
-| 9 | Confirmar que o número **continua funcionando no app do celular** | Celular | Conversas normais, nada mudou |
-| 10 | Teste real de `ctwa_clid`: clicar num anúncio e mandar a 1ª mensagem | Anúncio real | Cartão em **Novos leads** com o anúncio identificado |
-| 11 | Test Events da Meta: conferir os 3 payloads | Gerenciador de Eventos | Sem valor, sem dívida, sem placa, sem observação |
-| 12 | **Ligar o envio**: `CONVERSIONS_DISPATCHER_ENABLED=true` + cron | Vercel | `LeadSubmitted` chega no Dataset **daquele** cliente |
-| 13 | Conferir isolamento: o Dataset de outro cliente não recebeu nada | Gerenciador de Eventos | Zero eventos cruzados |
-| 14 | **Só então** desligar o n8n antigo de Conversões | n8n | Leads continuam chegando pelo webhook oficial |
+| 1 | **Migração ADITIVA** `20260924210000` | Supabase (staging → produção) | Roda sem erro. `select conversion_pipeline_version()` = 3. Todo cliente em `legacy_waha`. **A captação antiga continua funcionando.** |
+| 2 | Deploy da aplicação (compatível com os dois pipelines) | Vercel | Conversões abre normalmente; leads antigos continuam entrando pelo WAHA |
+| 3 | App, verificação do negócio, Tech Provider, App Review | Meta | Permissões dos grupos A e B concedidas |
+| 4 | Configuração do Embedded Signup com Coexistence | Meta | Você tem o Configuration ID |
+| 5 | Variáveis de ambiente, com `CONVERSIONS_DISPATCHER_ENABLED=false` | Vercel | Admin → Integração com o Meta sem aviso de pendência |
+| 6 | Webhook cadastrado, campo `messages` assinado | Meta | O desafio `hub.challenge` é aceito |
+| 7 | **Atribuição de anúncios** no WABA do cliente piloto | WhatsApp Manager | Toggle ligado |
+| 8 | Cliente **piloto** conecta pelo Embedded Signup | Dashboard | "Conectado" + "Rastreamento ativo"; `Coexistence: Ativo` no admin |
+| 9 | Confirmar que o número segue funcionando no app do celular | Celular | Conversas normais |
+| 10 | Teste real: clicar no anúncio e mandar a 1ª mensagem | Anúncio real | Cartão em **Novos leads**; o piloto vira `official_meta` sozinho no painel |
+| 11 | Conferir que o WAHA parou de captar **só** para o piloto | Admin | Piloto = "Meta oficial"; os demais = "WAHA (legado)" |
+| 12 | Test Events da Meta: conferir os 3 payloads | Gerenciador de Eventos | Sem valor, sem dívida, sem placa, sem observação |
+| 13 | **Ligar o envio**: `CONVERSIONS_DISPATCHER_ENABLED=true` + cron | Vercel | `LeadSubmitted` chega no Dataset **daquele** cliente |
+| 14 | Conferir isolamento entre Datasets | Gerenciador de Eventos | Zero eventos cruzados |
+| 15 | **Migrar os demais clientes, aos poucos** | Dashboard | Cada um conecta e é promovido sozinho |
+| 16 | Só quando **todos** estiverem em `official_meta`: segunda migração de cleanup | Supabase | Remove `waha_ingest_lead` e o `leads_webhook_url` |
+| 17 | Desativar os workflows `[LEGADO]` no n8n | n8n | Leads seguem chegando pelo webhook oficial |
 
-Testes negativos que valem a pena rodar no passo 10: mande uma mensagem
-**orgânica** de outro número e confirme que **não** cria cartão.
+Testes negativos que valem a pena no passo 10: mande uma mensagem **orgânica**
+de outro número e confirme que **não** cria cartão.
 
-O workflow de Atendimento IA do n8n **não** entra nesta lista: ele não é
-tocado em nenhum passo e continua ativo o tempo todo.
+O workflow de Atendimento IA do n8n **não** entra em nenhum passo: continua
+ativo do começo ao fim.
 
-#### Por que o envio fica desligado até o passo 12
+#### Rollback
+
+Deu problema com um cliente? `admin_set_conversion_ingest_mode(<cliente>,
+'legacy_waha')` devolve a captação dele ao WAHA na hora. Nada precisa ser
+revertido no banco nem no deploy.
+
+#### Por que o envio fica desligado até o passo 13
 
 Com `CONVERSIONS_DISPATCHER_ENABLED` diferente de `true`, a fila **acumula** os
-eventos com as datas originais e não envia nada. Isso permite aplicar a
-migração, publicar a aplicação e testar o Embedded Signup sem que um único
-evento vá para a Meta.
+eventos com as datas originais e não envia nada. Isso permite migrar, publicar
+e testar o Embedded Signup sem que um único evento vá para a Meta.
+
+Durante a fase híbrida o workflow `[LEGADO] CAPI` pode continuar drenando a
+fila: os dois consumidores usam a **mesma reserva atômica** no banco
+(`SKIP LOCKED`), então um evento nunca é enviado duas vezes. Ao ligar o
+dispatcher, desative o workflow antigo para simplificar o diagnóstico.
 
 Atenção a uma consequência real: a Meta recusa eventos com mais de **7 dias**.
-Um evento que ficar parado além disso é marcado como fora da janela e **não é
-rejuvenescido** — a data original é preservada. Se a validação for demorar mais
-de uma semana, prefira validar em staging com dados de teste.
+Um evento parado além disso é marcado como fora da janela e **não é
+rejuvenescido** — a data original é preservada.
 
+#### A segunda migração (cleanup)
+
+Só depois do passo 15. Ela deve:
+
+- remover `public.waha_ingest_lead`;
+- remover `leads_webhook_url` de `integration_settings` do provedor `waha`;
+- remover o campo legado da tela de Configurações e o `leadsWebhookUrl` de
+  `src/lib/waha.ts` e `src/app/whatsapp/conectar/route.ts`;
+- apagar `n8n/n8n_waha_ingestao.json`, `n8n/n8n_capi_conversoes.json`,
+  `n8n/code/`, `scripts/sync-capi-workflow.mjs` e
+  `tests/legacy-n8n-payload.test.mjs`;
+- opcionalmente, remover `clients.conversion_ingest_mode`.
+
+Antes de rodá-la, confirme:
+
+```sql
+select conversion_ingest_mode, count(*)
+from public.clients group by 1;
+-- precisa retornar só official_meta
+```
 ## Migração e histórico
 
 Conversões antigas já enviadas são preservadas e **não são reenviadas**. Nenhum
@@ -361,6 +437,11 @@ os que estavam em `desqualificado` permanecem no banco, fora da interface.
 A configuração manual de Dataset/WABA/token no perfil do cliente continua
 funcionando como saída de emergência do administrador: a fila aceita a
 credencial antiga enquanto o cliente não reconectar pelo fluxo oficial.
+
+Esta entrega **não remove nada**. `waha_ingest_lead`, o `leads_webhook_url` e os
+workflows n8n (marcados como `[LEGADO]`) continuam no lugar e funcionando para
+quem ainda não migrou. O cleanup destrutivo é a segunda migração, descrita
+acima.
 
 ## Testes
 

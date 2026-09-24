@@ -11,9 +11,12 @@ export type WahaCredentials = {
 
 export type WahaConfig = WahaCredentials & {
   webhookSecret: string;
-  // Webhook do fluxo n8n que cuida do tempo do atendimento por IA. É o único
-  // que resta: a ingestão de leads de Conversões passou a usar o webhook
-  // oficial da Meta e não depende mais do WAHA.
+  // LEGADO / TRANSITÓRIO. Captação de leads de Conversões pelo WAHA + n8n.
+  // Continua ativo apenas para clientes em conversion_ingest_mode =
+  // 'legacy_waha'. Quem já migrou é ignorado dentro de waha_ingest_lead.
+  // Sai numa segunda migração, quando todos estiverem em 'official_meta'.
+  leadsWebhookUrl: string | null;
+  // Webhook do fluxo n8n que cuida do tempo do atendimento por IA.
   aiWebhookUrl: string | null;
 };
 
@@ -171,6 +174,7 @@ export async function getWahaConfig(): Promise<WahaConfig> {
   const baseUrl = integration?.config?.base_url ?? "";
   const apiKey = integration?.config?.api_key ?? "";
   const webhookSecret = integration?.config?.webhook_secret ?? "";
+  const leadsWebhookUrl = integration?.config?.leads_webhook_url ?? "";
   const aiWebhookUrl = integration?.config?.ai_webhook_url ?? "";
 
   if (!integration?.enabled || !baseUrl || !apiKey || !webhookSecret) {
@@ -183,6 +187,9 @@ export async function getWahaConfig(): Promise<WahaConfig> {
     baseUrl: normalizeWahaBaseUrl(baseUrl),
     apiKey,
     webhookSecret,
+    leadsWebhookUrl: leadsWebhookUrl
+      ? normalizeWahaWebhookUrl(leadsWebhookUrl)
+      : null,
     aiWebhookUrl: aiWebhookUrl ? normalizeWahaWebhookUrl(aiWebhookUrl) : null,
   };
 }

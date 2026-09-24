@@ -38,6 +38,7 @@ test('Conversões oficiais: funil, idempotência, isolamento e entrega', async (
     create table public.users(id uuid primary key, auth_user_id uuid, client_id uuid, role public.app_role default 'client', ativo boolean default true);
     create table public.integration_settings(id uuid primary key default gen_random_uuid(), provider text, enabled boolean default false, config jsonb default '{}'::jsonb, updated_at timestamptz default now());
     create table private.client_capi_credentials(client_id uuid primary key, access_token text, atualizado_em timestamptz default now());
+    create table public.whatsapp_sessions(client_id uuid primary key, session_name text unique, status text);
     create table public.conversion_leads(
       id uuid primary key default gen_random_uuid(), client_id uuid references clients(id), campaign_id uuid,
       telefone text, email text, nome text, ctwa_clid text, ad_source_id text, ad_entry_point text,
@@ -59,8 +60,12 @@ test('Conversões oficiais: funil, idempotência, isolamento e entrega', async (
     grant select on public.conversion_leads,public.users to authenticated;
     grant update(qualificacao,observacao,valor,moeda) on public.conversion_leads to authenticated;
     grant all on public.conversion_leads to service_role;
+    -- Grants que a migração 20260824190000 já concede no banco real.
+    grant all on public.clients, public.whatsapp_sessions, public.integration_settings to service_role;
+    grant select on public.clients to authenticated;
     insert into clients(id,meta_dataset_id,meta_waba_id,capi_ativo) values ('${clientA}','dataset-a','waba-a',true),('${clientB}','dataset-b','waba-b',true);
     insert into public.users values ('${actor}','${actor}','${clientA}');
+    insert into public.whatsapp_sessions values ('${clientA}','sess-a','WORKING'),('${clientB}','sess-b','WORKING');
     insert into private.client_capi_credentials(client_id,access_token) values ('${clientA}','test-only-token'),('${clientB}','test-only-token');
     -- Histórico anterior à migração. Sem estas linhas o backfill de \`origem\`
     -- atualiza zero registros e o gatilho de escrita nunca é exercitado — foi
@@ -105,6 +110,19 @@ test('Conversões oficiais: funil, idempotência, isolamento e entrega', async (
     await service();
     await sql('select meta_save_whatsapp_connection($1,$2,$3,null,null,null,$4,true,$5,true,$6,$7,null,null)',
       [tenant, waba, phoneId, dataset, 'CLOUD_API', 'active', 'sealed-token']);
+  }
+  async function wahaIngest(overrides = {}) {
+    await service();
+    const input = {
+      session: 'sess-a', phone: '5511970001111', name: 'Legado',
+      click: null, adId: null, entry: 'ad', eventId: `waha-${++clickCounter}`, ...overrides,
+    };
+    return sql('select * from waha_ingest_lead($1,$2,$3,$4,$5,$6,$7)',
+      [input.session, input.phone, input.name, input.click, input.adId, input.entry, input.eventId]);
+  }
+  async function mode(tenant) {
+    await service();
+    return (await sql('select conversion_ingest_mode from clients where id=$1', [tenant]))[0].conversion_ingest_mode;
   }
   async function ingest(overrides = {}) {
     await service();
@@ -365,6 +383,135 @@ test('Conversões oficiais: funil, idempotência, isolamento e entrega', async (
     assert.equal(rows.some((row) => row.dataset_id === '880001'), true);
     assert.equal(rows.every((row) => row.access_token === 'sealed-token'), true);
   });
+
+
+  await t.test('FASE HÍBRIDA: todo cliente começa no fluxo antigo e ele continua captando', async () => {
+    // A migração é aditiva: um cliente novo nasce no fluxo antigo, sempre.
+    await service();
+    const fresh = '10000000-0000-4000-8000-000000000009';
+    await sql('insert into clients(id) values($1)', [fresh]);
+    assert.equal(await mode(fresh), 'legacy_waha');
+
+    // Os testes anteriores já conectaram e promoveram o cliente A — que é o
+    // comportamento correto. Aqui o cenário híbrido é montado do zero.
+    await sql(`update clients set conversion_ingest_mode='legacy_waha' where id in ($1,$2)`, [clientA, clientB]);
+    assert.equal(await mode(clientA), 'legacy_waha');
+    assert.equal(await mode(clientB), 'legacy_waha');
+
+    // waha_ingest_lead continua existindo e criando lead normalmente.
+    const [row] = await wahaIngest({ click: 'clid-legado-1', phone: '5511970002222' });
+    assert.equal(row.novo, true);
+
+    const created = (await sql('select * from conversion_leads where id=$1', [row.lead_id]))[0];
+    assert.equal(created.client_id, clientA);
+    assert.equal(created.ctwa_clid, 'clid-legado-1');
+    assert.equal(created.origem, 'anuncio');
+    // E o marco entra na mesma fila do pipeline novo.
+    assert.equal((await events(row.lead_id)).some((e) => e.event_name === 'LeadSubmitted'), true);
+  });
+
+  await t.test('FASE HÍBRIDA: repetir a ingestão legada não duplica o lead', async () => {
+    const [first] = await wahaIngest({ click: 'clid-legado-2', eventId: 'waha-fixo' });
+    const [again] = await wahaIngest({ click: 'clid-legado-2', eventId: 'waha-fixo' });
+    assert.equal(again.novo, false);
+    assert.equal(again.lead_id, first.lead_id);
+  });
+
+  await t.test('FASE HÍBRIDA: Meta oficial e WAHA vendo a mesma mensagem criam UM lead só', async () => {
+    // Cliente ainda em legacy_waha, mas o webhook oficial já chegou primeiro.
+    await service();
+    await sql(`update clients set conversion_ingest_mode='legacy_waha' where id=$1`, [clientA]);
+    await sql(`update client_whatsapp_connections set status='whatsapp_connected' where client_id=$1`, [clientA]);
+
+    const [oficial] = await ingest({
+      phoneId: '5550001', waba: '7770001', click: 'clid-cruzado', messageId: 'wamid-cruzado',
+      phone: '5511970003333',
+    });
+    assert.equal(oficial.novo, true);
+
+    // O WAHA enxerga a MESMA conversa, com outro id de mensagem. O ctwa_clid é
+    // a chave que cruza os dois pipelines.
+    const [legado] = await wahaIngest({
+      click: 'clid-cruzado', phone: '5511970003333', eventId: 'waha-cruzado',
+    });
+    assert.equal(legado.novo, false);
+    assert.equal(legado.lead_id, oficial.lead_id);
+
+    const total = await sql('select count(*)::int as n from conversion_leads where ctwa_clid=$1', ['clid-cruzado']);
+    assert.equal(total[0].n, 1);
+    // O vínculo original com o anúncio não foi sobrescrito pelo legado.
+    const lead = (await sql('select * from conversion_leads where id=$1', [oficial.lead_id]))[0];
+    assert.equal(lead.ctwa_clid, 'clid-cruzado');
+    assert.equal(lead.wa_message_id, 'wamid-cruzado');
+  });
+
+  await t.test('FASE HÍBRIDA: promoção automática só depois da integração provar que entrega', async () => {
+    await service();
+    await sql(`update clients set conversion_ingest_mode='legacy_waha' where id=$1`, [clientA]);
+
+    // Conexão incompleta (sem webhook assinado): não promove.
+    await sql(`update client_whatsapp_connections set webhook_subscribed=false, status='active' where client_id=$1`, [clientA]);
+    await ingest({ phoneId: '5550001', waba: '7770001', click: null, messageId: 'wamid-sem-webhook' });
+    assert.equal(await mode(clientA), 'legacy_waha');
+
+    // Promover à força também é recusado enquanto não estiver saudável.
+    await assert.rejects(
+      sql(`select admin_set_conversion_ingest_mode($1,'official_meta')`, [clientA]),
+      /ainda não está completa/,
+    );
+
+    // Integração completa + webhook oficial entregando: aí sim promove.
+    await sql(`update client_whatsapp_connections set webhook_subscribed=true, status='active' where client_id=$1`, [clientA]);
+    await ingest({ phoneId: '5550001', waba: '7770001', click: null, messageId: 'wamid-promove' });
+    assert.equal(await mode(clientA), 'official_meta');
+  });
+
+  await t.test('FASE HÍBRIDA: cliente migrado é ignorado pelo WAHA, sem afetar o Atendimento IA', async () => {
+    assert.equal(await mode(clientA), 'official_meta');
+
+    const before = (await sql('select count(*)::int as n from conversion_leads'))[0].n;
+    const result = await wahaIngest({ click: 'clid-pos-migracao', phone: '5511970004444' });
+
+    // Nada entra: as Conversões dele vêm do webhook oficial agora.
+    assert.equal(result.length, 0);
+    assert.equal((await sql('select count(*)::int as n from conversion_leads'))[0].n, before);
+
+    // A sessão WAHA continua intacta — é a mesma que o Atendimento IA usa.
+    assert.equal((await sql('select status from whatsapp_sessions where client_id=$1', [clientA]))[0].status, 'WORKING');
+  });
+
+  await t.test('FASE HÍBRIDA: A no oficial e B no legado funcionam ao mesmo tempo', async () => {
+    assert.equal(await mode(clientA), 'official_meta');
+    assert.equal(await mode(clientB), 'legacy_waha');
+
+    // B continua entrando pelo fluxo antigo.
+    const [legado] = await wahaIngest({
+      session: 'sess-b', click: 'clid-b-legado', phone: '5511970005555', eventId: 'waha-b',
+    });
+    assert.equal(legado.novo, true);
+    assert.equal((await sql('select client_id from conversion_leads where id=$1', [legado.lead_id]))[0].client_id, clientB);
+
+    // A continua entrando pelo oficial.
+    const [oficial] = await ingest({
+      phoneId: '5550001', waba: '7770001', click: 'clid-a-oficial', messageId: 'wamid-a-oficial',
+    });
+    assert.equal(oficial.novo, true);
+    assert.equal(oficial.client_id, clientA);
+
+    // E um não vaza para o outro.
+    assert.notEqual(legado.lead_id, oficial.lead_id);
+  });
+
+  await t.test('FASE HÍBRIDA: voltar um cliente ao legado é permitido para rollback', async () => {
+    await service();
+    await sql(`select admin_set_conversion_ingest_mode($1,'legacy_waha')`, [clientA]);
+    assert.equal(await mode(clientA), 'legacy_waha');
+
+    // E a captação antiga volta a funcionar imediatamente.
+    const [row] = await wahaIngest({ click: 'clid-rollback', phone: '5511970006666' });
+    assert.equal(row.novo, true);
+  });
+
 
   await db.close();
 });

@@ -259,6 +259,24 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="waha_leads_webhook_url">
+                    Webhook de produção do n8n para leads (legado)
+                  </Label>
+                  <Input
+                    id="waha_leads_webhook_url"
+                    name="config_leads_webhook_url"
+                    type="url"
+                    placeholder="https://n8n.seudominio.com/webhook/waha-eventos"
+                    defaultValue={integration.config.leads_webhook_url ?? ""}
+                  />
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Captação antiga de Conversões, mantida durante a migração.
+                    Vale só para clientes que ainda não conectaram o WhatsApp
+                    Business oficial; quem já migrou entra pelo webhook da Meta
+                    e é ignorado aqui. Não tem relação com o Atendimento por IA.
+                  </p>
+                </div>
+                <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="waha_ai_webhook_url">
                     Webhook de produção do n8n para o Atendimento IA
                   </Label>
