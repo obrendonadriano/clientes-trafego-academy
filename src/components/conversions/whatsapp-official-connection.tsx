@@ -15,6 +15,11 @@ import {
   type ClientConnection,
   type ConnectionTone,
 } from "@/lib/conversions/connection-shared";
+import {
+  ensureFacebookSdk,
+  isFacebookSdkPresent,
+  type FacebookSdk,
+} from "@/lib/meta/fb-sdk";
 import { cn } from "@/lib/utils";
 
 // Conexão oficial do WhatsApp Business por Embedded Signup (Coexistence).
@@ -33,13 +38,7 @@ import { cn } from "@/lib/utils";
 
 declare global {
   interface Window {
-    FB?: {
-      init: (options: Record<string, unknown>) => void;
-      login: (
-        callback: (response: { authResponse?: { code?: string } }) => void,
-        options: Record<string, unknown>,
-      ) => void;
-    };
+    FB?: FacebookSdk;
   }
 }
 
@@ -111,6 +110,23 @@ export function WhatsappOfficialConnection({
     event?: string;
     cancelledAt?: string;
   }>({});
+
+  // Numa navegação interna o script já está na página e o evento de
+  // carregamento não se repete — mas `window.FB` está lá. Conferir na
+  // montagem é o que libera o botão sem exigir recarregar a página.
+  const prepareSdk = useCallback(() => {
+    if (!appId || !configId) {
+      return;
+    }
+
+    if (ensureFacebookSdk(window, { appId, version: graphVersion ?? "" })) {
+      setSdkReady(true);
+    }
+  }, [appId, configId, graphVersion]);
+
+  useEffect(() => {
+    prepareSdk();
+  }, [prepareSdk]);
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
@@ -210,7 +226,7 @@ export function WhatsappOfficialConnection({
   );
 
   function launch() {
-    if (!window.FB || !configId || busy) {
+    if (!isFacebookSdkPresent(window) || !configId || busy) {
       return;
     }
 
@@ -319,17 +335,18 @@ export function WhatsappOfficialConnection({
         ) : (
           <>
             <Script
+              id="facebook-jssdk"
               src="https://connect.facebook.net/pt_BR/sdk.js"
               strategy="lazyOnload"
-              onLoad={() => {
-                window.FB?.init({
-                  appId,
-                  autoLogAppEvents: true,
-                  xfbml: false,
-                  version: graphVersion,
-                });
-                setSdkReady(true);
-              }}
+              // onReady dispara no primeiro carregamento E a cada remontagem
+              // do componente, ao contrário de onLoad. É o que faz o botão
+              // liberar ao voltar para esta tela por navegação interna.
+              onReady={prepareSdk}
+              onError={() =>
+                setNotice(
+                  "Não foi possível carregar a conexão segura da Meta. Verifique sua internet ou bloqueadores e tente novamente.",
+                )
+              }
             />
             <div className="flex flex-wrap items-center gap-2">
               <button
