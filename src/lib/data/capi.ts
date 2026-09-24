@@ -1,122 +1,17 @@
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getOptionalCurrentUser } from "@/lib/auth/session";
-import { isDevelopmentAuthFallbackEnabled } from "@/lib/auth/mode";
-import { isSupabaseAdminConfigured } from "@/lib/env";
+import "server-only";
 
-// Diagnóstico da integração por cliente. A página autentica o admin e chama a
-// RPC com o client server-only; o token nunca é devolvido, só o indicador de
-// que existe.
+import { getAdminConnectionOverview } from "@/lib/data/whatsapp-connection";
 
-export type ClientCapiStatus = {
-  clientId: string;
-  clientName: string;
-  datasetId: string | null;
-  wabaId: string | null;
-  capiAtivo: boolean;
-  tokenConfigurado: boolean;
-  leadsPendentes: number;
-  leadsNaFila: number;
-};
+// Estado de um cliente para o card de configuração manual na tela de perfil.
+//
+// O caminho normal é o cliente conectar sozinho pelo Embedded Signup, que
+// descobre WABA, número e Dataset. Este card continua existindo como saída de
+// emergência do administrador e por compatibilidade com clientes configurados
+// à mão antes da integração oficial. O token nunca volta pela API: só o
+// indicador de que existe um.
 
-export type CapiOverview = {
-  clients: ClientCapiStatus[];
-  notice?: string;
-};
-
-type StatusRow = {
-  client_id: string;
-  nome_empresa: string | null;
-  meta_dataset_id: string | null;
-  meta_waba_id: string | null;
-  capi_ativo: boolean | null;
-  token_configurado: boolean | null;
-  leads_pendentes: number | null;
-  leads_na_fila: number | null;
-};
-
-function mapRow(row: StatusRow): ClientCapiStatus {
-  return {
-    clientId: row.client_id,
-    clientName: row.nome_empresa ?? "Sem nome",
-    datasetId: row.meta_dataset_id,
-    wabaId: row.meta_waba_id,
-    capiAtivo: Boolean(row.capi_ativo),
-    tokenConfigurado: Boolean(row.token_configurado),
-    leadsPendentes: Number(row.leads_pendentes ?? 0),
-    leadsNaFila: Number(row.leads_na_fila ?? 0),
-  };
-}
-
-export async function getCapiOverview(): Promise<CapiOverview> {
-  const user = await getOptionalCurrentUser();
-  const adminClient = createSupabaseAdminClient();
-
-  if (user?.role === "admin" && user.active && adminClient) {
-    const { data, error } = await adminClient.rpc("admin_client_capi_status");
-
-    if (error) {
-      return { clients: [], notice: error.message };
-    }
-
-    return { clients: ((data as StatusRow[] | null) ?? []).map(mapRow) };
-  }
-
-  // Sem sessão Supabase a RPC recusa (ela identifica o admin pelo usuário
-  // logado). Em desenvolvimento, com o atalho de sessão mock, monta-se uma
-  // visão equivalente a partir das colunas públicas — o token continua
-  // inacessível, então aqui ele aparece como desconhecido.
-  if (isDevelopmentAuthFallbackEnabled() && isSupabaseAdminConfigured()) {
-    if (adminClient) {
-      const [{ data: clients }, { data: leads }] = await Promise.all([
-        adminClient
-          .from("clients")
-          .select("id, nome_empresa, meta_dataset_id, meta_waba_id, capi_ativo")
-          .order("nome_empresa"),
-        adminClient
-          .from("conversion_leads")
-          .select("client_id, qualificacao, capi_status"),
-      ]);
-
-      const pendentes = new Map<string, number>();
-      const naFila = new Map<string, number>();
-
-      for (const lead of leads ?? []) {
-        if (lead.qualificacao === "pendente") {
-          pendentes.set(lead.client_id, (pendentes.get(lead.client_id) ?? 0) + 1);
-        }
-
-        if (lead.qualificacao === "qualificado" && lead.capi_status === "nao_enviado") {
-          naFila.set(lead.client_id, (naFila.get(lead.client_id) ?? 0) + 1);
-        }
-      }
-
-      return {
-        notice:
-          "Sessão de desenvolvimento: o indicador de token não é lido aqui. Entre com um login real para ver o estado completo.",
-        clients: (clients ?? []).map((row) => ({
-          clientId: row.id,
-          clientName: row.nome_empresa ?? "Sem nome",
-          datasetId: row.meta_dataset_id,
-          wabaId: row.meta_waba_id,
-          capiAtivo: Boolean(row.capi_ativo),
-          tokenConfigurado: false,
-          leadsPendentes: pendentes.get(row.id) ?? 0,
-          leadsNaFila: naFila.get(row.id) ?? 0,
-        })),
-      };
-    }
-  }
-
-  return {
-    clients: [],
-    notice:
-      "Entre com um usuário administrador para ver o estado da integração.",
-  };
-}
-
-// Estado de um cliente só, para o card na tela de perfil.
 export async function getClientCapiConfig(clientId: string) {
-  const overview = await getCapiOverview();
+  const overview = await getAdminConnectionOverview();
   const found = overview.clients.find((item) => item.clientId === clientId);
 
   return {

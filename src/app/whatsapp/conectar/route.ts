@@ -87,13 +87,9 @@ export async function POST(request: Request) {
         };
       }
 
-      if (config.leadsWebhookUrl) {
-        webhooks.push(messageWebhook(config.leadsWebhookUrl));
-      }
-
-      // Fluxo do atendimento por IA: recebe o mesmo evento "message" num
-      // webhook separado, para não interferir na ingestão de leads que já roda.
-      if (config.aiWebhookUrl && config.aiWebhookUrl !== config.leadsWebhookUrl) {
+      // Único consumidor de "message": o Atendimento por IA. As Conversões
+      // recebem seus leads pelo webhook oficial da Meta, fora do WAHA.
+      if (config.aiWebhookUrl) {
         webhooks.push(messageWebhook(config.aiWebhookUrl));
       }
 

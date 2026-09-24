@@ -259,22 +259,6 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="waha_leads_webhook_url">
-                    Webhook de produção do n8n para leads
-                  </Label>
-                  <Input
-                    id="waha_leads_webhook_url"
-                    name="config_leads_webhook_url"
-                    type="url"
-                    placeholder="https://n8n.seudominio.com/webhook/waha-eventos"
-                    defaultValue={integration.config.leads_webhook_url ?? ""}
-                  />
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    Use a URL de produção do workflow WAHA. Sem ela, a conexão
-                    continua funcionando, mas mensagens não entram na fila de leads.
-                  </p>
-                </div>
-                <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="waha_ai_webhook_url">
                     Webhook de produção do n8n para o Atendimento IA
                   </Label>

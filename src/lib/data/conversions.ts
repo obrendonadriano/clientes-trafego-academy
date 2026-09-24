@@ -16,9 +16,9 @@ import {
 } from "@/lib/conversions/shared";
 import type { User } from "@/lib/types";
 
-// Leads de conversão vindos das campanhas. O cliente marca quais foram bons e
-// uma automação em n8n envia essa marcação ao Meta (Conversions API), para o
-// algoritmo aprender a buscar pessoas parecidas.
+// Leads de conversão vindos dos anúncios Click-to-WhatsApp. O cliente marca
+// quais foram bons e a fila da própria aplicação envia esses marcos à Meta
+// (Conversions API), para o algoritmo aprender a buscar pessoas parecidas.
 //
 // O isolamento é feito por RLS no banco: admin vê todos os clientes, cliente vê
 // só os dele. Por isso a leitura usa o client AUTENTICADO (cookies da sessão) e
@@ -42,6 +42,8 @@ type LeadRow = {
   nome: string | null;
   email: string | null;
   ctwa_clid: string | null;
+  origem: string | null;
+  ad_source_id: string | null;
   qualificacao: LeadQualification;
   observacao: string | null;
   valor: number | null;
@@ -55,7 +57,7 @@ type LeadRow = {
 };
 
 const SELECT_COLUMNS =
-  "id, client_id, campaign_id, telefone, nome, email, ctwa_clid, qualificacao, observacao, valor, moeda, capi_status, capi_enviado_em, capi_resposta, criado_em, campaigns(nome), clients(nome_empresa)";
+  "id, client_id, campaign_id, telefone, nome, email, ctwa_clid, origem, ad_source_id, qualificacao, observacao, valor, moeda, capi_status, capi_enviado_em, capi_resposta, criado_em, campaigns(nome), clients(nome_empresa)";
 
 function mapLead(row: LeadRow, canSeeCapiError: boolean): ConversionLead {
   return {
@@ -69,6 +71,9 @@ function mapLead(row: LeadRow, canSeeCapiError: boolean): ConversionLead {
     email: row.email,
     // O identificador do clique é o que liga o lead ao anúncio na Meta.
     hasClickId: Boolean(row.ctwa_clid),
+    // Um contato orgânico nunca é apresentado como se viesse de Meta Ads.
+    fromAd: row.origem === "anuncio" || Boolean(row.ctwa_clid),
+    adSourceId: row.ad_source_id,
     qualification: row.qualificacao,
     note: row.observacao,
     value: row.valor === null ? null : Number(row.valor),
@@ -216,9 +221,12 @@ export async function getConversionLeads(
   };
 
   // Paginar por etapa evita que novos contatos escondam todo o restante do funil.
+  // "desqualificado" não é mais uma coluna do Kanban, mas leads históricos
+  // precisam continuar visíveis em algum lugar: eles entram como novos leads
+  // na leitura de "todos" e aparecem na aba própria enquanto existirem.
   const stages: LeadQualification[] =
     options.tab === "todos"
-      ? ["pendente", "qualificado", "fechado", "desqualificado"]
+      ? ["pendente", "qualificado", "fechado"]
       : [options.tab];
   const from = (page - 1) * LEADS_PAGE_SIZE;
   async function listStage(stage: LeadQualification) {
@@ -246,7 +254,7 @@ export async function getConversionLeads(
   const qualifiedCount = Number(summaryRow?.qualified ?? 0);
   const discardedCount = Number(summaryRow?.discarded ?? 0);
   const closedCount = Number(summaryRow?.closed ?? 0);
-  const evaluated = qualifiedCount + discardedCount + closedCount;
+  const evaluated = qualifiedCount + closedCount + discardedCount;
   const summary: ConversionSummary = {
     total: totalCount,
     pending: pendingCount,
@@ -282,9 +290,7 @@ export async function getConversionLeads(
         ? summary.pending
         : options.tab === "qualificado"
           ? summary.qualified
-          : options.tab === "desqualificado"
-            ? summary.discarded
-            : summary.closed;
+          : summary.closed;
 
   return {
     leads: rows.map((row) => mapLead(row, isAdmin)),

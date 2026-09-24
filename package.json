@@ -8,7 +8,7 @@
     "postbuild": "node scripts/copy-standalone-assets.mjs",
     "start": "next start",
     "lint": "eslint",
-    "test:conversions": "node --test tests/conversion-events.test.mjs tests/conversion-payload.test.mjs"
+    "test:conversions": "node --test tests/conversion-events.test.mjs tests/conversion-payload.test.mjs tests/conversions-decoupling.test.mjs tests/onboarding-selection.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

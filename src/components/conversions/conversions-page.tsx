@@ -2,14 +2,11 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { Car, GripVertical, LoaderCircle, MessageCircle, X } from "lucide-react";
 import {
-  Car,
-  GripVertical,
-  LoaderCircle,
-  MessageCircle,
-  X,
-} from "lucide-react";
-import { closeLeadAction, qualifyLeadsAction } from "@/app/conversoes/actions";
+  moveLeadsAction,
+  saveAcquisitionCostAction,
+} from "@/app/conversoes/actions";
 import {
   AlreadySentWarning,
   CapiErrorBadge,
@@ -17,43 +14,19 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import {
+  conversionFeedback,
+  FUNNEL_STAGES,
   maskPhone,
   PERIOD_OPTIONS,
   QUALIFICATION_TABS,
   type ConversionLead,
   type ConversionLeadsResult,
-  type LeadQualification,
+  type FunnelStage,
   type PeriodOption,
   type QualificationTab,
 } from "@/lib/conversions/shared";
 import { cn } from "@/lib/utils";
 
-const STAGES = [
-  {
-    key: "pendente",
-    label: "Novos leads",
-    description: "Contatos que ainda precisam de avaliação.",
-    color: "border-t-sky-500",
-  },
-  {
-    key: "qualificado",
-    label: "Qualificados",
-    description: "Veículo e negociação dentro dos critérios de compra.",
-    color: "border-t-emerald-500",
-  },
-  {
-    key: "fechado",
-    label: "Veículos comprados",
-    description: "Contrato concluído e aquisição confirmada.",
-    color: "border-t-primary",
-  },
-  {
-    key: "desqualificado",
-    label: "Desqualificados",
-    description: "Contatos fora do perfil de compra.",
-    color: "border-t-slate-400",
-  },
-] as const;
 const money = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
@@ -89,19 +62,20 @@ export function ConversionsPage({
   const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<LeadQualification | null>(null);
-  const [closingLead, setClosingLead] = useState<ConversionLead | null>(null);
-  const [purchaseValue, setPurchaseValue] = useState("");
+  const [dropTarget, setDropTarget] = useState<FunnelStage | null>(null);
+  const [costLead, setCostLead] = useState<ConversionLead | null>(null);
+  const [costValue, setCostValue] = useState("");
   const dialogRef = useRef<HTMLDialogElement>(null);
+
   useEffect(() => {
-    if (closingLead) dialogRef.current?.showModal();
+    if (costLead) dialogRef.current?.showModal();
     else dialogRef.current?.close();
-  }, [closingLead]);
-  const totals = {
+  }, [costLead]);
+
+  const totals: Record<FunnelStage, number> = {
     pendente: data.summary.pending,
     qualificado: data.summary.qualified,
     fechado: data.summary.closed,
-    desqualificado: data.summary.discarded,
   };
 
   function navigate(key: string, value: string) {
@@ -113,16 +87,13 @@ export function ConversionsPage({
       router.replace(`${pathname}?${params}`, { scroll: false }),
     );
   }
-  function move(lead: ConversionLead, stage: LeadQualification) {
+
+  function move(lead: ConversionLead, stage: FunnelStage) {
     if (isPending || lead.qualification === stage) return;
-    if (stage === "fechado") {
-      setPurchaseValue(lead.value ? String(lead.value).replace(".", ",") : "");
-      setClosingLead(lead);
-      return;
-    }
+
     startTransition(async () => {
       try {
-        const result = await qualifyLeadsAction([lead.id], stage);
+        const result = await moveLeadsAction([lead.id], stage);
         showToast({
           message: result.error ?? result.success ?? "Etapa atualizada.",
           tone: result.error ? "erro" : undefined,
@@ -136,32 +107,31 @@ export function ConversionsPage({
       }
     });
   }
-  function confirmPurchase() {
-    if (!closingLead || isPending) return;
-    const compact = purchaseValue.trim().replace(/\s/g, "");
+
+  function saveCost() {
+    if (!costLead || isPending) return;
+
+    const compact = costValue.trim().replace(/\s/g, "");
     const value = Number(
       compact.includes(",")
         ? compact.replace(/\./g, "").replace(",", ".")
         : compact,
     );
+
     if (!Number.isFinite(value) || value <= 0) {
-      showToast({
-        message: "Informe o valor pago pelo veículo, maior que zero.",
-        tone: "erro",
-      });
+      showToast({ message: "Informe um valor maior que zero.", tone: "erro" });
       return;
     }
+
     startTransition(async () => {
       try {
-        const result = await closeLeadAction(closingLead.id, value, "BRL");
+        const result = await saveAcquisitionCostAction(costLead.id, value, "BRL");
         if (result.error) {
           showToast({ message: result.error, tone: "erro" });
           return;
         }
-        setClosingLead(null);
-        showToast({
-          message: result.success ?? "Compra do veículo registrada.",
-        });
+        setCostLead(null);
+        showToast({ message: result.success ?? "Valor registrado." });
       } catch {
         showToast({
           message:
@@ -171,6 +141,10 @@ export function ConversionsPage({
       }
     });
   }
+
+  const visibleStages = FUNNEL_STAGES.filter(
+    (stage) => tab === "todos" || stage.key === tab,
+  );
 
   return (
     <div className="min-w-0 space-y-5" aria-busy={isPending}>
@@ -182,6 +156,7 @@ export function ConversionsPage({
           {data.notice}
         </p>
       ) : null}
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { label: "Leads no período", value: data.summary.total },
@@ -202,6 +177,7 @@ export function ConversionsPage({
           </Card>
         ))}
       </div>
+
       <Card>
         <CardContent className="space-y-4 py-4">
           <div className="flex flex-wrap items-center gap-3">
@@ -269,25 +245,26 @@ export function ConversionsPage({
           </div>
           <p className="text-sm text-muted-foreground">
             Arraste os cartões entre as etapas ou use “Mover para” no cartão,
-            inclusive no celular. Desqualificar não envia um evento negativo à
-            Meta.
+            inclusive no celular.
           </p>
           <p className="text-xs text-muted-foreground">
-            O período considera a chegada do lead. Alterar uma etapa não desfaz
-            eventos já enviados.
+            O período considera a chegada do lead. Voltar um cartão e avançar de
+            novo não envia a mesma conversão duas vezes.
           </p>
         </CardContent>
       </Card>
+
       <div
         className={cn(
           "grid min-w-0 gap-4",
-          tab === "todos" ? "md:grid-cols-2 xl:grid-cols-4" : "max-w-xl",
+          tab === "todos" ? "md:grid-cols-2 xl:grid-cols-3" : "max-w-xl",
         )}
       >
-        {STAGES.filter((s) => tab === "todos" || s.key === tab).map((stage) => {
+        {visibleStages.map((stage) => {
           const leads = data.leads.filter(
             (lead) => lead.qualification === stage.key,
           );
+
           return (
             <section
               key={stage.key}
@@ -332,6 +309,7 @@ export function ConversionsPage({
                   </p>
                 ) : null}
               </div>
+
               <div className="space-y-3">
                 {leads.map((lead) => (
                   <article
@@ -339,9 +317,7 @@ export function ConversionsPage({
                     draggable={!isPending}
                     onDragStart={(e) => {
                       if (
-                        (e.target as HTMLElement).closest(
-                          "a,button,select,input",
-                        )
+                        (e.target as HTMLElement).closest("a,button,select,input")
                       ) {
                         e.preventDefault();
                         return;
@@ -382,10 +358,13 @@ export function ConversionsPage({
                         <MessageCircle className="size-4" />
                       </a>
                     </div>
+
                     <p className="mt-3 truncate text-xs text-muted-foreground">
                       {lead.campaignName ??
-                        (lead.hasClickId
-                          ? "Anúncio no WhatsApp"
+                        (lead.fromAd
+                          ? lead.adSourceId
+                            ? `Anúncio ${lead.adSourceId}`
+                            : "Anúncio no WhatsApp"
                           : "Origem não identificada")}
                     </p>
                     {isAdmin ? (
@@ -396,50 +375,59 @@ export function ConversionsPage({
                     <p className="mt-1 text-xs text-muted-foreground">
                       {date.format(new Date(lead.createdAt))}
                     </p>
+
                     {lead.note ? (
                       <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-xs">
                         {lead.note}
                       </p>
                     ) : null}
-                    {lead.qualification === "fechado" && lead.value !== null ? (
+
+                    {lead.qualification === "fechado" ? (
                       <p className="mt-3 text-sm font-medium">
-                        Valor pago: {money.format(lead.value)}
+                        {lead.value !== null ? (
+                          `Valor pago: ${money.format(lead.value)}`
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={isPending}
+                            onClick={() => {
+                              setCostValue("");
+                              setCostLead(lead);
+                            }}
+                            className="text-xs font-normal text-primary underline-offset-4 hover:underline"
+                          >
+                            Registrar valor pago (opcional)
+                          </button>
+                        )}
                       </p>
                     ) : null}
+
                     <div className="mt-3 text-xs text-muted-foreground">
                       {lead.capiStatus === "enviado" ? (
                         <AlreadySentWarning sentAt={lead.capiSentAt} />
-                      ) : lead.capiStatus === "erro" ? (
-                        isAdmin ? (
-                          <CapiErrorBadge lead={lead} />
-                        ) : (
-                          <span className="text-amber-600">
-                            Envio à Meta requer atenção do gestor.
-                          </span>
-                        )
-                      ) : lead.qualification === "desqualificado" ? (
-                        "Sem evento de desqualificação."
-                      ) : !lead.hasClickId &&
-                        lead.qualification !== "fechado" ? (
-                        "Sem vínculo com anúncio para envio à Meta."
-                      ) : lead.capiStatus === "ignorado" ? (
-                        "Evento não enviado à Meta."
+                      ) : lead.capiStatus === "erro" && isAdmin ? (
+                        <CapiErrorBadge lead={lead} />
                       ) : (
-                        "Aguardando envio à Meta e integração ativa."
+                        conversionFeedback(lead)
                       )}
                     </div>
+
                     <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                       Mover para
                       <select
                         className={cn(control, "min-w-0 flex-1 text-xs")}
                         aria-label={`Mover ${lead.name || "lead"} para`}
-                        value={lead.qualification}
+                        value={
+                          FUNNEL_STAGES.some((s) => s.key === lead.qualification)
+                            ? lead.qualification
+                            : "pendente"
+                        }
                         disabled={isPending}
                         onChange={(e) =>
-                          move(lead, e.target.value as LeadQualification)
+                          move(lead, e.target.value as FunnelStage)
                         }
                       >
-                        {STAGES.map((s) => (
+                        {FUNNEL_STAGES.map((s) => (
                           <option key={s.key} value={s.key}>
                             {s.label}
                           </option>
@@ -448,6 +436,7 @@ export function ConversionsPage({
                     </label>
                   </article>
                 ))}
+
                 {leads.length === 0 ? (
                   <p className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
                     {totals[stage.key]
@@ -460,6 +449,7 @@ export function ConversionsPage({
           );
         })}
       </div>
+
       {data.hasMore || data.page > 1 ? (
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
           <p className="text-muted-foreground">
@@ -484,32 +474,30 @@ export function ConversionsPage({
           </div>
         </div>
       ) : null}
+
       <dialog
         ref={dialogRef}
-        aria-labelledby="purchase-title"
+        aria-labelledby="cost-title"
         onCancel={(e) => {
           if (isPending) e.preventDefault();
-          else setClosingLead(null);
+          else setCostLead(null);
         }}
         className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl border border-border bg-background p-5 text-foreground shadow-2xl backdrop:bg-black/60"
       >
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            confirmPurchase();
+            saveCost();
           }}
         >
           <div className="flex items-start justify-between gap-3">
-            <h2
-              id="purchase-title"
-              className="font-display text-xl font-semibold"
-            >
-              Confirmar compra do veículo
+            <h2 id="cost-title" className="font-display text-xl font-semibold">
+              Valor pago pelo veículo
             </h2>
             <button
               type="button"
               disabled={isPending}
-              onClick={() => setClosingLead(null)}
+              onClick={() => setCostLead(null)}
               aria-label="Fechar"
               className="rounded-full p-1"
             >
@@ -517,32 +505,30 @@ export function ConversionsPage({
             </button>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            {closingLead?.name || "Lead sem nome"}. Confirme apenas após a
-            conclusão do contrato.
+            {costLead?.name || "Lead sem nome"}
           </p>
           <label className="mt-5 block text-sm font-medium">
-            Valor pago pelo veículo (R$)
+            Valor pago (R$)
             <input
               required
               inputMode="decimal"
               className={cn(control, "mt-2 w-full")}
-              value={purchaseValue}
-              onChange={(e) => setPurchaseValue(e.target.value)}
+              value={costValue}
+              onChange={(e) => setCostValue(e.target.value)}
               placeholder="0,00"
               disabled={isPending}
             />
           </label>
           <p className="mt-3 text-xs leading-5 text-muted-foreground">
-            O valor fica no controle interno. O evento de aquisição fora do
-            WhatsApp é separado dos eventos de mensagem e não representa receita
-            de venda. A atribuição depende da correspondência dos dados na Meta.
+            Este é o custo de aquisição do veículo e fica só no seu controle
+            interno. Ele não é enviado à Meta e não conta como receita.
           </p>
           <div className="mt-5 flex justify-end gap-2">
             <button
               type="button"
               className={control}
               disabled={isPending}
-              onClick={() => setClosingLead(null)}
+              onClick={() => setCostLead(null)}
             >
               Cancelar
             </button>
@@ -556,7 +542,7 @@ export function ConversionsPage({
               ) : (
                 <Car className="size-4" />
               )}
-              Confirmar compra
+              Salvar
             </button>
           </div>
         </form>

@@ -1,37 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { CircleAlert, Send, TriangleAlert } from "lucide-react";
+import { CircleAlert, Send } from "lucide-react";
 import { useDismiss } from "@/components/shell/use-dismiss";
-import { Badge } from "@/components/ui/badge";
-import type { ConversionLead, LeadQualification } from "@/lib/conversions/shared";
-
-const QUALIFICATION_LABEL: Record<LeadQualification, string> = {
-  pendente: "Novo lead",
-  qualificado: "Qualificado",
-  desqualificado: "Desqualificado",
-  fechado: "Veículo comprado",
-};
-
-export function QualificationBadge({
-  qualification,
-}: {
-  qualification: LeadQualification;
-}) {
-  return (
-    <Badge
-      variant={
-        qualification === "qualificado" || qualification === "fechado"
-          ? "success"
-          : qualification === "desqualificado"
-            ? "outline"
-            : "secondary"
-      }
-    >
-      {QUALIFICATION_LABEL[qualification]}
-    </Badge>
-  );
-}
+import type { ConversionLead } from "@/lib/conversions/shared";
 
 function shortDate(iso: string | null) {
   if (!iso) {
@@ -48,22 +20,6 @@ function shortDate(iso: string | null) {
     month: "2-digit",
     timeZone: "America/Sao_Paulo",
   }).format(date);
-}
-
-// Aviso de atribuição parcial: sem o identificador de clique, a Meta não
-// consegue ligar o lead ao anúncio com precisão.
-export function NoClickIdWarning() {
-  return (
-    <span
-      title="Sem identificador do anúncio: este lead não será enviado à Meta pela integração atual."
-      className="inline-flex text-amber-600 dark:text-amber-400"
-    >
-      <TriangleAlert className="size-4" aria-hidden />
-      <span className="sr-only">
-        Sem identificador do anúncio: este lead não será enviado à Meta pela integração atual.
-      </span>
-    </span>
-  );
 }
 
 // Já enviado ao Meta: a marcação ainda pode mudar (os relatórios do cliente
