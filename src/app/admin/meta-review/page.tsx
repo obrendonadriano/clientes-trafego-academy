@@ -30,8 +30,8 @@ export default async function MetaReviewRoute() {
     <div className="flex min-w-0 flex-col gap-5">
       <PageHeader
         eyebrow="Área administrativa"
-        title="Meta App Review — Ferramenta de demonstração"
-        description="Executa chamadas reais às APIs oficiais da Meta com os ativos de teste, para gravar as evidências exigidas no App Review."
+        title="Integração Meta WhatsApp"
+        description="Envio de mensagens e gestão de modelos pela WhatsApp Business Platform oficial."
       />
 
       <MetaReviewTool config={config} />

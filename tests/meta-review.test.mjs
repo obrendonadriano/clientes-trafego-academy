@@ -222,6 +222,23 @@ test('o token só existe no servidor, no cabeçalho Authorization', () => {
   assert.equal(/META_REVIEW_ACCESS_TOKEN|accessToken/.test(validation), false);
 });
 
+test('a interface não se apresenta como demonstração nem como temporária', () => {
+  const ui = read('src/components/admin/meta-review-tool.tsx');
+  const page = read('src/app/admin/meta-review/page.tsx');
+
+  // O texto que o cliente e o revisor veem descreve a função, não o motivo
+  // interno de a tela existir.
+  for (const source of [stripComments(ui), stripComments(page)]) {
+    assert.equal(
+      /demonstra|tempor[áa]ri|App Review|evid[êe]ncia/i.test(source),
+      false,
+      'texto visível não pode enquadrar a tela como demonstração',
+    );
+  }
+
+  assert.equal(page.includes('Integração Meta WhatsApp'), true);
+});
+
 test('nada do token atravessa para o navegador', () => {
   const ui = read('src/components/admin/meta-review-tool.tsx');
   const page = read('src/app/admin/meta-review/page.tsx');
@@ -306,7 +323,7 @@ test('configuração ausente não derruba a página', () => {
   assert.match(tools, /missing\.push\("META_REVIEW_PHONE_NUMBER_ID"\)/);
 
   const ui = read('src/components/admin/meta-review-tool.tsx');
-  assert.equal(ui.includes('Configuração do Meta App Review incompleta'), true);
+  assert.equal(ui.includes('Configuração da integração incompleta'), true);
   // E a tela mostra só o NOME do que falta.
   assert.equal(ui.includes('config.missing.join'), true);
 });

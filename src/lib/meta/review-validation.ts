@@ -166,7 +166,7 @@ export function suggestTemplateName(now = new Date()) {
     .replace(/[-:T]/g, "")
     .slice(2, 12);
 
-  return `trafego_academy_review_${stamp}`;
+  return `trafego_academy_${stamp}`;
 }
 
 export type SanitizedMetaError = {

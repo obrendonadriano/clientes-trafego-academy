@@ -7,7 +7,6 @@ import {
   LoaderCircle,
   RefreshCw,
   Send,
-  TriangleAlert,
 } from "lucide-react";
 import {
   createTestTemplateAction,
@@ -154,7 +153,7 @@ export function MetaReviewTool({ config }: { config: ConfigStatus }) {
     // modelo a cada clique repetido durante a gravação.
     if (
       !window.confirm(
-        `Criar o modelo "${newName}" no WABA de teste? Esta ação é real na Meta.`,
+        `Criar o modelo "${newName}" na conta do WhatsApp Business? A ação é enviada à Meta.`,
       )
     ) {
       return;
@@ -199,23 +198,18 @@ export function MetaReviewTool({ config }: { config: ConfigStatus }) {
 
   return (
     <div className="min-w-0 space-y-5" aria-busy={pending}>
-      <div className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm leading-6">
-        <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-        <p>
-          Ferramenta interna e temporária utilizada exclusivamente para
-          demonstrar permissões da Meta durante o processo de App Review.
-        </p>
-      </div>
-
       <Card>
         <CardContent className="space-y-3 py-5">
           <h2 className="font-display text-lg font-semibold">Configuração</h2>
           <div className="space-y-2">
             <ConfigLine
-              label="Número de teste da Meta"
+              label="Número do WhatsApp Business"
               ok={config.hasPhoneNumberId}
             />
-            <ConfigLine label="WABA de teste" ok={config.hasWabaId} />
+            <ConfigLine
+              label="Conta do WhatsApp Business"
+              ok={config.hasWabaId}
+            />
             <ConfigLine label="Access token" ok={config.hasAccessToken} />
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="text-muted-foreground">Versão da Graph API</span>
@@ -226,7 +220,7 @@ export function MetaReviewTool({ config }: { config: ConfigStatus }) {
           {!config.ready ? (
             <Result tone="error">
               <p className="font-medium">
-                Configuração do Meta App Review incompleta.
+                Configuração da integração incompleta.
               </p>
               <p className="mt-1">
                 Faltando:{" "}
@@ -244,14 +238,11 @@ export function MetaReviewTool({ config }: { config: ConfigStatus }) {
         <CardContent className="space-y-4 py-5">
           <div>
             <h2 className="font-display text-lg font-semibold">
-              Teste de envio de mensagem
+              Envio de mensagem
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Evidência da permissão{" "}
-              <span className="font-mono text-xs">
-                whatsapp_business_messaging
-              </span>
-              . Usa modelo aprovado para não depender da janela de 24 horas.
+              Envia uma mensagem pela WhatsApp Cloud API usando um modelo
+              aprovado, sem depender da janela de 24 horas.
             </p>
           </div>
 
@@ -297,7 +288,7 @@ export function MetaReviewTool({ config }: { config: ConfigStatus }) {
             ) : (
               <Send className="size-4" aria-hidden />
             )}
-            Enviar mensagem de teste
+            Enviar mensagem
           </button>
 
           {sendResult ? (
@@ -335,11 +326,7 @@ export function MetaReviewTool({ config }: { config: ConfigStatus }) {
               Criar modelo de mensagem
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Evidência da permissão{" "}
-              <span className="font-mono text-xs">
-                whatsapp_business_management
-              </span>
-              , gerenciando ativos do WABA de teste.
+              Cria um modelo de mensagem na conta do WhatsApp Business.
             </p>
           </div>
 
@@ -396,7 +383,7 @@ export function MetaReviewTool({ config }: { config: ConfigStatus }) {
             ) : (
               <CircleCheck className="size-4" aria-hidden />
             )}
-            Criar modelo de teste
+            Criar modelo
           </button>
 
           {createResult ? (
@@ -441,7 +428,7 @@ export function MetaReviewTool({ config }: { config: ConfigStatus }) {
         <CardContent className="space-y-4 py-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-lg font-semibold">
-              Modelos do WABA de teste
+              Modelos da conta
             </h2>
             <button
               type="button"
@@ -462,12 +449,11 @@ export function MetaReviewTool({ config }: { config: ConfigStatus }) {
 
           {templates === null ? (
             <p className="text-sm text-muted-foreground">
-              Clique em “Atualizar lista” para carregar os modelos do WABA de
-              teste.
+              Clique em “Atualizar lista” para carregar os modelos da conta.
             </p>
           ) : templates.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Nenhum modelo encontrado neste WABA.
+              Nenhum modelo encontrado nesta conta.
             </p>
           ) : (
             <div className="min-w-0 overflow-x-auto">
