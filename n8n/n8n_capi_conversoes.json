@@ -1,5 +1,5 @@
 {
-  "name": "CAPI - Envio de Conversoes (Trafego Academy)",
+  "name": "[LEGADO] CAPI - Envio de Conversoes (Trafego Academy)",
   "nodes": [
     {
       "parameters": {
@@ -310,7 +310,8 @@
   },
   "pinData": {},
   "meta": {
-    "instanceId": "trafego-academy-capi"
+    "instanceId": "trafego-academy-capi",
+    "trafegoacademy_status": "LEGADO/TRANSITORIO - Envio de conversoes pela fila. Pode coexistir com o worker da aplicacao: a reserva atomica no banco impede envio duplicado. Desativar ao ligar CONVERSIONS_DISPATCHER_ENABLED=true."
   },
   "tags": []
 }

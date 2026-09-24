@@ -11,6 +11,10 @@ export type WahaCredentials = {
 
 export type WahaConfig = WahaCredentials & {
   webhookSecret: string;
+  // LEGADO / TRANSITÓRIO. Captação de leads de Conversões pelo WAHA + n8n.
+  // Continua ativo apenas para clientes em conversion_ingest_mode =
+  // 'legacy_waha'. Quem já migrou é ignorado dentro de waha_ingest_lead.
+  // Sai numa segunda migração, quando todos estiverem em 'official_meta'.
   leadsWebhookUrl: string | null;
   // Webhook do fluxo n8n que cuida do tempo do atendimento por IA.
   aiWebhookUrl: string | null;

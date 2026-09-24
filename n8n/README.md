@@ -1,27 +1,44 @@
-# Workflows WAHA e Meta CAPI
+# Workflows n8n
 
-Importe os dois arquivos JSON no n8n. Os fluxos não acessam variáveis de ambiente: os segredos ficam nas credenciais criptografadas do próprio n8n.
+Três arquivos, em dois estados diferentes.
 
-- Crie ou reutilize uma credencial **Supabase API** com o host `https://jqvwhonmtpopvldguiln.supabase.co` e a chave secreta do projeto TrafegoAcademy. Selecione-a nos quatro nós HTTP do Supabase: `Gravar lead no Supabase`, `Atualizar status no Supabase`, `Buscar fila no Supabase` e `Gravar resultado no Supabase`.
-- Crie ou reutilize uma credencial **Header Auth** com Name `x-trafegoacademy-secret` e Value igual ao segredo salvo em Admin → Configurações → WhatsApp (WAHA). Selecione-a no nó `Webhook WAHA`.
-- Mantenha `N8N_BLOCK_ENV_ACCESS_IN_NODE=true`; estes workflows não precisam de acesso a `$env`.
+## Em transição (LEGADO)
 
-Depois:
+`[LEGADO] n8n_waha_ingestao.json` e `[LEGADO] n8n_capi_conversoes.json` são o
+pipeline antigo de Conversões. Eles **continuam necessários** enquanto houver
+cliente em `conversion_ingest_mode = 'legacy_waha'`.
 
-1. Selecione as credenciais indicadas nos nós importados. O n8n não inclui IDs nem valores de credenciais no arquivo exportado.
-2. Ative `WAHA - Ingestao de Leads e Status de Sessao` e copie a URL de produção do webhook `waha-eventos`.
-3. Cole essa URL em Admin → Configurações → WhatsApp (WAHA) → Webhook de produção do n8n para leads.
-4. Salve a integração e peça ao cliente para clicar em conectar novamente. A rota atualiza os webhooks da sessão WAHA existente sem exigir um novo QR quando ela já está ativa.
-5. Ative `CAPI - Envio de Conversoes (Trafego Academy)`.
+**Não desative e não apague ainda.** Fazer isso agora interrompe a captação de
+leads de todos os clientes que ainda não conectaram o WhatsApp Business
+oficial. A ordem correta está no
+[roteiro de implantação](../docs/conversoes-whatsapp-meta.md).
 
-Os workflows desativam a persistência de dados de execução para não gravar tokens ou payloads de WhatsApp no histórico do n8n. Mantenha o n8n em HTTPS e nunca coloque a `service_role` diretamente em nós, URLs, credenciais compartilhadas ou no navegador.
+O que muda no comportamento deles: um cliente já migrado para `official_meta` é
+ignorado dentro de `waha_ingest_lead`, no banco — o workflow não precisa saber
+de nada. Isso evita que a mesma conversa entre duas vezes durante a fase
+híbrida.
 
-O fluxo CAPI exige a migração `20260924020710_conversion_event_outbox.sql` e usa uma fila por evento: `LeadSubmitted` e `QualifiedLead` são eventos de WhatsApp; `VehicleAcquired` é uma aquisição contratual fora da conversa, com telefone em hash e sem valor de receita. As datas originais são preservadas e respostas ambíguas exigem conciliação antes de reenvio. Pause o workflow antigo antes de atualizar banco e JSON. Consulte o [diagnóstico e roteiro de ativação](../docs/conversoes-whatsapp-meta.md).
+O `[LEGADO] CAPI` pode conviver com o worker da aplicação: os dois consomem a
+mesma fila com reserva atômica (`SKIP LOCKED`), então um evento nunca é enviado
+em duplicidade. Ao ligar `CONVERSIONS_DISPATCHER_ENABLED=true`, desative este
+workflow para simplificar o diagnóstico.
 
-## Workflow do Atendimento IA
+Se editar os arquivos em `n8n/code`, rode `node scripts/sync-capi-workflow.mjs`
+antes de importar o JSON. Há teste garantindo que o workflow e os arquivos não
+divergem.
 
-`n8n_waha_atendimento_ia.json` é o fluxo que dá **tempo** ao atendimento por
-IA. Ele não conhece prompt, plano nem lead: toda a regra de negócio fica no
+Quando **todos** os clientes estiverem em `official_meta`, a segunda migração
+remove tudo isto do repositório.
+
+## Permanente
+
+`n8n_waha_atendimento_ia.json` é do Atendimento por IA e **não** é legado. Ele
+não tem relação com Conversões e continua ativo o tempo todo.
+
+## Atendimento IA
+
+`n8n_waha_atendimento_ia.json` é o fluxo que dá **tempo** ao atendimento por IA.
+Ele não conhece prompt, plano nem lead: toda a regra de negócio fica no
 dashboard. O n8n só espera e chama de volta — que é justamente o que a app,
 rodando em serverless, não consegue fazer sozinha.
 
@@ -42,9 +59,9 @@ ou `{ "acao": "fim" }`. O laço tem corte em 40 iterações por segurança.
 
 Para instalar:
 
-1. Importe o arquivo e selecione, nos dois nós HTTP, a mesma credencial
-   **Header Auth** já usada no fluxo de ingestão (`x-trafegoacademy-secret`
-   com o segredo de Admin → Configurações → WhatsApp (WAHA)).
+1. Importe o arquivo e selecione, nos dois nós HTTP, uma credencial
+   **Header Auth** com Name `x-trafegoacademy-secret` e Value igual ao segredo
+   salvo em Admin → Configurações → WhatsApp (WAHA).
 2. Troque `https://dashboard.trafegoacademy.online` pela URL real do dashboard
    nos nós `Registrar mensagem no dashboard` e `Avancar conversa`, se for
    diferente.
@@ -54,9 +71,11 @@ Para instalar:
 5. Peça ao cliente para clicar em conectar novamente. A rota `/whatsapp/conectar`
    atualiza os webhooks da sessão existente sem exigir um novo QR.
 
-O fluxo de ingestão de leads (`waha-eventos`) continua funcionando sem
-alteração: os dois webhooks recebem o mesmo evento `message` de forma
-independente.
+Mantenha `N8N_BLOCK_ENV_ACCESS_IN_NODE=true`; este workflow não precisa de
+acesso a `$env`. Ele desativa a persistência de dados de execução para não
+gravar conversas de WhatsApp no histórico do n8n. Mantenha o n8n em HTTPS e
+nunca coloque a `service_role` em nós, URLs, credenciais compartilhadas ou no
+navegador.
 
-Em Admin → Configurações, o card **DeepSeek** guarda o modelo e a API Key
-usados nas conversas. A chave fica no banco e só é lida pelo servidor.
+Em Admin → Configurações, o card **DeepSeek** guarda o modelo e a API Key usados
+nas conversas. A chave fica no banco e só é lida pelo servidor.

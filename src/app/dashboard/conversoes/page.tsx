@@ -1,10 +1,11 @@
 import { Suspense } from "react";
 import { ConversionsPage } from "@/components/conversions/conversions-page";
-import { WhatsappConnectionExperience } from "@/components/whatsapp/whatsapp-connection-experience";
+import { WhatsappOfficialConnection } from "@/components/conversions/whatsapp-official-connection";
 import { ListSkeleton } from "@/components/dashboard/skeletons";
 import { PageHeader } from "@/components/shell/page-header";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getConversionLeads } from "@/lib/data/conversions";
+import { getClientWhatsappConnection } from "@/lib/data/whatsapp-connection";
 import {
   PERIOD_OPTIONS,
   QUALIFICATION_TABS,
@@ -12,6 +13,7 @@ import {
   type QualificationTab,
 } from "@/lib/conversions/shared";
 import { getAppShellData } from "@/lib/data/queries";
+import { resolveBoardGoalType } from "@/lib/data/conversions";
 
 type ConversionsRouteProps = {
   searchParams: Promise<{
@@ -38,7 +40,9 @@ async function ConversionsSection({
   ) as PeriodOption;
   const clientId = user.role === "admin" ? (params.cliente ?? null) : null;
 
-  const [data, shell] = await Promise.all([
+  // Conversões não depende do plano de Atendimento IA: qualquer cliente com
+  // acesso ao portal pode conectar o WhatsApp e acompanhar o funil.
+  const [data, shell, whatsapp] = await Promise.all([
     getConversionLeads(user, {
       tab,
       period,
@@ -46,22 +50,31 @@ async function ConversionsSection({
       page: Number(params.pagina) || 1,
     }),
     getAppShellData(user),
+    user.role === "client"
+      ? getClientWhatsappConnection(user)
+      : Promise.resolve(null),
   ]);
 
   return (
     <div className="space-y-5">
-      {user.role === "client" ? (
-        <details
-          id="whatsapp"
-          className="rounded-2xl border border-border/70 p-4"
-        >
-          <summary className="cursor-pointer text-sm font-medium">
-            Conectar ou gerenciar WhatsApp
-          </summary>
-          <div className="mt-4">
-            <WhatsappConnectionExperience purpose="conversions" />
-          </div>
-        </details>
+      {whatsapp ? (
+        <div id="whatsapp">
+          <WhatsappOfficialConnection
+            connection={whatsapp.connection}
+            appId={whatsapp.signup.ready ? whatsapp.signup.appId : undefined}
+            configId={
+              whatsapp.signup.ready ? whatsapp.signup.configId : undefined
+            }
+            graphVersion={
+              whatsapp.signup.ready ? whatsapp.signup.graphVersion : undefined
+            }
+            unavailableReason={
+              whatsapp.signup.ready
+                ? undefined
+                : "A conexão com o WhatsApp Business ainda está sendo liberada pela Tráfego Academy. Você será avisado quando estiver disponível."
+            }
+          />
+        </div>
       ) : null}
       <ConversionsPage
         data={data}
@@ -70,6 +83,7 @@ async function ConversionsSection({
         isAdmin={user.role === "admin"}
         clients={shell.clients}
         selectedClientId={clientId}
+        goalType={await resolveBoardGoalType(user, clientId)}
       />
     </div>
   );
@@ -83,7 +97,7 @@ export default function ConversionsRoute({
       <PageHeader
         eyebrow="Área do cliente"
         title="Conversões"
-        description="Acompanhe os contatos das campanhas até a compra do veículo. Arraste cada lead para a etapa correspondente."
+        description="Acompanhe os contatos dos anúncios até o fechamento. Arraste cada lead para a etapa correspondente."
       />
 
       <Suspense fallback={<ListSkeleton />}>

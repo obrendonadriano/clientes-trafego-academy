@@ -5,6 +5,7 @@ import { type Embedded, firstEmbedded } from "@/lib/supabase/embedded";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
+  toConversionGoalType,
   LEADS_PAGE_SIZE,
   type CapiStatus,
   type ConversionLead,
@@ -14,17 +15,19 @@ import {
   type PeriodOption,
   type QualificationTab,
 } from "@/lib/conversions/shared";
+import type { ConversionGoalType } from "@/lib/conversions/shared";
 import type { User } from "@/lib/types";
 
-// Leads de conversão vindos das campanhas. O cliente marca quais foram bons e
-// uma automação em n8n envia essa marcação ao Meta (Conversions API), para o
-// algoritmo aprender a buscar pessoas parecidas.
+// Leads de conversão vindos dos anúncios Click-to-WhatsApp. O cliente marca
+// quais foram bons e a fila da própria aplicação envia esses marcos à Meta
+// (Conversions API), para o algoritmo aprender a buscar pessoas parecidas.
 //
 // O isolamento é feito por RLS no banco: admin vê todos os clientes, cliente vê
 // só os dele. Por isso a leitura usa o client AUTENTICADO (cookies da sessão) e
 // não o client de serviço — que ignoraria as policies.
 
 export type {
+  ConversionGoalType,
   CapiStatus,
   ConversionLead,
   ConversionLeadsResult,
@@ -42,6 +45,8 @@ type LeadRow = {
   nome: string | null;
   email: string | null;
   ctwa_clid: string | null;
+  origem: string | null;
+  ad_source_id: string | null;
   qualificacao: LeadQualification;
   observacao: string | null;
   valor: number | null;
@@ -51,17 +56,20 @@ type LeadRow = {
   capi_resposta: string | null;
   criado_em: string;
   campaigns?: Embedded<{ nome: string }>;
-  clients?: Embedded<{ nome_empresa: string }>;
+  clients?: Embedded<{ nome_empresa: string; conversion_goal_type: string }>;
 };
 
 const SELECT_COLUMNS =
-  "id, client_id, campaign_id, telefone, nome, email, ctwa_clid, qualificacao, observacao, valor, moeda, capi_status, capi_enviado_em, capi_resposta, criado_em, campaigns(nome), clients(nome_empresa)";
+  "id, client_id, campaign_id, telefone, nome, email, ctwa_clid, origem, ad_source_id, qualificacao, observacao, valor, moeda, capi_status, capi_enviado_em, capi_resposta, criado_em, campaigns(nome), clients(nome_empresa, conversion_goal_type)";
 
 function mapLead(row: LeadRow, canSeeCapiError: boolean): ConversionLead {
   return {
     id: row.id,
     clientId: row.client_id,
     clientName: firstEmbedded(row.clients)?.nome_empresa ?? null,
+    goalType: toConversionGoalType(
+      firstEmbedded(row.clients)?.conversion_goal_type,
+    ),
     campaignId: row.campaign_id,
     campaignName: firstEmbedded(row.campaigns)?.nome ?? null,
     name: row.nome,
@@ -69,6 +77,9 @@ function mapLead(row: LeadRow, canSeeCapiError: boolean): ConversionLead {
     email: row.email,
     // O identificador do clique é o que liga o lead ao anúncio na Meta.
     hasClickId: Boolean(row.ctwa_clid),
+    // Um contato orgânico nunca é apresentado como se viesse de Meta Ads.
+    fromAd: row.origem === "anuncio" || Boolean(row.ctwa_clid),
+    adSourceId: row.ad_source_id,
     qualification: row.qualificacao,
     note: row.observacao,
     value: row.valor === null ? null : Number(row.valor),
@@ -216,9 +227,12 @@ export async function getConversionLeads(
   };
 
   // Paginar por etapa evita que novos contatos escondam todo o restante do funil.
+  // "desqualificado" não é mais uma coluna do Kanban, mas leads históricos
+  // precisam continuar visíveis em algum lugar: eles entram como novos leads
+  // na leitura de "todos" e aparecem na aba própria enquanto existirem.
   const stages: LeadQualification[] =
     options.tab === "todos"
-      ? ["pendente", "qualificado", "fechado", "desqualificado"]
+      ? ["pendente", "qualificado", "fechado"]
       : [options.tab];
   const from = (page - 1) * LEADS_PAGE_SIZE;
   async function listStage(stage: LeadQualification) {
@@ -246,7 +260,7 @@ export async function getConversionLeads(
   const qualifiedCount = Number(summaryRow?.qualified ?? 0);
   const discardedCount = Number(summaryRow?.discarded ?? 0);
   const closedCount = Number(summaryRow?.closed ?? 0);
-  const evaluated = qualifiedCount + discardedCount + closedCount;
+  const evaluated = qualifiedCount + closedCount + discardedCount;
   const summary: ConversionSummary = {
     total: totalCount,
     pending: pendingCount,
@@ -282,9 +296,7 @@ export async function getConversionLeads(
         ? summary.pending
         : options.tab === "qualificado"
           ? summary.qualified
-          : options.tab === "desqualificado"
-            ? summary.discarded
-            : summary.closed;
+          : summary.closed;
 
   return {
     leads: rows.map((row) => mapLead(row, isAdmin)),
@@ -294,4 +306,34 @@ export async function getConversionLeads(
     pageSize: LEADS_PAGE_SIZE,
     hasMore,
   };
+}
+
+// Modelo de conversão que dá nome às colunas do quadro.
+//
+// O cliente vê o próprio modelo. O administrador vê o do cliente selecionado;
+// sem filtro, o quadro pode misturar modelos, e aí o rótulo precisa ser neutro
+// (cada cartão continua falando a língua do seu próprio cliente).
+export async function resolveBoardGoalType(
+  user: User,
+  clientId?: string | null,
+): Promise<ConversionGoalType | "mixed"> {
+  const target = user.role === "admin" ? clientId : user.clientId;
+
+  if (!isUuid(target)) {
+    return user.role === "admin" ? "mixed" : "vehicle_acquisition";
+  }
+
+  const admin = createSupabaseAdminClient();
+
+  if (!admin) {
+    return "vehicle_acquisition";
+  }
+
+  const { data } = await admin
+    .from("clients")
+    .select("conversion_goal_type")
+    .eq("id", target)
+    .maybeSingle<{ conversion_goal_type: string | null }>();
+
+  return toConversionGoalType(data?.conversion_goal_type);
 }

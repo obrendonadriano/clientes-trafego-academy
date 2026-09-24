@@ -64,18 +64,15 @@ function responseError(response: Response, payload: ApiPayload) {
 }
 
 /**
- * Conexao do WhatsApp do cliente (onboarding, QR, status e desconexao).
+ * Conexao WAHA do Atendimento por IA (onboarding, QR, status e desconexao).
  *
- * Nasceu dentro da tela de Conversoes, mas a conexao nao pertence aquela
- * tela: e a mesma sessao WAHA usada pelo Atendimento IA. Por isso o que
- * aparece DEPOIS de conectado vem por `children`.
+ * Exclusiva do modulo de IA, disponivel nos planos que o incluem. Conversoes
+ * usa o Embedded Signup oficial da Meta e nao passa por aqui.
  */
 export function WhatsappConnectionExperience({
   children,
-  purpose = "ai",
 }: {
   children?: ReactNode;
-  purpose?: "ai" | "conversions";
 }) {
   const {
     session,
@@ -290,7 +287,6 @@ export function WhatsappConnectionExperience({
   ) {
     return (
       <ConnectionOnboarding
-        purpose={purpose}
         status={status}
         error={requestError ?? session?.lastError ?? null}
         onConnect={startConnection}
@@ -337,13 +333,11 @@ function ConnectionLoading() {
 }
 
 function ConnectionOnboarding({
-  purpose,
   status,
   error,
   onConnect,
   isRequesting,
 }: {
-  purpose: "ai" | "conversions";
   status: WhatsappSessionStatus;
   error: string | null;
   onConnect: () => Promise<void>;
@@ -360,13 +354,13 @@ function ConnectionOnboarding({
               <WhatsappLogo className="size-7" />
             </span>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-              {purpose === "conversions" ? "Leads das suas campanhas" : "Atendimento automático por IA"}
+              Atendimento automático por IA
             </p>
             <h2 className="mt-2 max-w-2xl font-display text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              {purpose === "conversions" ? "Conecte o WhatsApp para receber seus leads" : "Conecte seu WhatsApp para a IA começar a atender"}
+              Conecte seu WhatsApp para a IA começar a atender
             </h2>
             <div className="mt-5 max-w-2xl space-y-3 text-[0.95rem] leading-7 text-muted-foreground">
-              {purpose === "conversions" ? <p>Conecte o número que recebe os contatos dos anúncios. Os leads identificados pela integração aparecem no Kanban para você avaliar e acompanhar até a compra do veículo.</p> : <><p>
+              <p>
                 Quando alguém chamar no seu WhatsApp, a IA responde na hora —
                 conversando de verdade, uma pergunta por vez, sem parecer
                 mensagem automática.
@@ -376,7 +370,7 @@ function ConnectionOnboarding({
                 realmente serve para o seu negócio. Quando o lead é qualificado,
                 você recebe um resumo no seu WhatsApp pessoal e assume a conversa
                 já sabendo tudo.
-              </p></>}
+              </p>
               <p>
                 A conexão é igual à do WhatsApp Web, aquela que você usa no
                 computador. Leva menos de um minuto.
@@ -442,12 +436,12 @@ function ConnectionOnboarding({
             <OnboardingBenefit
               icon={ShieldCheck}
               title="Você mantém o controle"
-              text={purpose === "conversions" ? "Você avalia os leads e confirma quando a compra foi concluída." : "Pode desligar a IA ou assumir a conversa quando quiser."}
+              text="Pode desligar a IA ou assumir a conversa quando quiser."
             />
             <OnboardingBenefit
               icon={CheckCircle2}
-              title={purpose === "conversions" ? "Acompanhe no Kanban" : "Atende 24 horas"}
-              text={purpose === "conversions" ? "Separe novos contatos, qualificados, desqualificados e veículos comprados." : "A IA responde a qualquer hora, sem você precisar estar online."}
+              title="Atende 24 horas"
+              text="A IA responde a qualquer hora, sem você precisar estar online."
             />
           </div>
         </div>

@@ -260,7 +260,7 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="waha_leads_webhook_url">
-                    Webhook de produção do n8n para leads
+                    Webhook de produção do n8n para leads (legado)
                   </Label>
                   <Input
                     id="waha_leads_webhook_url"
@@ -270,8 +270,10 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
                     defaultValue={integration.config.leads_webhook_url ?? ""}
                   />
                   <p className="text-xs leading-5 text-muted-foreground">
-                    Use a URL de produção do workflow WAHA. Sem ela, a conexão
-                    continua funcionando, mas mensagens não entram na fila de leads.
+                    Captação antiga de Conversões, mantida durante a migração.
+                    Vale só para clientes que ainda não conectaram o WhatsApp
+                    Business oficial; quem já migrou entra pelo webhook da Meta
+                    e é ignorado aqui. Não tem relação com o Atendimento por IA.
                   </p>
                 </div>
                 <div className="space-y-2 md:col-span-2">

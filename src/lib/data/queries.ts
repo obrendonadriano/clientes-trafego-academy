@@ -28,6 +28,7 @@ import {
 } from "@/lib/types";
 import { getSupabasePublishableKey, getSupabaseUrl } from "@/lib/supabase/env";
 import { toClientPlanType } from "@/lib/ai-agent/shared";
+import { toConversionGoalType } from "@/lib/conversions/shared";
 import { withMetaTaxes } from "@/lib/taxes";
 import type { WhatsappSession } from "@/lib/whatsapp-session";
 
@@ -65,6 +66,7 @@ type DbClientRow = {
   segmento?: string | null;
   segmento_descricao?: string | null;
   plan_type?: string | null;
+  conversion_goal_type?: string | null;
   ativo: boolean;
 };
 
@@ -203,6 +205,7 @@ function mapClient(row: DbClientRow, campaignCode?: string): Client {
     segment: row.segmento ?? undefined,
     segmentDescription: row.segmento_descricao ?? undefined,
     planType: toClientPlanType(row.plan_type),
+    conversionGoalType: toConversionGoalType(row.conversion_goal_type),
   };
 }
 
@@ -478,13 +481,15 @@ const fetchClientsCached = unstable_cache(
     // (migração não aplicada), refaz sem elas para não derrubar o painel.
     const withSegments = await admin
       .from("clients")
-      .select(`${baseColumns}, segmento, segmento_descricao, plan_type`)
+      .select(
+        `${baseColumns}, segmento, segmento_descricao, plan_type, conversion_goal_type`,
+      )
       .order("created_at", { ascending: true });
 
     let rows = withSegments.data as DbClientRow[] | null;
     let error = withSegments.error;
 
-    if (error && /segmento|plan_type/i.test(error.message)) {
+    if (error && /segmento|plan_type|conversion_goal_type/i.test(error.message)) {
       const fallback = await admin
         .from("clients")
         .select(baseColumns)

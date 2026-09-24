@@ -27,6 +27,7 @@ import { WabaHelp } from "@/components/admin/waba-help";
 import {
   Field,
   IconInput,
+  ConversionGoalField,
   PlanTypeField,
   SegmentField,
   WHATSAPP_PATTERN,
@@ -55,7 +56,14 @@ const STEPS: (WizardStep & { fields: string[] })[] = [
     title: "Empresa",
     description: "Quem é o cliente e como falar com ele.",
     icon: Building2,
-    fields: ["companyName", "contactName", "whatsapp", "planType", "notes"],
+    fields: [
+      "companyName",
+      "contactName",
+      "whatsapp",
+      "planType",
+      "conversionGoalType",
+      "notes",
+    ],
   },
   {
     id: "acesso",
@@ -295,6 +303,7 @@ export function ClientCreateForm({ campaigns }: ClientCreateFormProps) {
                 />
               </Field>
               <PlanTypeField />
+              <ConversionGoalField />
               <SegmentField />
 
               <Field

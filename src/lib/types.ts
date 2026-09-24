@@ -1,4 +1,5 @@
 import type { ClientPlanType } from "@/lib/ai-agent/shared";
+import type { ConversionGoalType } from "@/lib/conversions/shared";
 
 export type Role = "admin" | "client";
 
@@ -30,6 +31,9 @@ export type Client = {
   segmentDescription?: string;
   // Plano contratado: define se a area de Atendimento IA fica liberada.
   planType?: ClientPlanType;
+  // Resultado final do negócio: a empresa compra do lead ou vende para ele.
+  // Decide o rótulo da última etapa do Kanban e o evento enviado à Meta.
+  conversionGoalType?: ConversionGoalType;
 };
 
 export type CampaignMetric = {

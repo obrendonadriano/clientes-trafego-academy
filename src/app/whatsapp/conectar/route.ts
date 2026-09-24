@@ -87,6 +87,9 @@ export async function POST(request: Request) {
         };
       }
 
+      // LEGADO / TRANSITÓRIO: captação de Conversões pelo WAHA. O banco
+      // ignora quem já migrou, então manter isto registrado não duplica lead
+      // e é o que evita apagão de captação durante a transição.
       if (config.leadsWebhookUrl) {
         webhooks.push(messageWebhook(config.leadsWebhookUrl));
       }

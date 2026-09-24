@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CLIENT_PLAN_TYPES } from "@/lib/ai-agent/shared";
+import { CONVERSION_GOAL_TYPES } from "@/lib/conversions/shared";
 
 // Schemas compartilhados entre os formulários (client) e as server actions
 // (server revalida sempre — nunca confiar só no front).
@@ -23,6 +24,12 @@ export const planTypeField = z
   .enum(CLIENT_PLAN_TYPES)
   .catch("essential");
 
+// Modelo de conversão do cliente. Decide qual evento o fechamento gera, então
+// é revalidado no servidor como o plano — nunca só no <select>.
+export const conversionGoalTypeField = z
+  .enum(CONVERSION_GOAL_TYPES)
+  .catch("vehicle_acquisition");
+
 const metaIdField = z
   .string()
   .trim()
@@ -40,6 +47,7 @@ export const clientWorkspaceSchema = z.object({
   segment: z.string().nullish(),
   segmentDescription: z.string().nullish(),
   planType: planTypeField,
+  conversionGoalType: conversionGoalTypeField,
   accountName: z.string().min(2, "Informe o nome do acesso."),
   username: usernameField,
   email: z.string().email("Informe um email válido."),
@@ -72,6 +80,10 @@ export const updateClientWorkspaceSchema = z.object({
   segment: z.string().nullish(),
   segmentDescription: z.string().nullish(),
   planType: planTypeField,
+  conversionGoalType: conversionGoalTypeField,
+  // Trocar o modelo com fechamentos já registrados exige confirmação: ele
+  // decide qual evento o próximo fechamento gera.
+  confirmGoalChange: z.string().nullish(),
   // Checkbox/switch desmarcado não é enviado → vem null. nullish aceita
   // null/undefined; "on" quando marcado.
   clientActive: z.string().nullish(),

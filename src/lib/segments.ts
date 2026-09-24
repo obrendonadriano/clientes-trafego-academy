@@ -6,6 +6,7 @@ export type ClientSegmentValue =
   | "veiculo_atrasado"
   | "veiculo_quitacao"
   | "eventos"
+  | "agencia_marketing"
   | "outro";
 
 export const CLIENT_SEGMENTS: { value: ClientSegmentValue; label: string }[] = [
@@ -15,6 +16,10 @@ export const CLIENT_SEGMENTS: { value: ClientSegmentValue; label: string }[] = [
   },
   { value: "veiculo_quitacao", label: "Quitação de financiamento de veículo" },
   { value: "eventos", label: "Eventos / convites" },
+  {
+    value: "agencia_marketing",
+    label: "Agência / Gestão de tráfego e marketing",
+  },
   { value: "outro", label: "Outro (descrever)" },
 ];
 
@@ -25,6 +30,7 @@ const SEGMENT_CONTEXT: Record<
 > = {
   veiculo_atrasado: `CONTEXTO DO NEGÓCIO DESTE CLIENTE: ele atua na COMPRA de veículos de pessoas que financiaram um carro e não estão conseguindo pagar as parcelas — estão com o financiamento em atraso, muitas vezes sob risco de Renajud, busca e apreensão do veículo. As campanhas são de MENSAGENS no WhatsApp: encontram essas pessoas e iniciam uma conversa para negociar e comprar o veículo delas, dando uma saída para a dívida. Portanto, o "resultado"/"lead" de cada campanha é uma CONVERSA iniciada no WhatsApp por um dono de veículo nessa situação — cada conversa é uma oportunidade real de compra de um carro. Ao escrever, refira-se ao resultado como "pessoas interessadas que chamaram no WhatsApp" ou "conversas de donos de veículos querendo negociar", NUNCA como "vendas". Fale de forma simples e humana sobre quantas dessas oportunidades chegaram, o investimento e o custo por conversa, valorizando a chegada de contatos qualificados desse público específico.`,
   veiculo_quitacao: `CONTEXTO DO NEGÓCIO DESTE CLIENTE: ele vende uma SOLUÇÃO/SERVIÇO para ajudar pessoas a QUITAR a dívida do financiamento do veículo pagando muito menos do que devem (economias que podem chegar a cerca de 80% a menos). O público são pessoas endividadas no financiamento do carro que querem se livrar da dívida gastando menos. As campanhas geram CONVERSAS no WhatsApp / contatos dessas pessoas interessadas em quitar. Portanto, o "resultado"/"lead" é um contato/conversa de alguém interessado em quitar o financiamento. Ao escrever, refira-se ao resultado como "pessoas interessadas em quitar o financiamento" ou "contatos de quem quer quitar a dívida", NUNCA como "vendas". Fale de forma simples sobre o volume de interessados que chegaram, o investimento e o custo por interessado, valorizando o alcance de quem realmente precisa dessa solução.`,
+  agencia_marketing: `CONTEXTO DO NEGÓCIO DESTE CLIENTE: ele VENDE serviços de gestão de tráfego pago, marketing, automações, sites e soluções digitais para outras empresas. As campanhas captam empresas e profissionais interessados nesses serviços. Um "lead" é alguém que entrou em contato demonstrando interesse; um lead QUALIFICADO é alguém com perfil e interesse reais em contratar; uma VENDA acontece quando esse lead fecha um serviço ou contrato, e aí existe receita de verdade. Ao escrever, trate o resultado como "contatos interessados nos serviços" e, quando houver fechamento, como "vendas"/"contratos fechados" — com o valor real do contrato. NUNCA confunda quantidade de mensagens ou conversas com vendas: conversa é oportunidade, venda é contrato assinado. Fale de forma simples sobre quantos interessados chegaram, quantos viraram cliente, o investimento e o retorno.`,
   eventos: `CONTEXTO DO NEGÓCIO DESTE CLIENTE: ele trabalha com EVENTOS — vende convites/ingressos para festas, shows e eventos em geral. O objetivo das campanhas é divulgar o evento e gerar venda de convites/ingressos ou interesse de pessoas que querem comprar. Portanto, o "resultado" são convites/ingressos vendidos ou pessoas interessadas em comprar o ingresso. Ao escrever, fale sobre o alcance da divulgação do evento, o número de interessados/convites e o investimento, com um tom animado, simples e convidativo, adequado ao universo de festas e shows.`,
 };
 
