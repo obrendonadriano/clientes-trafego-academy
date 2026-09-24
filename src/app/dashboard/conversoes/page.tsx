@@ -13,6 +13,7 @@ import {
   type QualificationTab,
 } from "@/lib/conversions/shared";
 import { getAppShellData } from "@/lib/data/queries";
+import { resolveBoardGoalType } from "@/lib/data/conversions";
 
 type ConversionsRouteProps = {
   searchParams: Promise<{
@@ -82,6 +83,7 @@ async function ConversionsSection({
         isAdmin={user.role === "admin"}
         clients={shell.clients}
         selectedClientId={clientId}
+        goalType={await resolveBoardGoalType(user, clientId)}
       />
     </div>
   );
@@ -95,7 +97,7 @@ export default function ConversionsRoute({
       <PageHeader
         eyebrow="Área do cliente"
         title="Conversões"
-        description="Acompanhe os contatos dos anúncios até a compra do veículo. Arraste cada lead para a etapa correspondente."
+        description="Acompanhe os contatos dos anúncios até o fechamento. Arraste cada lead para a etapa correspondente."
       />
 
       <Suspense fallback={<ListSkeleton />}>

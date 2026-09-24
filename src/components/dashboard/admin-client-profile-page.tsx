@@ -30,6 +30,7 @@ import { CampaignMultiSelect } from "@/components/admin/campaign-multi-select";
 import {
   Field,
   IconInput,
+  ConversionGoalField,
   PlanTypeField,
   SegmentField,
   WHATSAPP_PATTERN,
@@ -68,7 +69,14 @@ const STEPS: (WizardStep & { fields: string[] })[] = [
     title: "Empresa",
     description: "Dados do cliente, contato e status.",
     icon: Building2,
-    fields: ["companyName", "contactName", "whatsapp", "planType", "notes"],
+    fields: [
+      "companyName",
+      "contactName",
+      "whatsapp",
+      "planType",
+      "conversionGoalType",
+      "notes",
+    ],
   },
   {
     id: "acesso",
@@ -405,6 +413,13 @@ export function AdminClientProfilePage({
                     <Switch name="clientActive" defaultChecked={client.active} />
                   </div>
                   <PlanTypeField defaultValue={client.planType ?? "essential"} />
+                  <ConversionGoalField
+                    defaultValue={
+                      client.conversionGoalType ?? "vehicle_acquisition"
+                    }
+                    hasHistory={capiConfig.hasConversionHistory}
+                    error={fieldErrors?.conversionGoalType}
+                  />
                   <SegmentField
                     defaultSegment={client.segment}
                     defaultDescription={client.segmentDescription}

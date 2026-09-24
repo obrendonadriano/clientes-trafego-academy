@@ -241,6 +241,7 @@ export async function createClientWorkspaceAction(
     segment: formData.get("segment"),
     segmentDescription: formData.get("segmentDescription"),
     planType: formData.get("planType"),
+    conversionGoalType: formData.get("conversionGoalType"),
     accountName: formData.get("accountName"),
     username: formData.get("username"),
     email: formData.get("email"),
@@ -290,6 +291,7 @@ export async function createClientWorkspaceAction(
       segmento: parsed.data.segment || null,
       segmento_descricao: parsed.data.segmentDescription || null,
       plan_type: parsed.data.planType,
+      conversion_goal_type: parsed.data.conversionGoalType,
       ativo: true,
     })
     .select("id")
@@ -452,6 +454,8 @@ export async function updateClientWorkspaceAction(
     segment: formData.get("segment"),
     segmentDescription: formData.get("segmentDescription"),
     planType: formData.get("planType"),
+    conversionGoalType: formData.get("conversionGoalType"),
+    confirmGoalChange: formData.get("confirmGoalChange"),
     clientActive: formData.get("clientActive"),
     accountName: formData.get("accountName"),
     username: formData.get("username"),
@@ -510,6 +514,22 @@ export async function updateClientWorkspaceAction(
 
   if (clientUpdate.error) {
     return { error: clientUpdate.error.message };
+  }
+
+  // O modelo de conversão passa por uma RPC própria: ela recusa a troca quando
+  // o cliente já tem fechamentos registrados e ninguém confirmou. Eventos já
+  // enfileirados nunca são reescritos por essa mudança.
+  const goalChange = await adminClient.rpc("admin_set_conversion_goal_type", {
+    p_client_id: parsed.data.clientId,
+    p_goal: parsed.data.conversionGoalType,
+    p_confirm: parsed.data.confirmGoalChange === "on",
+  });
+
+  if (goalChange.error) {
+    return {
+      error: goalChange.error.message,
+      fieldErrors: { conversionGoalType: goalChange.error.message },
+    };
   }
 
   let userId = parsed.data.userId || "";

@@ -5,6 +5,7 @@ import { type Embedded, firstEmbedded } from "@/lib/supabase/embedded";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
+  toConversionGoalType,
   LEADS_PAGE_SIZE,
   type CapiStatus,
   type ConversionLead,
@@ -14,6 +15,7 @@ import {
   type PeriodOption,
   type QualificationTab,
 } from "@/lib/conversions/shared";
+import type { ConversionGoalType } from "@/lib/conversions/shared";
 import type { User } from "@/lib/types";
 
 // Leads de conversão vindos dos anúncios Click-to-WhatsApp. O cliente marca
@@ -25,6 +27,7 @@ import type { User } from "@/lib/types";
 // não o client de serviço — que ignoraria as policies.
 
 export type {
+  ConversionGoalType,
   CapiStatus,
   ConversionLead,
   ConversionLeadsResult,
@@ -53,17 +56,20 @@ type LeadRow = {
   capi_resposta: string | null;
   criado_em: string;
   campaigns?: Embedded<{ nome: string }>;
-  clients?: Embedded<{ nome_empresa: string }>;
+  clients?: Embedded<{ nome_empresa: string; conversion_goal_type: string }>;
 };
 
 const SELECT_COLUMNS =
-  "id, client_id, campaign_id, telefone, nome, email, ctwa_clid, origem, ad_source_id, qualificacao, observacao, valor, moeda, capi_status, capi_enviado_em, capi_resposta, criado_em, campaigns(nome), clients(nome_empresa)";
+  "id, client_id, campaign_id, telefone, nome, email, ctwa_clid, origem, ad_source_id, qualificacao, observacao, valor, moeda, capi_status, capi_enviado_em, capi_resposta, criado_em, campaigns(nome), clients(nome_empresa, conversion_goal_type)";
 
 function mapLead(row: LeadRow, canSeeCapiError: boolean): ConversionLead {
   return {
     id: row.id,
     clientId: row.client_id,
     clientName: firstEmbedded(row.clients)?.nome_empresa ?? null,
+    goalType: toConversionGoalType(
+      firstEmbedded(row.clients)?.conversion_goal_type,
+    ),
     campaignId: row.campaign_id,
     campaignName: firstEmbedded(row.campaigns)?.nome ?? null,
     name: row.nome,
@@ -300,4 +306,34 @@ export async function getConversionLeads(
     pageSize: LEADS_PAGE_SIZE,
     hasMore,
   };
+}
+
+// Modelo de conversão que dá nome às colunas do quadro.
+//
+// O cliente vê o próprio modelo. O administrador vê o do cliente selecionado;
+// sem filtro, o quadro pode misturar modelos, e aí o rótulo precisa ser neutro
+// (cada cartão continua falando a língua do seu próprio cliente).
+export async function resolveBoardGoalType(
+  user: User,
+  clientId?: string | null,
+): Promise<ConversionGoalType | "mixed"> {
+  const target = user.role === "admin" ? clientId : user.clientId;
+
+  if (!isUuid(target)) {
+    return user.role === "admin" ? "mixed" : "vehicle_acquisition";
+  }
+
+  const admin = createSupabaseAdminClient();
+
+  if (!admin) {
+    return "vehicle_acquisition";
+  }
+
+  const { data } = await admin
+    .from("clients")
+    .select("conversion_goal_type")
+    .eq("id", target)
+    .maybeSingle<{ conversion_goal_type: string | null }>();
+
+  return toConversionGoalType(data?.conversion_goal_type);
 }

@@ -11,10 +11,12 @@ import { PGlite } from '@electric-sql/pglite';
 const clientA = '10000000-0000-4000-8000-000000000001';
 const clientB = '10000000-0000-4000-8000-000000000002';
 const actor = '20000000-0000-4000-8000-000000000001';
+const actorB = '20000000-0000-4000-8000-000000000002';
 
 const read = (name) => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8');
 const outbox = read('20260924020710_conversion_event_outbox.sql');
 const official = read('20260924210000_official_whatsapp_conversions.sql');
+const goals = read('20260925000000_conversion_goal_types.sql');
 const previous = read('20260826181403_closed_lead_meta_pipeline.sql');
 const guard = previous.slice(
   previous.indexOf('create or replace function private.guard_conversion_lead_update()'),
@@ -34,7 +36,7 @@ test('Conversões oficiais: funil, idempotência, isolamento e entrega', async (
     create type public.app_role as enum ('admin','client');
     create type public.lead_qualification as enum ('pendente','qualificado','desqualificado','fechado');
     create type public.capi_send_status as enum ('nao_enviado','enviado','erro','ignorado');
-    create table public.clients(id uuid primary key, meta_dataset_id text, meta_waba_id text, capi_ativo boolean default false, nome_empresa text default 'Test');
+    create table public.clients(id uuid primary key, meta_dataset_id text, meta_waba_id text, capi_ativo boolean default false, nome_empresa text default 'Test', segmento text);
     create table public.users(id uuid primary key, auth_user_id uuid, client_id uuid, role public.app_role default 'client', ativo boolean default true);
     create table public.integration_settings(id uuid primary key default gen_random_uuid(), provider text, enabled boolean default false, config jsonb default '{}'::jsonb, updated_at timestamptz default now());
     create table private.client_capi_credentials(client_id uuid primary key, access_token text, atualizado_em timestamptz default now());
@@ -64,7 +66,7 @@ test('Conversões oficiais: funil, idempotência, isolamento e entrega', async (
     grant all on public.clients, public.whatsapp_sessions, public.integration_settings to service_role;
     grant select on public.clients to authenticated;
     insert into clients(id,meta_dataset_id,meta_waba_id,capi_ativo) values ('${clientA}','dataset-a','waba-a',true),('${clientB}','dataset-b','waba-b',true);
-    insert into public.users values ('${actor}','${actor}','${clientA}');
+    insert into public.users values ('${actor}','${actor}','${clientA}'),('${actorB}','${actorB}','${clientB}');
     insert into public.whatsapp_sessions values ('${clientA}','sess-a','WORKING'),('${clientB}','sess-b','WORKING');
     insert into private.client_capi_credentials(client_id,access_token) values ('${clientA}','test-only-token'),('${clientB}','test-only-token');
     -- Histórico anterior à migração. Sem estas linhas o backfill de \`origem\`
@@ -79,6 +81,7 @@ test('Conversões oficiais: funil, idempotência, isolamento e entrega', async (
   await db.exec(`reset role; reset request.jwt.claims;`);
   await db.exec(outbox);
   await db.exec(official);
+  await db.exec(goals);
 
   const sql = async (query, params = []) => (await db.query(query, params)).rows;
   async function service() {
@@ -512,6 +515,187 @@ test('Conversões oficiais: funil, idempotência, isolamento e entrega', async (
     assert.equal(row.novo, true);
   });
 
+
+
+  await t.test('MODELO A: cliente de aquisição continua gerando VehicleAcquired', async () => {
+    await service();
+    assert.equal(
+      (await sql('select conversion_goal_type from clients where id=$1', [clientA]))[0].conversion_goal_type,
+      'vehicle_acquisition',
+    );
+
+    const id = await lead();
+    await move(id, 'qualificado');
+    await move(id, 'fechado');
+
+    const names = (await events(id)).map((e) => e.event_name);
+    assert.deepEqual(names, ['LeadSubmitted', 'QualifiedLead', 'VehicleAcquired']);
+    assert.equal(names.includes('Purchase'), false);
+  });
+
+  await t.test('MODELO A: o valor pago pelo veículo nunca vira receita', async () => {
+    const id = await lead();
+    await move(id, 'fechado');
+    await user();
+    await sql(`update conversion_leads set valor=42000, moeda='BRL' where id=$1`, [id]);
+    await service();
+
+    const acquired = (await events(id)).find((e) => e.event_name === 'VehicleAcquired');
+    // custom_data existe no schema, mas para aquisição fica sempre nulo.
+    assert.equal(acquired.custom_data, null);
+    assert.equal(JSON.stringify(acquired).includes('42000'), false);
+
+    const queued = (await queue()).find((e) => e.lead_id === id && e.event_name === 'VehicleAcquired');
+    assert.equal(queued.custom_data, null);
+    assert.equal(queued.action_source, 'other');
+  });
+
+  await t.test('MODELO B: venda gera Purchase com valor e moeda no contexto de mensagens', async () => {
+    await service();
+    await sql(`update clients set conversion_goal_type='sale' where id=$1`, [clientB]);
+
+    const id = await lead({ tenant: clientB, click: 'clid-venda-1' });
+    await service();
+    await sql(`update conversion_leads set qualificacao='qualificado' where id=$1`, [id]);
+    await sql(`update conversion_leads set qualificacao='fechado', valor=500, moeda='BRL' where id=$1`, [id]);
+
+    const all = await events(id);
+    assert.deepEqual(all.map((e) => e.event_name).sort(), ['LeadSubmitted', 'Purchase', 'QualifiedLead']);
+
+    const purchase = all.find((e) => e.event_name === 'Purchase');
+    assert.equal(purchase.action_source, 'business_messaging');
+    assert.deepEqual(purchase.custom_data, { currency: 'BRL', value: 500 });
+    // O mesmo clique original percorre os três marcos.
+    assert.equal(purchase.user_data.ctwa_clid, 'clid-venda-1');
+    assert.equal(all.find((e) => e.event_name === 'LeadSubmitted').user_data.ctwa_clid, 'clid-venda-1');
+    assert.equal(purchase.event_id, `cl_${id}_purchase`);
+  });
+
+  await t.test('MODELO B: o fechamento exige o valor da venda', async () => {
+    await service();
+    const id = await lead({ tenant: clientB, click: 'clid-venda-sem-valor' });
+
+    // Caminho autenticado do dono: o guarda recusa fechar sem valor.
+    await db.exec(`reset role; set request.jwt.claims = '{"role":"authenticated","sub":"${actorB}"}'; set role authenticated;`);
+    await assert.rejects(
+      sql(`update conversion_leads set qualificacao='fechado' where id=$1`, [id]),
+      /Informe o valor da venda/,
+    );
+
+    // Com valor, fecha normalmente.
+    await sql(`update conversion_leads set qualificacao='fechado', valor=500, moeda='BRL' where id=$1`, [id]);
+    await service();
+    assert.equal(
+      (await sql('select qualificacao from conversion_leads where id=$1', [id]))[0].qualificacao,
+      'fechado',
+    );
+  });
+
+  await t.test('MODELO B: Purchase não duplica quando o cartão volta e avança', async () => {
+    await service();
+    const id = await lead({ tenant: clientB, click: 'clid-venda-dedup' });
+    await sql(`update conversion_leads set qualificacao='fechado', valor=500, moeda='BRL' where id=$1`, [id]);
+
+    const first = (await events(id)).find((e) => e.event_name === 'Purchase');
+    const queued = (await queue()).find((e) => e.event_id === first.event_id);
+    await ack(queued);
+
+    // Volta e avança de novo.
+    await sql(`update conversion_leads set qualificacao='qualificado' where id=$1`, [id]);
+    await sql(`update conversion_leads set qualificacao='fechado', valor=500, moeda='BRL' where id=$1`, [id]);
+
+    const after = (await events(id)).filter((e) => e.event_name === 'Purchase');
+    assert.equal(after.length, 1);
+    assert.equal(after[0].status, 'enviado');
+    assert.equal(after[0].event_id, first.event_id);
+  });
+
+  await t.test('MODELO B: mudar o valor depois não cria um segundo Purchase', async () => {
+    await service();
+    const id = await lead({ tenant: clientB, click: 'clid-venda-edicao' });
+    await sql(`update conversion_leads set qualificacao='fechado', valor=500, moeda='BRL' where id=$1`, [id]);
+
+    const purchase = (await events(id)).find((e) => e.event_name === 'Purchase');
+    const queued = (await queue()).find((e) => e.event_id === purchase.event_id);
+    await ack(queued);
+
+    // Correção do valor no CRM.
+    await sql(`update conversion_leads set valor=600 where id=$1`, [id]);
+
+    const after = (await events(id)).filter((e) => e.event_name === 'Purchase');
+    assert.equal(after.length, 1);
+    assert.equal(after[0].status, 'enviado');
+    // O snapshot enviado permanece o que foi confirmado pela Meta.
+    assert.deepEqual(after[0].custom_data, { currency: 'BRL', value: 500 });
+  });
+
+  await t.test('MODELO B: venda sem ctwa_clid é registrada sem atribuição inventada', async () => {
+    await service();
+    const id = await lead({ tenant: clientB, click: null, phone: '+55 (11) 98888-7777' });
+    await sql(`update conversion_leads set qualificacao='fechado', valor=500, moeda='BRL' where id=$1`, [id]);
+
+    const purchase = (await events(id)).find((e) => e.event_name === 'Purchase');
+    assert.equal(purchase.status, 'ignorado');
+    assert.match(purchase.response, /sem vínculo com anúncio|Sem vínculo com anúncio/i);
+    // Nunca um identificador falso.
+    assert.equal(purchase.user_data.ctwa_clid, null);
+    assert.equal((await queue()).some((e) => e.event_id === purchase.event_id), false);
+  });
+
+  await t.test('os dois modelos convivem sem se misturar', async () => {
+    await service();
+    const acquisition = await lead({ tenant: clientA, click: 'clid-misto-a' });
+    await sql(`update conversion_leads set qualificacao='fechado' where id=$1`, [acquisition]);
+
+    const sale = await lead({ tenant: clientB, click: 'clid-misto-b' });
+    await sql(`update conversion_leads set qualificacao='fechado', valor=750, moeda='BRL' where id=$1`, [sale]);
+
+    assert.equal((await events(acquisition)).some((e) => e.event_name === 'VehicleAcquired'), true);
+    assert.equal((await events(acquisition)).some((e) => e.event_name === 'Purchase'), false);
+    assert.equal((await events(sale)).some((e) => e.event_name === 'Purchase'), true);
+    assert.equal((await events(sale)).some((e) => e.event_name === 'VehicleAcquired'), false);
+  });
+
+  await t.test('trocar o modelo não reescreve eventos já enfileirados', async () => {
+    await service();
+    const id = await lead({ tenant: clientB, click: 'clid-troca-modelo' });
+    await sql(`update conversion_leads set qualificacao='fechado', valor=900, moeda='BRL' where id=$1`, [id]);
+
+    const before = (await events(id)).find((e) => e.event_name === 'Purchase');
+    assert.deepEqual(before.custom_data, { currency: 'BRL', value: 900 });
+
+    // Admin troca o modelo do cliente, confirmando o histórico.
+    await sql(`select admin_set_conversion_goal_type($1,'vehicle_acquisition',true)`, [clientB]);
+
+    const after = (await events(id)).find((e) => e.event_name === 'Purchase');
+    assert.equal(after.event_id, before.event_id);
+    assert.deepEqual(after.custom_data, { currency: 'BRL', value: 900 });
+    assert.equal(after.action_source, 'business_messaging');
+
+    // Volta ao modelo de venda para os testes seguintes.
+    await sql(`select admin_set_conversion_goal_type($1,'sale',true)`, [clientB]);
+  });
+
+  await t.test('trocar o modelo com histórico exige confirmação explícita', async () => {
+    await service();
+    await assert.rejects(
+      sql(`select admin_set_conversion_goal_type($1,'vehicle_acquisition',false)`, [clientB]),
+      /Confirme a troca do modelo/,
+    );
+    // E o modelo permanece intacto.
+    assert.equal(
+      (await sql('select conversion_goal_type from clients where id=$1', [clientB]))[0].conversion_goal_type,
+      'sale',
+    );
+  });
+
+  await t.test('mudar o segmento não altera o modelo nem os eventos', async () => {
+    await service();
+    const before = (await sql('select conversion_goal_type from clients where id=$1', [clientB]))[0];
+    await sql(`update clients set segmento='agencia_marketing' where id=$1`, [clientB]);
+    const after = (await sql('select conversion_goal_type from clients where id=$1', [clientB]))[0];
+    assert.equal(after.conversion_goal_type, before.conversion_goal_type);
+  });
 
   await db.close();
 });

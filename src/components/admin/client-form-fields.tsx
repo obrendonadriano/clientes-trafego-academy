@@ -2,7 +2,7 @@
 
 import type { ComponentProps, ComponentType, ReactNode } from "react";
 import { useState } from "react";
-import { Briefcase, Sparkles } from "lucide-react";
+import { Briefcase, Sparkles, Target } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -12,6 +12,7 @@ import {
   CLIENT_PLAN_TYPES,
   type ClientPlanType,
 } from "@/lib/ai-agent/shared";
+import type { ConversionGoalType } from "@/lib/conversions/shared";
 import { CLIENT_SEGMENTS } from "@/lib/segments";
 import { cn } from "@/lib/utils";
 
@@ -155,6 +156,72 @@ export function SegmentField({
             placeholder="O que o cliente vende, qual o público e o que conta como 'resultado' (ex.: conversas no WhatsApp, ingressos vendidos...)."
           />
         </Field>
+      ) : null}
+    </div>
+  );
+}
+
+// Tipo de resultado final do negócio. Decide o que a etapa final do Kanban
+// significa e qual conversão é enviada à Meta — por isso é uma configuração
+// explícita, e não algo deduzido do segmento.
+//
+// O gestor não lê nomes técnicos aqui; eles ficam no painel administrativo.
+export function ConversionGoalField({
+  defaultValue = "vehicle_acquisition",
+  hasHistory = false,
+  error,
+}: {
+  defaultValue?: ConversionGoalType;
+  // Com fechamentos já registrados, trocar o modelo pede confirmação.
+  hasHistory?: boolean;
+  error?: string;
+}) {
+  const [goal, setGoal] = useState<ConversionGoalType>(defaultValue);
+  const changed = goal !== defaultValue;
+
+  return (
+    <div className="min-w-0 space-y-2 md:col-span-2">
+      <Field
+        label="Tipo de resultado final"
+        htmlFor="conversionGoalType"
+        error={error}
+      >
+        <div className="relative min-w-0">
+          <Target className="pointer-events-none absolute left-4 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Select
+            id="conversionGoalType"
+            name="conversionGoalType"
+            value={goal}
+            onChange={(event) =>
+              setGoal(event.target.value as ConversionGoalType)
+            }
+            className="pl-11"
+          >
+            <option value="vehicle_acquisition">Compra / Aquisição</option>
+            <option value="sale">Venda</option>
+          </Select>
+        </div>
+      </Field>
+
+      <p className="text-xs leading-5 text-muted-foreground">
+        {goal === "sale"
+          ? "A empresa vende um produto ou serviço ao lead. A última etapa vira “Vendas realizadas” e o valor informado é a receita do contrato. Ex.: agência, dentista, energia solar."
+          : "A empresa compra algo do lead. A última etapa vira “Veículos comprados” e o valor informado é o custo de aquisição, que nunca é tratado como receita. Ex.: compra de veículos."}
+      </p>
+
+      {hasHistory && changed ? (
+        <label className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5">
+          <input
+            type="checkbox"
+            name="confirmGoalChange"
+            className="mt-0.5 size-4 shrink-0"
+          />
+          <span>
+            Este cliente já tem fechamentos registrados. Confirmo a troca do
+            modelo. Os resultados já enviados à Meta não mudam; apenas os
+            próximos fechamentos passam a usar o novo modelo.
+          </span>
+        </label>
       ) : null}
     </div>
   );

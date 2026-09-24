@@ -6,6 +6,7 @@ import {
   connectionHeadline,
   formatOfficialPhone,
 } from "@/lib/conversions/connection-shared";
+import { goalCopy } from "@/lib/conversions/shared";
 import type { AdminConnectionOverview } from "@/lib/data/whatsapp-connection";
 import { cn } from "@/lib/utils";
 
@@ -166,6 +167,17 @@ export function ConversionsDiagnostics({
                     <div>
                       <dt className="text-muted-foreground">Conta de anúncios</dt>
                       <dd>Tráfego Academy</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">
+                        Modelo de conversão
+                      </dt>
+                      <dd>
+                        {goalCopy(client.goalType).adminLabel} ·{" "}
+                        <span className="font-mono">
+                          {goalCopy(client.goalType).finalEvent}
+                        </span>
+                      </dd>
                     </div>
                     <div>
                       <dt className="text-muted-foreground">Captação</dt>

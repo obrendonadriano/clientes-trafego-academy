@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Car, GripVertical, LoaderCircle, MessageCircle, X } from "lucide-react";
 import {
   moveLeadsAction,
-  saveAcquisitionCostAction,
+  registerClosedDealAction,
 } from "@/app/conversoes/actions";
 import {
   AlreadySentWarning,
@@ -15,10 +15,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import {
   conversionFeedback,
+  goalCopy,
+  stageDescription,
+  stageLabel,
   FUNNEL_STAGES,
   maskPhone,
   PERIOD_OPTIONS,
   QUALIFICATION_TABS,
+  type ConversionGoalType,
   type ConversionLead,
   type ConversionLeadsResult,
   type FunnelStage,
@@ -48,6 +52,7 @@ export function ConversionsPage({
   isAdmin,
   clients,
   selectedClientId,
+  goalType,
 }: {
   data: ConversionLeadsResult;
   tab: QualificationTab;
@@ -55,6 +60,8 @@ export function ConversionsPage({
   isAdmin: boolean;
   clients: { id: string; name: string }[];
   selectedClientId: string | null;
+  // "mixed" é a visão do administrador com clientes de modelos diferentes.
+  goalType: ConversionGoalType | "mixed";
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -91,11 +98,24 @@ export function ConversionsPage({
   function move(lead: ConversionLead, stage: FunnelStage) {
     if (isPending || lead.qualification === stage) return;
 
+    // Quem VENDE precisa informar o valor para concluir: sem receita não há
+    // venda a registrar, e o evento não faria sentido.
+    if (stage === "fechado" && goalCopy(lead.goalType).requiresValue) {
+      setCostValue(lead.value ? String(lead.value).replace(".", ",") : "");
+      setCostLead(lead);
+      return;
+    }
+
     startTransition(async () => {
       try {
         const result = await moveLeadsAction([lead.id], stage);
         showToast({
-          message: result.error ?? result.success ?? "Etapa atualizada.",
+          message:
+            result.error ??
+            // O fechamento fala a língua do negócio do cliente.
+            (stage === "fechado"
+              ? goalCopy(lead.goalType).movedMessage
+              : (result.success ?? "Etapa atualizada.")),
           tone: result.error ? "erro" : undefined,
         });
       } catch {
@@ -119,19 +139,22 @@ export function ConversionsPage({
     );
 
     if (!Number.isFinite(value) || value <= 0) {
-      showToast({ message: "Informe um valor maior que zero.", tone: "erro" });
+      showToast({
+        message: `Informe ${costCopy.valueLabel.toLowerCase().replace(" (r$)", "")} maior que zero.`,
+        tone: "erro",
+      });
       return;
     }
 
     startTransition(async () => {
       try {
-        const result = await saveAcquisitionCostAction(costLead.id, value, "BRL");
+        const result = await registerClosedDealAction(costLead.id, value, "BRL");
         if (result.error) {
           showToast({ message: result.error, tone: "erro" });
           return;
         }
         setCostLead(null);
-        showToast({ message: result.success ?? "Valor registrado." });
+        showToast({ message: goalCopy(costLead.goalType).movedMessage });
       } catch {
         showToast({
           message:
@@ -144,6 +167,10 @@ export function ConversionsPage({
 
   const visibleStages = FUNNEL_STAGES.filter(
     (stage) => tab === "todos" || stage.key === tab,
+  );
+  // O modal fala a língua do cliente dono do cartão que está aberto.
+  const costCopy = goalCopy(
+    costLead?.goalType ?? (goalType === "mixed" ? "vehicle_acquisition" : goalType),
   );
 
   return (
@@ -161,7 +188,13 @@ export function ConversionsPage({
         {[
           { label: "Leads no período", value: data.summary.total },
           { label: "Aguardando avaliação", value: data.summary.pending },
-          { label: "Veículos comprados", value: data.summary.closed },
+          {
+            label:
+              goalType === "mixed"
+                ? "Negócios fechados"
+                : goalCopy(goalType).closedMetric,
+            value: data.summary.closed,
+          },
           {
             label: "Taxa de qualificação",
             value: `${data.summary.qualificationRate.toFixed(0)}%`,
@@ -268,7 +301,7 @@ export function ConversionsPage({
           return (
             <section
               key={stage.key}
-              aria-label={stage.label}
+              aria-label={stageLabel(stage.key, goalType)}
               onDragOver={(e) => {
                 if (draggedId && !isPending) {
                   e.preventDefault();
@@ -295,13 +328,15 @@ export function ConversionsPage({
             >
               <div className="mb-4 px-1">
                 <div className="flex items-center justify-between gap-2">
-                  <h2 className="font-semibold">{stage.label}</h2>
+                  <h2 className="font-semibold">
+                    {stageLabel(stage.key, goalType)}
+                  </h2>
                   <span className="rounded-full bg-background px-2.5 py-1 text-xs font-medium">
                     {totals[stage.key]}
                   </span>
                 </div>
                 <p className="mt-2 min-h-10 text-xs leading-5 text-muted-foreground">
-                  {stage.description}
+                  {stageDescription(stage.key, goalType)}
                 </p>
                 {totals[stage.key] > leads.length ? (
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -385,7 +420,7 @@ export function ConversionsPage({
                     {lead.qualification === "fechado" ? (
                       <p className="mt-3 text-sm font-medium">
                         {lead.value !== null ? (
-                          `Valor pago: ${money.format(lead.value)}`
+                          `${goalCopy(lead.goalType).valuePrefix}: ${money.format(lead.value)}`
                         ) : (
                           <button
                             type="button"
@@ -396,7 +431,7 @@ export function ConversionsPage({
                             }}
                             className="text-xs font-normal text-primary underline-offset-4 hover:underline"
                           >
-                            Registrar valor pago (opcional)
+                            {goalCopy(lead.goalType).registerValueCta}
                           </button>
                         )}
                       </p>
@@ -429,7 +464,7 @@ export function ConversionsPage({
                       >
                         {FUNNEL_STAGES.map((s) => (
                           <option key={s.key} value={s.key}>
-                            {s.label}
+                            {stageLabel(s.key, lead.goalType)}
                           </option>
                         ))}
                       </select>
@@ -492,7 +527,7 @@ export function ConversionsPage({
         >
           <div className="flex items-start justify-between gap-3">
             <h2 id="cost-title" className="font-display text-xl font-semibold">
-              Valor pago pelo veículo
+              {costCopy.valueDialogTitle}
             </h2>
             <button
               type="button"
@@ -508,7 +543,7 @@ export function ConversionsPage({
             {costLead?.name || "Lead sem nome"}
           </p>
           <label className="mt-5 block text-sm font-medium">
-            Valor pago (R$)
+            {costCopy.valueLabel}
             <input
               required
               inputMode="decimal"
@@ -520,8 +555,7 @@ export function ConversionsPage({
             />
           </label>
           <p className="mt-3 text-xs leading-5 text-muted-foreground">
-            Este é o custo de aquisição do veículo e fica só no seu controle
-            interno. Ele não é enviado à Meta e não conta como receita.
+            {costCopy.valueHint}
           </p>
           <div className="mt-5 flex justify-end gap-2">
             <button

@@ -65,58 +65,82 @@ Não há n8n em nenhum ponto deste caminho, e nenhuma chamada ao WAHA. É o flux
 de quem já está em `official_meta`; quem ainda está em `legacy_waha` continua
 no caminho antigo, descrito acima.
 
+## Dois modelos de negócio
+
+Conversões não é mais exclusiva de compra de veículos. Cada cliente tem um
+**modelo de conversão** em `clients.conversion_goal_type`, independente do
+segmento — nicho e modelo de conversão são coisas diferentes, e derivar um do
+outro seria frágil.
+
+| Modelo | Quem é | Etapa final | Evento | O que o valor significa |
+| --- | --- | --- | --- | --- |
+| `vehicle_acquisition` | A empresa **compra** do lead (LS Motors) | Veículos comprados | `VehicleAcquired` | **Custo** de aquisição. Fica no CRM, opcional, nunca vai à Meta. |
+| `sale` | A empresa **vende** ao lead (Tráfego Academy) | Vendas realizadas | `Purchase` | **Receita** real. Obrigatório, e vai à Meta em `custom_data`. |
+
+Todo cliente existente permanece em `vehicle_acquisition`. Nada é
+reclassificado, nenhum evento histórico é reenviado.
+
 ## Funil
 
 | Etapa | Evento | Como sai | Quando acontece |
 | --- | --- | --- | --- |
 | Novos leads | `LeadSubmitted` | `business_messaging`, `messaging_channel: whatsapp`, `ctwa_clid` + `whatsapp_business_account_id` | Automático, na chegada do webhook |
 | Qualificados | `QualifiedLead` | idem, com **o mesmo** `ctwa_clid` original | Cliente arrasta o cartão |
-| Veículos comprados | `VehicleAcquired` | `action_source: other`, telefone normalizado em SHA-256 (`ph`) | Cliente arrasta o cartão |
+| Fechamento (`vehicle_acquisition`) | `VehicleAcquired` | `action_source: other`, telefone em SHA-256 (`ph`) | Cliente arrasta o cartão |
+| Fechamento (`sale`) | `Purchase` | `business_messaging`, mesmo `ctwa_clid`, + `custom_data: { currency, value }` | Cliente arrasta o cartão e informa o valor |
 
 `Desqualificado` saiu do produto. O valor do enum continua no banco e as linhas
 históricas continuam existindo; o gatilho recusa qualquer transição **nova** para
 essa etapa e a interface não a mostra. Nada foi apagado.
 
-### Por que `VehicleAcquired` é diferente
+Os três marcos de um mesmo lead carregam **o mesmo `ctwa_clid` original**, do
+clique até a venda. O identificador nunca é gerado, substituído nem removido.
+
+### Por que `VehicleAcquired` e `Purchase` são diferentes
 
 A Conversions API de Business Messaging aceita uma lista fechada de eventos
 (`Purchase, LeadSubmitted, InitiateCheckout, AddToCart, ViewContent,
 OrderCreated, OrderShipped, OrderDelivered, OrderCanceled, OrderReturned,
-CartAbandoned, QualifiedLead, RatingProvided, ReviewProvided`). **Evento
-personalizado não é aceito nesse canal.** Como `VehicleAcquired` é
-personalizado — e o fechamento acontece por contrato, fora da conversa — ele sai
-como evento server-side comum, com `action_source: other` e correspondência por
-telefone. É o mesmo Dataset do cliente; o que muda é o contexto do evento.
+CartAbandoned, QualifiedLead, RatingProvided, ReviewProvided`) e **não aceita
+evento personalizado**.
 
-`Purchase` não é usado: o dinheiro representa o que a empresa **pagou** para
-adquirir o veículo, não receita gerada pelo consumidor.
+- `Purchase` **está** nessa lista. Por isso a venda de um lead originado em
+  Click-to-WhatsApp vai pelo próprio canal de mensagens, com o `ctwa_clid`
+  original e `value`/`currency` em `custom_data` — exatamente como o exemplo
+  oficial mostra. `partner_agent` fica no **nível superior** do corpo, ao lado
+  de `data`, não dentro do evento.
+- `VehicleAcquired` **não está**: é personalizado. E o fechamento acontece por
+  contrato, fora da conversa. Por isso ele sai como evento server-side comum,
+  com `action_source: other` e correspondência por telefone.
 
-**Confirmado:** `VehicleAcquired` é um **evento personalizado** (custom event),
-não um evento padrão da Meta. Ele não existe no catálogo da Meta e não deve ser
-tratado como se existisse. Consequências práticas:
+Como evento personalizado, `VehicleAcquired` não aparece sozinho como opção de
+otimização no Gerenciador de Anúncios: é preciso criar a conversão
+personalizada correspondente no Gerenciador de Eventos, a partir do Dataset
+daquele cliente. `Purchase`, por ser padrão, não precisa disso.
 
-- Vai pela **Conversions API server-side comum**, com `action_source: "other"`,
-  para o mesmo Dataset do cliente — **nunca** com `action_source:
-  "business_messaging"`, que só aceita a lista fechada acima. O código recusa
-  essa combinação em `buildServerEvent`, com teste cobrindo.
-- Como evento personalizado, ele **não aparece sozinho** como opção de
-  otimização no Gerenciador de Anúncios. Para usá-lo em campanha é preciso
-  criar a **conversão personalizada** correspondente no Gerenciador de Eventos,
-  a partir do Dataset daquele cliente.
-- `events_received = 1` significa apenas que a Meta **recebeu** o evento. Não
-  garante atribuição à campanha nem habilita otimização automaticamente.
-- A correspondência é por telefone em SHA-256 (`ph`), sem `ctwa_clid` — porque
-  o fechamento ocorre fora da conversa. Isso tende a atribuir menos do que os
-  eventos de mensagem, e é esperado.
+`Purchase` nunca é criado automaticamente por qualificação, nem com valor
+inferido de orçamento ou ticket médio. Ele só existe quando alguém registra uma
+venda com valor.
+
+### Venda sem vínculo com anúncio
+
+Um lead sem `ctwa_clid` não recebe identificador falso, em nenhuma hipótese. A
+venda é registrada internamente e o evento fica como *"Registrado — sem
+atribuição de anúncio"*. Atribuição inventada é pior do que atribuição ausente.
 
 ### O que nunca é enviado à Meta
 
-Valor pago, dívida, parcelas, condição financeira, placa, RENAJUD, dados do
-veículo, informações jurídicas e observações internas. O payload de mensagens
-leva só `ctwa_clid` + WABA; o de aquisição leva só o telefone em hash. Há teste
-automatizado para isso (`tests/conversion-payload.test.mjs`).
+Dívida, parcelas, condição financeira, placa, RENAJUD, dados do veículo,
+informações jurídicas e observações internas — em nenhum dos dois modelos.
 
-O valor pago continua no CRM, é **opcional** e não é exigido para mover o cartão.
+O **custo de aquisição de veículo** também nunca sai: o payload de
+`VehicleAcquired` leva só o telefone em hash, e `custom_data` fica nulo mesmo
+que a fila traga um valor. Já o **valor de uma venda** é receita legítima e vai
+em `custom_data` do `Purchase`. Há teste automatizado para os dois casos
+(`tests/conversion-payload.test.mjs`).
+
+Para `vehicle_acquisition`, o valor é **opcional** e pode ser registrado depois.
+Para `sale`, é **obrigatório** — o gatilho recusa o fechamento sem ele.
 
 ## Isolamento entre clientes
 
@@ -334,7 +358,17 @@ reconectar.
 
 ### 7. Migração do banco
 
-Aplique `supabase/migrations/20260924210000_official_whatsapp_conversions.sql`
+**Já aplicada:** `20260924210000_official_whatsapp_conversions.sql`.
+
+**A aplicar:** `supabase/migrations/20260925000000_conversion_goal_types.sql`.
+Também aditiva: acrescenta `clients.conversion_goal_type` (padrão
+`vehicle_acquisition`), `private.conversion_events.custom_data`, e atualiza os
+gatilhos e RPCs. Não toca em `waha_ingest_lead`, em `leads_webhook_url` nem em
+nenhum evento já enfileirado. Depois dela,
+`select conversion_pipeline_version()` retorna **4**.
+
+Referência da migração anterior — aplique
+`supabase/migrations/20260924210000_official_whatsapp_conversions.sql`
 no projeto correto, depois das anteriores, numa transação. Ela:
 
 - cria `client_whatsapp_connections` e `private.client_whatsapp_credentials`;

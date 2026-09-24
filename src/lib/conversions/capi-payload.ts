@@ -13,8 +13,19 @@
 //     receita ou custom_data. Dívida, parcelas, placa, condição financeira e
 //     observações internas jamais entram no payload.
 
-export const MESSAGING_EVENTS = ["LeadSubmitted", "QualifiedLead"] as const;
+// Allowlist estrita. A CAPI de Business Messaging aceita uma lista fechada de
+// eventos e NÃO aceita evento personalizado; Purchase está nessa lista oficial.
+// VehicleAcquired é personalizado e por isso só existe fora desse canal.
+export const MESSAGING_EVENTS = [
+  "LeadSubmitted",
+  "QualifiedLead",
+  "Purchase",
+] as const;
 export const OFFLINE_EVENTS = ["VehicleAcquired"] as const;
+
+// Só o fechamento de quem VENDE carrega dinheiro. O custo de aquisição de um
+// veículo nunca vira receita, então nenhum outro evento aceita custom_data.
+const EVENTS_WITH_VALUE = ["Purchase"] as const;
 
 // Identifica a integração para a Meta, como a documentação recomenda.
 export const PARTNER_AGENT = "trafegoacademy-dashboard";
@@ -29,6 +40,7 @@ export type QueueRow = {
   event_time: number | string;
   action_source: string;
   user_data: Record<string, unknown> | null;
+  custom_data?: Record<string, unknown> | null;
   tentativas?: number;
   credential_source?: string | null;
 };
@@ -39,8 +51,8 @@ export type ServerEvent = {
   event_id: string;
   action_source: string;
   messaging_channel?: string;
-  partner_agent: string;
   user_data: Record<string, unknown>;
+  custom_data?: { currency: string; value: number };
 };
 
 export class PayloadRejected extends Error {
@@ -95,16 +107,35 @@ export function buildServerEvent(row: QueueRow): ServerEvent {
       throw new PayloadRejected(`Evento ${row.event_id} sem WABA de origem.`);
     }
 
-    return {
+    const event: ServerEvent = {
       event_name: row.event_name,
       event_time: eventTime,
       event_id: row.event_id,
       action_source: "business_messaging",
       messaging_channel: "whatsapp",
-      partner_agent: PARTNER_AGENT,
       // Só os identificadores do anúncio. Nada do CRM viaja junto.
       user_data: { ctwa_clid: clickId, whatsapp_business_account_id: waba },
     };
+
+    if ((EVENTS_WITH_VALUE as readonly string[]).includes(row.event_name)) {
+      const custom = row.custom_data ?? {};
+      const value = Number(custom.value);
+      const currency = String(custom.currency ?? "");
+
+      if (!Number.isFinite(value) || value <= 0) {
+        throw new PayloadRejected(
+          `Evento ${row.event_id} sem valor de venda válido.`,
+        );
+      }
+
+      if (!/^[A-Z]{3}$/.test(currency)) {
+        throw new PayloadRejected(`Evento ${row.event_id} sem moeda válida.`);
+      }
+
+      event.custom_data = { currency, value };
+    }
+
+    return event;
   }
 
   const hashes = source.ph;
@@ -119,18 +150,20 @@ export function buildServerEvent(row: QueueRow): ServerEvent {
     );
   }
 
+  // Aquisição de veículo: nenhum valor acompanha o evento, em nenhuma hipótese.
   return {
     event_name: row.event_name,
     event_time: eventTime,
     event_id: row.event_id,
     action_source: "other",
-    partner_agent: PARTNER_AGENT,
     user_data: { ph: hashes },
   };
 }
 
+// `partner_agent` fica no nível superior do corpo, ao lado de `data`, como o
+// exemplo oficial da Conversions API para Business Messaging mostra.
 export function buildRequestBody(row: QueueRow) {
-  return { data: [buildServerEvent(row)] };
+  return { data: [buildServerEvent(row)], partner_agent: PARTNER_AGENT };
 }
 
 export type MetaOutcome = {

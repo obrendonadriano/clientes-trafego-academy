@@ -11,6 +11,10 @@ import type {
   ClientConnection,
   ConnectionStatus,
 } from "@/lib/conversions/connection-shared";
+import {
+  toConversionGoalType,
+  type ConversionGoalType,
+} from "@/lib/conversions/shared";
 import type { User } from "@/lib/types";
 
 // Leitura da conexão oficial. A do cliente passa pela sessão autenticada, para
@@ -108,6 +112,8 @@ export type AdminConnectionRow = {
   eventosComErro: number;
   // De onde vêm os leads deste cliente durante a migração.
   ingestMode: "legacy_waha" | "official_meta";
+  // Modelo de conversão: decide o evento do fechamento.
+  goalType: ConversionGoalType;
 };
 
 export type AdminConnectionOverview = {
@@ -137,6 +143,7 @@ type StatusRow = {
   leads_na_fila: number | null;
   eventos_com_erro: number | null;
   ingest_mode: string | null;
+  goal_type: string | null;
 };
 
 export async function getAdminConnectionOverview(): Promise<AdminConnectionOverview> {
@@ -184,6 +191,7 @@ export async function getAdminConnectionOverview(): Promise<AdminConnectionOverv
       eventosComErro: Number(row.eventos_com_erro ?? 0),
       ingestMode:
         row.ingest_mode === "official_meta" ? "official_meta" : "legacy_waha",
+      goalType: toConversionGoalType(row.goal_type),
     })),
   };
 }

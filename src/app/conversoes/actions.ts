@@ -40,10 +40,12 @@ function revalidateConversions() {
   revalidatePath("/dashboard/conversoes");
 }
 
+// O texto do fechamento depende do modelo do cliente e quem sabe disso é a
+// tela, que conhece o lead. Aqui fica só o que vale para os dois modelos.
 const STAGE_FEEDBACK: Record<FunnelStage, string> = {
   pendente: "Lead devolvido para novos leads.",
   qualificado: "Lead qualificado.",
-  fechado: "Veículo comprado registrado.",
+  fechado: "Fechamento registrado.",
 };
 
 // Move um ou mais leads de etapa.
@@ -123,9 +125,16 @@ export async function moveLeadsAction(
   };
 }
 
-// Valor pago pelo veículo: custo de aquisição que fica no CRM. Não é exigido
-// para mover o cartão, não é receita e nunca é enviado à Meta.
-export async function saveAcquisitionCostAction(
+// Registra o fechamento com valor.
+//
+// O significado do valor depende do modelo do cliente, e quem decide isso é o
+// banco — não este arquivo:
+//   vehicle_acquisition  custo de aquisição. Fica no CRM, nunca vai à Meta.
+//   sale                 receita da venda. Vira custom_data do Purchase.
+//
+// Para quem vende, o valor é obrigatório: o gatilho recusa o fechamento sem
+// ele. A validação aqui é a primeira barreira, não a única.
+export async function registerClosedDealAction(
   leadId: string,
   value: number,
   currency = "BRL",
@@ -144,6 +153,10 @@ export async function saveAcquisitionCostAction(
     return { error: "Informe um valor maior que zero." };
   }
 
+  // Dinheiro é gravado com duas casas: nada de centavo fracionado vindo de
+  // uma conversão de vírgula mal feita no navegador.
+  const amount = Math.round(value * 100) / 100;
+
   const normalizedCurrency = currency.trim().toUpperCase();
 
   if (!/^[A-Z]{3}$/.test(normalizedCurrency)) {
@@ -160,7 +173,7 @@ export async function saveAcquisitionCostAction(
     .from("conversion_leads")
     .update({
       qualificacao: "fechado" satisfies LeadQualification,
-      valor: value,
+      valor: amount,
       moeda: normalizedCurrency,
     })
     .eq("id", leadId);
@@ -185,7 +198,7 @@ export async function saveAcquisitionCostAction(
   revalidateConversions();
   after(() => dispatchQuietly());
 
-  return { success: "Veículo comprado registrado." };
+  return { success: "Fechamento registrado." };
 }
 
 export async function saveLeadNoteAction(

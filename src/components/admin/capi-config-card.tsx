@@ -14,12 +14,18 @@ import { FormPendingButton } from "@/components/ui/form-pending-button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 
+import type { ConversionGoalType } from "@/lib/conversions/shared";
+
 export type CapiConfig = {
   clientId: string;
   datasetId: string;
   wabaId: string;
   capiAtivo: boolean;
   tokenConfigurado: boolean;
+  goalType: ConversionGoalType;
+  // Trocar o modelo de conversão com fechamentos já registrados pede
+  // confirmação explícita do administrador.
+  hasConversionHistory: boolean;
 };
 
 const initialState: CapiConfigState = {};
