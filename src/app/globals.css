@@ -78,6 +78,46 @@
   * {
     border-color: var(--border);
   }
+
+  /* O Preflight do Tailwind v4 passou a usar `cursor: default` em botões, o
+     que deixa a interface com cara de texto em vez de algo clicável. Aqui a
+     mãozinha volta para tudo que realmente responde ao clique.
+
+     Fica na camada `base` de propósito: qualquer `cursor-*` escrito no
+     componente continua vencendo (o arrastar do Kanban, por exemplo). */
+  button,
+  summary,
+  select,
+  a[href],
+  /* Só o rótulo que alterna algo. O rótulo de um campo de texto continua com
+     cursor de texto, porque é isso que ele é. */
+  label:has(input[type="checkbox"]),
+  label:has(input[type="radio"]),
+  label:has(select),
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="option"],
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="file"],
+  input[type="color"],
+  input[type="range"],
+  input[type="submit"],
+  input[type="reset"] {
+    cursor: pointer;
+  }
+
+  /* Desabilitado não é clicável: o cursor precisa dizer isso antes do clique,
+     não só a opacidade. */
+  button:disabled,
+  select:disabled,
+  textarea:disabled,
+  input:disabled,
+  fieldset:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
 }
 
 html {
