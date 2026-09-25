@@ -1,4 +1,5 @@
 import "server-only";
+import { EMPTY_KNOWLEDGE, DEFAULT_SCHEDULE } from "@/lib/ai-agent/config";
 
 import { DEFAULT_AI_PROMPT } from "@/lib/ai-agent/prompt";
 import {
@@ -51,6 +52,8 @@ function fallbackSettings(clientId: string): AiAgentSettings {
     debounceMs: AI_AGENT_DEFAULTS.debounceMs,
     timezone: AI_AGENT_DEFAULTS.timezone,
     disabledByPlanAt: null,
+    knowledge: EMPTY_KNOWLEDGE,
+    businessSchedule: DEFAULT_SCHEDULE,
   };
 }
 

@@ -1,3 +1,4 @@
+import type { AiKnowledge, AiSchedule } from "./config";
 // Tipos e regras do atendimento por IA que rodam nos dois lados (servidor e
 // navegador). Nada aqui pode importar "server-only" nem tocar no Supabase.
 
@@ -65,6 +66,8 @@ export type AiAgentSettings = {
   debounceMs: number;
   timezone: string;
   disabledByPlanAt: string | null;
+  knowledge: AiKnowledge;
+  businessSchedule: AiSchedule;
 };
 
 export type AiConversationSummary = {
@@ -88,6 +91,9 @@ export type AiConversationSummary = {
   lastInboundAt: string | null;
   createdAt: string;
   updatedAt: string;
+  processingState: string;
+  lastError: string | null;
+  whatsappDisplayName: string | null;
 };
 
 export type AiConversationMessage = {
@@ -97,6 +103,7 @@ export type AiConversationMessage = {
   status: string;
   createdAt: string;
   sentAt: string | null;
+  senderType: "lead" | "ai" | "human";
 };
 
 // Valores padrão exigidos pela especificação: IA desligada, atendimento 24h,
@@ -106,10 +113,10 @@ export const AI_AGENT_DEFAULTS = {
   alwaysOn: true,
   typingEnabled: true,
   notifyQualified: true,
-  delayMinMs: 2000,
-  delayMaxMs: 5000,
-  messageGapMinMs: 1000,
-  messageGapMaxMs: 3000,
+  delayMinMs: 1500,
+  delayMaxMs: 4000,
+  messageGapMinMs: 800,
+  messageGapMaxMs: 2200,
   debounceMs: 3000,
   timezone: "America/Sao_Paulo",
 } as const;
@@ -130,20 +137,14 @@ export const AI_AGENT_LIMITS = {
 // DDDs realmente em uso no Brasil (Anatel). Serve para recusar "(00) ..." e
 // afins antes de gravar um número que nunca receberia a notificação.
 const VALID_AREA_CODES = new Set([
-  11, 12, 13, 14, 15, 16, 17, 18, 19,
-  21, 22, 24, 27, 28,
-  31, 32, 33, 34, 35, 37, 38,
-  41, 42, 43, 44, 45, 46, 47, 48, 49,
-  51, 53, 54, 55,
-  61, 62, 63, 64, 65, 66, 67, 68, 69,
-  71, 73, 74, 75, 77, 79,
-  81, 82, 83, 84, 85, 86, 87, 88, 89,
-  91, 92, 93, 94, 95, 96, 97, 98, 99,
+  11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 27, 28, 31, 32, 33, 34, 35,
+  37, 38, 41, 42, 43, 44, 45, 46, 47, 48, 49, 51, 53, 54, 55, 61, 62, 63, 64,
+  65, 66, 67, 68, 69, 71, 73, 74, 75, 77, 79, 81, 82, 83, 84, 85, 86, 87, 88,
+  89, 91, 92, 93, 94, 95, 96, 97, 98, 99,
 ]);
 
 export type PhoneNormalizationResult =
-  | { ok: true; value: string }
-  | { ok: false; error: string };
+  { ok: true; value: string } | { ok: false; error: string };
 
 const INVALID_PHONE_MESSAGE =
   "Número de WhatsApp inválido. Verifique o DDD e o telefone informado.";
@@ -204,9 +205,8 @@ export function formatBrazilianWhatsapp(value: string | null | undefined) {
   }
 
   const digits = value.replace(/\D/g, "");
-  const local = digits.startsWith("55") && digits.length > 11
-    ? digits.slice(2)
-    : digits;
+  const local =
+    digits.startsWith("55") && digits.length > 11 ? digits.slice(2) : digits;
 
   if (local.length === 11) {
     return local.replace(/^(\d{2})(\d{5})(\d{4})$/, "($1) $2-$3");

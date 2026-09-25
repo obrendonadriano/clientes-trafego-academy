@@ -3,6 +3,14 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { DEFAULT_AI_PROMPT } from "@/lib/ai-agent/prompt";
 import {
+  knowledgeSchema,
+  scheduleSchema,
+  EMPTY_KNOWLEDGE,
+  DEFAULT_SCHEDULE,
+  type AiKnowledge,
+  type AiSchedule,
+} from "./config";
+import {
   AI_AGENT_DEFAULTS,
   isAiLeadStatus,
   toClientPlanType,
@@ -37,12 +45,14 @@ export function aiAdminClient() {
 }
 
 const SETTINGS_COLUMNS =
-  "client_id, enabled, prompt, notification_whatsapp, always_on, typing_enabled, notify_qualified, delay_min_ms, delay_max_ms, message_gap_min_ms, message_gap_max_ms, debounce_ms, timezone, disabled_by_plan_at";
+  "client_id, enabled, prompt, notification_whatsapp, always_on, typing_enabled, notify_qualified, delay_min_ms, delay_max_ms, message_gap_min_ms, message_gap_max_ms, debounce_ms, timezone, disabled_by_plan_at, knowledge, business_schedule";
 
 const CONVERSATION_COLUMNS =
-  "id, client_id, whatsapp_number, chat_id, name, status, vehicle, vehicle_year, financed, bank, debt_amount, has_overdue_installments, overdue_installments_count, unknown_fields, extra_data, disqualification_reason, qualified_at, notification_sent, notification_sent_at, human_takeover, human_takeover_requested, last_inbound_at, last_outbound_at, last_error, criado_em, atualizado_em";
+  "id, client_id, whatsapp_number, chat_id, name, status, vehicle, vehicle_year, financed, bank, debt_amount, has_overdue_installments, overdue_installments_count, unknown_fields, extra_data, disqualification_reason, qualified_at, notification_sent, notification_sent_at, human_takeover, human_takeover_requested, last_inbound_at, last_outbound_at, last_error, criado_em, atualizado_em, revision, processing_state, whatsapp_display_name, last_question, off_hours_period";
 
 type SettingsRow = {
+  knowledge: unknown;
+  business_schedule: unknown;
   client_id: string;
   enabled: boolean;
   prompt: string | null;
@@ -60,6 +70,11 @@ type SettingsRow = {
 };
 
 export type ConversationRow = {
+  revision: number;
+  processing_state: string;
+  whatsapp_display_name: string | null;
+  last_question: string | null;
+  off_hours_period: string | null;
   id: string;
   client_id: string;
   whatsapp_number: string;
@@ -104,6 +119,9 @@ function mapSettings(row: SettingsRow): AiAgentSettings {
     debounceMs: row.debounce_ms,
     timezone: row.timezone || AI_AGENT_DEFAULTS.timezone,
     disabledByPlanAt: row.disabled_by_plan_at,
+    knowledge: knowledgeSchema.safeParse(row.knowledge).data ?? EMPTY_KNOWLEDGE,
+    businessSchedule:
+      scheduleSchema.safeParse(row.business_schedule).data ?? DEFAULT_SCHEDULE,
   };
 }
 
@@ -129,6 +147,9 @@ export function mapConversation(row: ConversationRow): AiConversationSummary {
     lastInboundAt: row.last_inbound_at,
     createdAt: row.criado_em,
     updatedAt: row.atualizado_em,
+    processingState: row.processing_state,
+    lastError: row.last_error,
+    whatsappDisplayName: row.whatsapp_display_name,
   };
 }
 
@@ -189,22 +210,20 @@ export async function ensureAiAgentSettings(clientId: string) {
     return current;
   }
 
-  const { error } = await aiAdminClient()
-    .from("ai_agent_settings")
-    .insert({
-      client_id: clientId,
-      enabled: false,
-      prompt: DEFAULT_AI_PROMPT,
-      always_on: AI_AGENT_DEFAULTS.alwaysOn,
-      typing_enabled: AI_AGENT_DEFAULTS.typingEnabled,
-      notify_qualified: AI_AGENT_DEFAULTS.notifyQualified,
-      delay_min_ms: AI_AGENT_DEFAULTS.delayMinMs,
-      delay_max_ms: AI_AGENT_DEFAULTS.delayMaxMs,
-      message_gap_min_ms: AI_AGENT_DEFAULTS.messageGapMinMs,
-      message_gap_max_ms: AI_AGENT_DEFAULTS.messageGapMaxMs,
-      debounce_ms: AI_AGENT_DEFAULTS.debounceMs,
-      timezone: AI_AGENT_DEFAULTS.timezone,
-    });
+  const { error } = await aiAdminClient().from("ai_agent_settings").insert({
+    client_id: clientId,
+    enabled: false,
+    prompt: DEFAULT_AI_PROMPT,
+    always_on: AI_AGENT_DEFAULTS.alwaysOn,
+    typing_enabled: AI_AGENT_DEFAULTS.typingEnabled,
+    notify_qualified: AI_AGENT_DEFAULTS.notifyQualified,
+    delay_min_ms: AI_AGENT_DEFAULTS.delayMinMs,
+    delay_max_ms: AI_AGENT_DEFAULTS.delayMaxMs,
+    message_gap_min_ms: AI_AGENT_DEFAULTS.messageGapMinMs,
+    message_gap_max_ms: AI_AGENT_DEFAULTS.messageGapMaxMs,
+    debounce_ms: AI_AGENT_DEFAULTS.debounceMs,
+    timezone: AI_AGENT_DEFAULTS.timezone,
+  });
 
   // 23505: outra requisição criou a mesma linha no meio do caminho.
   if (error && error.code !== "23505") {
@@ -221,6 +240,8 @@ export async function ensureAiAgentSettings(clientId: string) {
 }
 
 export type AiAgentSettingsPatch = Partial<{
+  knowledge: AiKnowledge;
+  business_schedule: AiSchedule;
   enabled: boolean;
   prompt: string;
   notification_whatsapp: string | null;
@@ -340,7 +361,10 @@ export async function getSessionForClient(clientId: string) {
 // Conversas
 // ---------------------------------------------------------------------------
 
-export async function findConversation(clientId: string, whatsappNumber: string) {
+export async function findConversation(
+  clientId: string,
+  whatsappNumber: string,
+) {
   const { data, error } = await aiAdminClient()
     .from("ai_conversations")
     .select(CONVERSATION_COLUMNS)
@@ -373,102 +397,11 @@ export async function findConversationById(
   return (data as ConversationRow | null) ?? null;
 }
 
-export async function getOrCreateConversation(input: {
-  clientId: string;
-  whatsappNumber: string;
-  chatId: string;
-  name?: string | null;
-}) {
-  const existing = await findConversation(input.clientId, input.whatsappNumber);
-
-  if (existing) {
-    return existing;
-  }
-
-  const { error } = await aiAdminClient().from("ai_conversations").insert({
-    client_id: input.clientId,
-    whatsapp_number: input.whatsappNumber,
-    chat_id: input.chatId,
-    name: input.name?.trim() || null,
-    status: "new",
-  });
-
-  if (error && error.code !== "23505") {
-    throw new AiAgentError("Não foi possível abrir a conversa do lead.");
-  }
-
-  const created = await findConversation(input.clientId, input.whatsappNumber);
-
-  if (!created) {
-    throw new AiAgentError("Não foi possível abrir a conversa do lead.");
-  }
-
-  return created;
-}
-
-export type ConversationPatch = Partial<{
-  name: string | null;
-  status: AiLeadStatus;
-  vehicle: string | null;
-  vehicle_year: number | null;
-  financed: boolean | null;
-  bank: string | null;
-  debt_amount: number | null;
-  has_overdue_installments: boolean | null;
-  overdue_installments_count: number | null;
-  unknown_fields: string[];
-  extra_data: Record<string, unknown>;
-  disqualification_reason: string | null;
-  qualified_at: string | null;
-  notification_sent: boolean;
-  notification_sent_at: string | null;
-  human_takeover: boolean;
-  human_takeover_requested: boolean;
-  last_inbound_at: string | null;
-  last_outbound_at: string | null;
-  processing_claimed_at: string | null;
-  last_error: string | null;
-}>;
-
-export async function updateConversation(
-  conversationId: string,
-  patch: ConversationPatch,
-) {
-  const { error } = await aiAdminClient()
-    .from("ai_conversations")
-    .update(patch)
-    .eq("id", conversationId);
-
-  if (error) {
-    throw new AiAgentError("Não foi possível atualizar a conversa.");
-  }
-}
-
-/** Reserva a conversa. Retorna false quando outra execução já está rodando. */
-export async function claimConversation(conversationId: string) {
-  const { data, error } = await aiAdminClient().rpc("ai_claim_conversation", {
-    p_conversation_id: conversationId,
-  });
-
-  if (error) {
-    throw new AiAgentError("Não foi possível reservar a conversa.");
-  }
-
-  return data === true;
-}
-
-export async function releaseConversation(conversationId: string) {
-  await aiAdminClient()
-    .from("ai_conversations")
-    .update({ processing_claimed_at: null })
-    .eq("id", conversationId);
-}
-
-// ---------------------------------------------------------------------------
-// Mensagens
-// ---------------------------------------------------------------------------
-
 export type MessageRow = {
+  closed_period: string | null;
+  revision: number;
+  sender_type: "lead" | "ai" | "human";
+  media_kind: "text" | "audio" | "image" | "document";
   id: string;
   conversation_id: string;
   client_id: string;
@@ -485,37 +418,7 @@ export type MessageRow = {
 };
 
 const MESSAGE_COLUMNS =
-  "id, conversation_id, client_id, direction, status, body, provider_message_id, run_id, sequence, delay_ms, typing_started_at, sent_at, criado_em";
-
-/**
- * Grava a mensagem recebida. Retorna `false` quando o mesmo id já existia —
- * é o que torna o webhook idempotente contra entregas repetidas.
- */
-export async function recordInboundMessage(input: {
-  conversationId: string;
-  clientId: string;
-  body: string;
-  providerMessageId: string | null;
-}) {
-  const { error } = await aiAdminClient().from("ai_messages").insert({
-    conversation_id: input.conversationId,
-    client_id: input.clientId,
-    direction: "inbound",
-    status: "received",
-    body: input.body,
-    provider_message_id: input.providerMessageId,
-  });
-
-  if (error) {
-    if (error.code === "23505") {
-      return false;
-    }
-
-    throw new AiAgentError("Não foi possível registrar a mensagem recebida.");
-  }
-
-  return true;
-}
+  "id, conversation_id, client_id, direction, status, body, provider_message_id, run_id, sequence, delay_ms, typing_started_at, sent_at, criado_em, revision, sender_type, media_kind, closed_period";
 
 export async function getUnprocessedInbound(conversationId: string) {
   const { data, error } = await aiAdminClient()
@@ -525,35 +428,13 @@ export async function getUnprocessedInbound(conversationId: string) {
     .eq("direction", "inbound")
     .eq("status", "received")
     .order("criado_em", { ascending: true })
-    .limit(30);
+    .limit(31);
 
   if (error) {
     throw new AiAgentError("Não foi possível ler as mensagens pendentes.");
   }
 
   return (data as MessageRow[] | null) ?? [];
-}
-
-export async function markInboundProcessed(messageIds: string[]) {
-  if (messageIds.length === 0) {
-    return;
-  }
-
-  await aiAdminClient()
-    .from("ai_messages")
-    .update({ status: "processed" })
-    .in("id", messageIds);
-}
-
-export async function markInboundIgnored(messageIds: string[]) {
-  if (messageIds.length === 0) {
-    return;
-  }
-
-  await aiAdminClient()
-    .from("ai_messages")
-    .update({ status: "ignored" })
-    .in("id", messageIds);
 }
 
 /**
@@ -573,40 +454,12 @@ export async function getRecentMessages(conversationId: string, limit = 20) {
     .limit(limit);
 
   if (error) {
-    throw new AiAgentError("Não foi possível carregar o histórico da conversa.");
+    throw new AiAgentError(
+      "Não foi possível carregar o histórico da conversa.",
+    );
   }
 
   return ((data as MessageRow[] | null) ?? []).reverse();
-}
-
-export async function queueOutboundMessages(input: {
-  conversationId: string;
-  clientId: string;
-  runId: string;
-  messages: { body: string; delayMs: number }[];
-}) {
-  if (input.messages.length === 0) {
-    return;
-  }
-
-  const { error } = await aiAdminClient()
-    .from("ai_messages")
-    .insert(
-      input.messages.map((message, index) => ({
-        conversation_id: input.conversationId,
-        client_id: input.clientId,
-        direction: "outbound",
-        status: "queued",
-        body: message.body,
-        run_id: input.runId,
-        sequence: index,
-        delay_ms: message.delayMs,
-      })),
-    );
-
-  if (error) {
-    throw new AiAgentError("Não foi possível enfileirar a resposta da IA.");
-  }
 }
 
 /** Próxima mensagem a tratar na fila de saída (aguardando ou digitando). */
@@ -629,29 +482,6 @@ export async function getNextOutboundMessage(conversationId: string) {
   return (data as MessageRow | null) ?? null;
 }
 
-export async function updateMessageStatus(
-  messageId: string,
-  patch: Partial<{
-    status: string;
-    provider_message_id: string | null;
-    typing_started_at: string | null;
-    sent_at: string | null;
-  }>,
-) {
-  await aiAdminClient().from("ai_messages").update(patch).eq("id", messageId);
-}
-
-/** Descarta a fila pendente — usado quando o humano assume a conversa. */
-export async function discardQueuedMessages(conversationId: string) {
-  await aiAdminClient()
-    .from("ai_messages")
-    .update({ status: "failed" })
-    .eq("conversation_id", conversationId)
-    .eq("direction", "outbound")
-    .in("status", ["queued", "typing"]);
-}
-
-// ---------------------------------------------------------------------------
 // Leituras para o painel
 // ---------------------------------------------------------------------------
 
@@ -688,7 +518,7 @@ export async function listConversationMessages(
     .from("ai_messages")
     .select(MESSAGE_COLUMNS)
     .eq("conversation_id", conversationId)
-    .order("criado_em", { ascending: true })
+    .order("criado_em", { ascending: false })
     .limit(limit);
 
   if (error) {
@@ -696,7 +526,13 @@ export async function listConversationMessages(
   }
 
   return ((data as MessageRow[] | null) ?? [])
-    .filter((row) => row.status !== "failed" && row.status !== "ignored")
+    .reverse()
+    .filter(
+      (row) =>
+        row.direction === "inbound" ||
+        row.status === "sent" ||
+        row.status === "delivery_unknown",
+    )
     .map((row) => ({
       id: row.id,
       direction: row.direction,
@@ -704,6 +540,7 @@ export async function listConversationMessages(
       status: row.status,
       createdAt: row.criado_em,
       sentAt: row.sent_at,
+      senderType: row.sender_type,
     }));
 }
 

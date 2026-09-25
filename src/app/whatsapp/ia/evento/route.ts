@@ -32,7 +32,9 @@ export async function POST(request: Request) {
 function aiErrorResponse(scope: string, error: unknown) {
   const status = error instanceof AiAgentError ? error.status : 500;
   const message =
-    error instanceof Error ? error.message : "Falha ao processar o evento.";
+    error instanceof AiAgentError
+      ? error.message
+      : "Falha ao processar o evento.";
 
   // Log interno sem telefone, prompt ou conteúdo de conversa.
   console.error(`[${scope}] falha`, { status, message });

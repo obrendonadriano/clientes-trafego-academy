@@ -13,10 +13,7 @@
       "name": "Webhook Atendimento IA",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [
-        -960,
-        300
-      ],
+      "position": [-960, 300],
       "webhookId": "waha-atendimento-ia-trafego-academy"
     },
     {
@@ -29,92 +26,23 @@
       "name": "Responder 200 imediato",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [
-        -740,
-        300
-      ]
+      "position": [-740, 300]
     },
     {
       "parameters": {
-        "jsCode": "// Le o evento \"message\" do WAHA e reduz ao minimo necessario.\n// Nada de conteudo extra entra no historico de execucao do n8n.\nconst body = $json.body ?? $json;\nconst payload = body.payload ?? {};\nconst data = payload._data ?? {};\n\nconst chatId = payload.from ?? '';\nconst texto = payload.body ?? payload.caption ?? '';\n\nreturn [{\n  json: {\n    session: body.session ?? '',\n    chatId,\n    messageId: payload.id ?? '',\n    fromMe: payload.fromMe === true || data.fromMe === true,\n    body: texto,\n    notifyName: data.notifyName ?? null,\n    // So conversa individual vira lead: grupo, status e newsletter ficam fora.\n    ehContatoIndividual: typeof chatId === 'string' && chatId.endsWith('@c.us'),\n    temTexto: typeof texto === 'string' && texto.trim().length > 0,\n  },\n}];"
+        "jsCode": "// Minimal transport; the dashboard validates, routes and decides.\nconst root = $json.body ?? $json;\nconst p = root.payload ?? root;\nconst d = p._data ?? {};\nconst fromMe = p.fromMe === true || d.fromMe === true;\nconst id = p.id ?? root.messageId;\nconst mime = p.media?.mimetype ?? '';\nconst type = p.type ?? d.type;\nreturn [{ json: {\n  session: root.session ?? root.sessionName,\n  event: root.event ?? 'message.any',\n  chatId: root.chatId ?? (fromMe ? p.to : p.from),\n  messageId: typeof id === 'string' ? id : (id?._serialized ?? id?.id),\n  fromMe, body: p.body ?? p.caption ?? '',\n  notifyName: d.notifyName ?? p.notifyName ?? null,\n  timestamp: p.timestamp ?? null,\n  mediaKind: mime.startsWith('audio/') || ['ptt','audio','voice'].includes(type) ? 'audio' : mime.startsWith('image/') || type === 'image' ? 'image' : p.hasMedia ? 'document' : 'text',\n} }];"
       },
       "id": "c3000000-0000-4000-8000-000000000003",
       "name": "Preparar evento",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        -520,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "f-nao-e-minha",
-              "leftValue": "={{ $json.fromMe }}",
-              "rightValue": false,
-              "operator": {
-                "type": "boolean",
-                "operation": "false",
-                "singleValue": true
-              }
-            },
-            {
-              "id": "f-individual",
-              "leftValue": "={{ $json.ehContatoIndividual }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            },
-            {
-              "id": "f-tem-texto",
-              "leftValue": "={{ $json.temTexto }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            },
-            {
-              "id": "f-sessao",
-              "leftValue": "={{ $json.session }}",
-              "rightValue": "",
-              "operator": {
-                "type": "string",
-                "operation": "notEmpty",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "c3000000-0000-4000-8000-000000000004",
-      "name": "Mensagem do lead?",
-      "type": "n8n-nodes-base.filter",
-      "typeVersion": 2.2,
-      "position": [
-        -300,
-        300
-      ]
+      "position": [-520, 300]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "https://dashboard.trafegoacademy.online/whatsapp/ia/evento",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "httpHeaderAuth",
+        "authentication": "genericCredentialType",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -126,19 +54,17 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ session: $json.session, chatId: $json.chatId, messageId: $json.messageId, fromMe: $json.fromMe, body: $json.body, notifyName: $json.notifyName }) }}",
+        "jsonBody": "={{ JSON.stringify($json) }}",
         "options": {
           "timeout": 30000
-        }
+        },
+        "genericAuthType": "httpHeaderAuth"
       },
       "id": "c3000000-0000-4000-8000-000000000005",
       "name": "Registrar mensagem no dashboard",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        -80,
-        300
-      ],
+      "position": [-80, 300],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000
@@ -169,10 +95,7 @@
       "name": "A IA deve responder?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [
-        140,
-        300
-      ]
+      "position": [140, 300]
     },
     {
       "parameters": {
@@ -183,18 +106,14 @@
       "name": "Agrupar mensagens (debounce)",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [
-        360,
-        220
-      ],
+      "position": [360, 220],
       "webhookId": "waha-ia-debounce"
     },
     {
       "parameters": {
         "method": "POST",
         "url": "https://dashboard.trafegoacademy.online/whatsapp/ia/passo",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "httpHeaderAuth",
+        "authentication": "genericCredentialType",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -208,17 +127,15 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ sessionName: $json.sessionName, chatId: $json.chatId }) }}",
         "options": {
-          "timeout": 60000
-        }
+          "timeout": 165000
+        },
+        "genericAuthType": "httpHeaderAuth"
       },
       "id": "c3000000-0000-4000-8000-000000000008",
       "name": "Avancar conversa",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        580,
-        220
-      ],
+      "position": [580, 220],
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 5000
@@ -243,7 +160,7 @@
             {
               "id": "i-limite",
               "leftValue": "={{ $runIndex }}",
-              "rightValue": 40,
+              "rightValue": 120,
               "operator": {
                 "type": "number",
                 "operation": "lt"
@@ -258,10 +175,7 @@
       "name": "Tem proximo passo?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [
-        800,
-        220
-      ]
+      "position": [800, 220]
     },
     {
       "parameters": {
@@ -272,10 +186,7 @@
       "name": "Esperar (delay humanizado)",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [
-        580,
-        400
-      ],
+      "position": [580, 400],
       "webhookId": "waha-ia-delay"
     }
   ],
@@ -303,17 +214,6 @@
       ]
     },
     "Preparar evento": {
-      "main": [
-        [
-          {
-            "node": "Mensagem do lead?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Mensagem do lead?": {
       "main": [
         [
           {

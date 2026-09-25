@@ -1,7 +1,7 @@
 // Humanização do envio: quebra a resposta da IA em mensagens curtas e sorteia
 // os intervalos. Puro e sem dependências — dá para testar isoladamente.
 
-const MAX_PARTS = 4;
+const MAX_PARTS = 2;
 const MAX_CHARS_PER_PART = 220;
 const MAX_SENTENCES_PER_PART = 2;
 
@@ -28,7 +28,8 @@ function reattachLeadingOrphans(sentences: string[]) {
     const rest = sentence.slice(orphan.length);
 
     if (orphan.trim() && result.length > 0) {
-      result[result.length - 1] = `${result[result.length - 1]} ${orphan.trim()}`;
+      result[result.length - 1] =
+        `${result[result.length - 1]} ${orphan.trim()}`;
 
       if (rest.trim()) {
         result.push(rest.trim());
@@ -65,7 +66,9 @@ function splitIntoSentences(text: string): string[] {
       .map((part) => part.trim())
       .filter(Boolean);
 
-    sentences.push(...reattachLeadingOrphans(parts.length > 0 ? parts : [block]));
+    sentences.push(
+      ...reattachLeadingOrphans(parts.length > 0 ? parts : [block]),
+    );
   }
 
   return sentences;
@@ -155,7 +158,7 @@ export type DelayConfig = {
 
 /**
  * Sorteia o intervalo de cada mensagem. A primeira usa a janela inicial
- * (2–5s por padrão) e as seguintes a janela entre mensagens (1–3s). Texto
+ * (1,5–4s por padrão) e as seguintes a janela entre mensagens (0,8–2,2s). Texto
  * mais longo pede um pouco mais de tempo, como se estivesse sendo digitado,
  * mas o acréscimo é limitado para não travar a conversa.
  */
@@ -164,12 +167,14 @@ export function buildDelaysForMessages(
   config: DelayConfig,
 ): number[] {
   return messages.map((message, index) => {
-    const base = index === 0
-      ? randomBetween(config.delayMinMs, config.delayMaxMs)
-      : randomBetween(config.messageGapMinMs, config.messageGapMaxMs);
+    const base =
+      index === 0
+        ? randomBetween(config.delayMinMs, config.delayMaxMs)
+        : randomBetween(config.messageGapMinMs, config.messageGapMaxMs);
 
-    // ~40ms por caractere acima de 60, com teto de 4s de acréscimo.
-    const typingBonus = Math.min(4000, Math.max(0, message.length - 60) * 40);
+    // A primeira resposta recebe até 2,5s adicionais conforme o tamanho.
+    const typingBonus =
+      index === 0 ? Math.min(2500, Math.max(0, message.length - 80) * 20) : 0;
 
     return Math.min(30_000, base + typingBonus);
   });

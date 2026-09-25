@@ -1,12 +1,15 @@
 import { z } from "zod";
-import { advanceConversation, authenticateAiWebhook } from "@/lib/ai-agent/pipeline";
+import {
+  advanceConversation,
+  authenticateAiWebhook,
+} from "@/lib/ai-agent/pipeline";
 import { AiAgentError } from "@/lib/ai-agent/store";
 
 // Segundo passo do fluxo do n8n. Cada chamada avança UM passo da conversa
 // (gerar resposta, ligar o "digitando", enviar uma mensagem) e devolve quanto
 // tempo o n8n deve esperar antes de chamar de novo. Toda a espera acontece no
 // n8n justamente porque a app roda em serverless.
-export const maxDuration = 60;
+export const maxDuration = 150;
 
 const stepSchema = z.object({
   sessionName: z.string().min(1),
@@ -30,7 +33,9 @@ export async function POST(request: Request) {
   } catch (error) {
     const status = error instanceof AiAgentError ? error.status : 500;
     const message =
-      error instanceof Error ? error.message : "Falha ao avançar a conversa.";
+      error instanceof AiAgentError
+        ? error.message
+        : "Falha ao avançar a conversa.";
 
     console.error("[ia/passo] falha", { status, message });
     return Response.json({ acao: "fim", erro: message }, { status });

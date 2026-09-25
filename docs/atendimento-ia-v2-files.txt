@@ -1,0 +1,30 @@
+Arquivos alterados em relação à main (d0ffafd)
+Branch: feat/ai-attendance-v2
+
+docs/atendimento-ia-v2-files.txt
+docs/atendimento-ia-v2.md
+n8n/n8n_waha_atendimento_ia.json
+package.json
+src/app/dashboard/atendimento-ia/actions.ts
+src/app/whatsapp/ia/evento/route.ts
+src/app/whatsapp/ia/passo/route.ts
+src/components/ai-agent/ai-agent-page.tsx
+src/components/ai-agent/ai-knowledge-settings.tsx
+src/components/ai-agent/ai-leads-panel.tsx
+src/lib/ai-agent/config.ts
+src/lib/ai-agent/engine.ts
+src/lib/ai-agent/event.ts
+src/lib/ai-agent/humanize.ts
+src/lib/ai-agent/media.ts
+src/lib/ai-agent/pipeline.ts
+src/lib/ai-agent/policy.ts
+src/lib/ai-agent/prompt.ts
+src/lib/ai-agent/retry.ts
+src/lib/ai-agent/shared.ts
+src/lib/ai-agent/store.ts
+src/lib/ai-agent/transitions.ts
+src/lib/data/ai-agent.ts
+src/lib/services/deepseek.ts
+supabase/migrations/20260924173314_ai_attendance_v2.sql
+tests/ai-attendance.test.mjs
+tests/ai-runtime.test.mjs

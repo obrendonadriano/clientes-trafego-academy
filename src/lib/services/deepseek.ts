@@ -1,13 +1,14 @@
 import "server-only";
 
 import { getIntegrationSettingByProvider } from "@/lib/integrations";
+import { withTransientRetry } from "@/lib/ai-agent/retry";
 
 // Cliente do DeepSeek para o atendimento por IA. A API é compatível com o
 // formato OpenAI de chat/completions, então o corpo segue esse mesmo padrão.
 // A chave nunca sai do servidor: fica em integration_settings ou no ambiente.
 
 const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
-const DEEPSEEK_TIMEOUT_MS = 40_000;
+const DEEPSEEK_TIMEOUT_MS = 20_000;
 
 export { DEEPSEEK_MODELS } from "@/lib/services/deepseek-models";
 
@@ -95,11 +96,16 @@ type DeepseekResponse = {
  * sintaticamente válido. Isso **não** garante o formato esperado — quem
  * valida o schema é quem chama (ver `ai-agent/engine.ts`).
  */
-export async function generateDeepseekJson(
+async function generateDeepseekJsonOnce(
   messages: DeepseekMessage[],
-  options: { temperature?: number; maxTokens?: number } = {},
+  options: {
+    temperature?: number;
+    maxTokens?: number;
+    timeoutMs?: number;
+    config?: DeepseekRuntimeConfig;
+  } = {},
 ): Promise<string> {
-  const config = await getDeepseekRuntimeConfig();
+  const config = options.config ?? (await getDeepseekRuntimeConfig());
 
   if (!config) {
     throw new DeepseekError(
@@ -125,11 +131,14 @@ export async function generateDeepseekJson(
         stream: false,
       }),
       cache: "no-store",
-      signal: AbortSignal.timeout(DEEPSEEK_TIMEOUT_MS),
+      signal: AbortSignal.timeout(options.timeoutMs ?? DEEPSEEK_TIMEOUT_MS),
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === "TimeoutError") {
-      throw new DeepseekError("O DeepSeek demorou demais para responder.", true);
+      throw new DeepseekError(
+        "O DeepSeek demorou demais para responder.",
+        true,
+      );
     }
 
     throw new DeepseekError("Não foi possível conectar ao DeepSeek.", true);
@@ -151,7 +160,7 @@ export async function generateDeepseekJson(
   }
 
   if (data.error?.message) {
-    throw new DeepseekError(`O DeepSeek retornou um erro: ${data.error.message}`);
+    throw new DeepseekError("O DeepSeek recusou a solicitação.");
   }
 
   const content = data.choices?.[0]?.message?.content?.trim();
@@ -161,4 +170,16 @@ export async function generateDeepseekJson(
   }
 
   return content;
+}
+
+export async function generateDeepseekJson(
+  messages: DeepseekMessage[],
+  options: {
+    temperature?: number;
+    maxTokens?: number;
+    timeoutMs?: number;
+    config?: DeepseekRuntimeConfig;
+  } = {},
+) {
+  return withTransientRetry(() => generateDeepseekJsonOnce(messages, options));
 }

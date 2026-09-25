@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getOptionalCurrentUser } from "@/lib/auth/session";
-import { DEFAULT_AI_PROMPT, DEFAULT_AI_PROMPT_MAX_LENGTH } from "@/lib/ai-agent/prompt";
+import {
+  DEFAULT_AI_PROMPT,
+  DEFAULT_AI_PROMPT_MAX_LENGTH,
+} from "@/lib/ai-agent/prompt";
 import {
   AI_AGENT_LIMITS,
   normalizeBrazilianWhatsapp,
@@ -12,16 +15,16 @@ import {
 } from "@/lib/ai-agent/shared";
 import {
   AiAgentError,
-  discardQueuedMessages,
   ensureAiAgentSettings,
   findConversationById,
   getClientPlan,
   getSessionForClient,
   listConversationMessages,
   updateAiAgentSettings,
-  updateConversation,
 } from "@/lib/ai-agent/store";
-import { getWahaConfig, sendWahaText } from "@/lib/waha";
+import { getWahaConfig, sendWahaText, setWahaTyping } from "@/lib/waha";
+import { transition } from "@/lib/ai-agent/transitions";
+import { knowledgeSchema, scheduleSchema } from "@/lib/ai-agent/config";
 
 export type AiAgentActionState = {
   success?: string;
@@ -65,7 +68,7 @@ function toState(error: unknown): AiAgentActionState {
   }
 
   console.error("[ia/action] falha", {
-    message: error instanceof Error ? error.message : "erro desconhecido",
+    code: "action_failed",
   });
 
   return { error: "Não foi possível concluir esta operação. Tente novamente." };
@@ -257,7 +260,7 @@ export async function testNotificationNumberAction(
     }
 
     console.error("[ia/teste-notificacao] falha", {
-      message: error instanceof Error ? error.message : "erro desconhecido",
+      code: "action_failed",
     });
 
     return {
@@ -291,7 +294,10 @@ const advancedSchema = z
       AI_AGENT_LIMITS.messageGapMaxMs,
       "O intervalo máximo entre mensagens",
     ),
-    debounceMs: msField(AI_AGENT_LIMITS.debounceMs, "O agrupamento de mensagens"),
+    debounceMs: msField(
+      AI_AGENT_LIMITS.debounceMs,
+      "O agrupamento de mensagens",
+    ),
     alwaysOn: z.boolean(),
     typingEnabled: z.boolean(),
     notifyQualified: z.boolean(),
@@ -381,7 +387,7 @@ export async function setHumanTakeoverAction(
   formData: FormData,
 ): Promise<AiAgentActionState> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId, user } = await requireCompletePlanClient();
 
     const parsed = conversationSchema.safeParse({
       conversationId: formData.get("conversationId"),
@@ -402,25 +408,30 @@ export async function setHumanTakeoverAction(
       return { error: "Conversa não encontrada." };
     }
 
-    if (parsed.data.humanTakeover) {
-      await discardQueuedMessages(conversation.id);
-      await updateConversation(conversation.id, {
-        human_takeover: true,
-        status: "human_takeover",
-      });
-
-      refresh();
-      return { success: "A IA parou de responder esta conversa." };
-    }
-
-    await updateConversation(conversation.id, {
-      human_takeover: false,
-      human_takeover_requested: false,
-      status: conversation.status === "human_takeover" ? "qualifying" : undefined,
+    const result = await transition(clientId, "takeover", {
+      conversationId: conversation.id,
+      human: parsed.data.humanTakeover,
+      actorId: user.id,
     });
-
+    if (!result.ok) return { error: "Não foi possível alterar o atendimento." };
+    const session = await getSessionForClient(clientId);
+    if (session) {
+      try {
+        await setWahaTyping(await getWahaConfig(), {
+          session: session.sessionName,
+          chatId: conversation.chat_id,
+          typing: false,
+        });
+      } catch {
+        /* Cancellation is already persisted if WAHA is offline. */
+      }
+    }
     refresh();
-    return { success: "IA retomada nesta conversa." };
+    return {
+      success: parsed.data.humanTakeover
+        ? "A IA parou de responder esta conversa."
+        : "IA retomada. Apenas novas mensagens receberão resposta.",
+    };
   } catch (error) {
     return toState(error);
   }
@@ -450,5 +461,86 @@ export async function loadConversationMessagesAction(
   } catch (error) {
     const state = toState(error);
     return { error: state.error };
+  }
+}
+
+export async function saveAiKnowledgeAction(
+  _previous: AiAgentActionState,
+  formData: FormData,
+): Promise<AiAgentActionState> {
+  try {
+    const { clientId } = await requireCompletePlanClient();
+    const getLines = (key: string) =>
+      String(formData.get(key) ?? "")
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    const faqLines = getLines("faq");
+    if (faqLines.some((line) => !line.includes("|")))
+      return { error: "Separe cada pergunta da resposta usando |." };
+    const parsed = knowledgeSchema.safeParse({
+      company: formData.get("company"),
+      service: formData.get("service"),
+      ...Object.fromEntries(
+        [
+          "buys",
+          "doesNotBuy",
+          "regions",
+          "hours",
+          "documents",
+          "rules",
+          "forbiddenPromises",
+          "allowedFacts",
+          "escalation",
+        ].map((k) => [k, getLines(k)]),
+      ),
+      faq: faqLines.map((line) => ({
+        question: line.slice(0, line.indexOf("|")).trim(),
+        answer: line.slice(line.indexOf("|") + 1).trim(),
+      })),
+    });
+    if (!parsed.success)
+      return {
+        error:
+          "Revise os campos da base: use até 30 itens, com até 500 caracteres por item.",
+      };
+    await ensureAiAgentSettings(clientId);
+    await updateAiAgentSettings(clientId, { knowledge: parsed.data });
+    refresh();
+    return { success: "Base de conhecimento salva." };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+export async function saveAiScheduleAction(
+  _previous: AiAgentActionState,
+  formData: FormData,
+): Promise<AiAgentActionState> {
+  try {
+    const { clientId } = await requireCompletePlanClient();
+    const parsed = scheduleSchema.safeParse({
+      weekdays: formData.getAll("weekdays").map(Number),
+      start: formData.get("start"),
+      end: formData.get("end"),
+      timezone: formData.get("timezone"),
+      offHoursMessage: formData.get("offHoursMessage"),
+    });
+    if (!parsed.success)
+      return {
+        error: "Selecione os dias, horários diferentes e um fuso válido.",
+      };
+    await ensureAiAgentSettings(clientId);
+    await updateAiAgentSettings(clientId, {
+      business_schedule: parsed.data,
+      timezone: parsed.data.timezone,
+    });
+    refresh();
+    return {
+      success:
+        "Horários salvos. Desative o atendimento 24 horas para usar esta agenda.",
+    };
+  } catch (error) {
+    return toState(error);
   }
 }

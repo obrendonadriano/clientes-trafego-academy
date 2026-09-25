@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Bot,
   CircleUser,
@@ -39,6 +40,39 @@ const STATUS_VARIANT: Record<
   completed: "success",
   error: "outline",
 };
+
+const FIELD_LABELS: Record<string, string> = {
+  name: "nome",
+  vehicle: "veículo",
+  vehicle_year: "ano",
+  financed: "financiamento",
+  bank: "banco",
+  debt_amount: "dívida",
+  has_overdue_installments: "situação das parcelas",
+  overdue_installments_count: "quantidade de parcelas atrasadas",
+};
+const PROCESSING_LABELS: Record<string, string> = {
+  idle: "Aguardando mensagem",
+  debouncing: "Recebendo mensagens",
+  generating: "Preparando resposta",
+  typing: "Respondendo",
+  human: "Com a equipe",
+  error: "Precisa de atenção",
+};
+function ProcessingStatus({
+  conversation,
+}: {
+  conversation: AiConversationSummary;
+}) {
+  return (
+    <span className="mt-1 block text-xs text-muted-foreground">
+      {conversation.humanTakeover
+        ? "Atendimento humano"
+        : (PROCESSING_LABELS[conversation.processingState] ??
+          "Aguardando mensagem")}
+    </span>
+  );
+}
 
 function formatDateTime(value: string | null) {
   if (!value) {
@@ -90,10 +124,23 @@ export function AiLeadsPanel({
   interactive: boolean;
 }) {
   const [filter, setFilter] = useState<AiLeadStatus | "todos">("todos");
-  const [selected, setSelected] = useState<AiConversationSummary | null>(null);
+  const [selectedId, setSelected] = useState<string | null>(null);
+  const selected = conversations.find((item) => item.id === selectedId);
+  const router = useRouter();
+  useEffect(() => {
+    if (!interactive) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") router.refresh();
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [interactive, router]);
 
   const visible = conversations.filter(
-    (item) => filter === "todos" || item.status === filter,
+    (item) =>
+      filter === "todos" ||
+      (filter === "human_takeover"
+        ? item.humanTakeover
+        : item.status === filter),
   );
 
   return (
@@ -140,7 +187,7 @@ export function AiLeadsPanel({
                   <button
                     type="button"
                     disabled={!interactive}
-                    onClick={() => setSelected(item)}
+                    onClick={() => setSelected(item.id)}
                     className="w-full rounded-2xl border border-border/60 bg-background/60 p-4 text-left transition enabled:hover:border-primary/30 disabled:cursor-not-allowed"
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -156,6 +203,7 @@ export function AiLeadsPanel({
                         {AI_LEAD_STATUS_LABELS[item.status]}
                       </Badge>
                     </div>
+                    <ProcessingStatus conversation={item} />
                     <p className="mt-3 text-sm text-muted-foreground">
                       {orNotInformed(item.vehicle)}
                       {item.vehicleYear ? ` · ${item.vehicleYear}` : ""}
@@ -185,10 +233,10 @@ export function AiLeadsPanel({
                     <tr
                       key={item.id}
                       tabIndex={interactive ? 0 : -1}
-                      onClick={() => interactive && setSelected(item)}
+                      onClick={() => interactive && setSelected(item.id)}
                       onKeyDown={(event) => {
                         if (interactive && event.key === "Enter") {
-                          setSelected(item);
+                          setSelected(item.id);
                         }
                       }}
                       className={cn(
@@ -227,6 +275,7 @@ export function AiLeadsPanel({
                         <Badge variant={STATUS_VARIANT[item.status]}>
                           {AI_LEAD_STATUS_LABELS[item.status]}
                         </Badge>
+                        <ProcessingStatus conversation={item} />
                       </td>
                     </tr>
                   ))}
@@ -257,7 +306,9 @@ function ConversationDialog({
   onClose: () => void;
 }) {
   const { showToast } = useToast();
-  const [messages, setMessages] = useState<AiConversationMessage[] | null>(null);
+  const [messages, setMessages] = useState<AiConversationMessage[] | null>(
+    null,
+  );
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, startLoading] = useTransition();
   const [takeoverState, takeoverAction] = useActionState(
@@ -266,8 +317,10 @@ function ConversationDialog({
   );
 
   useEffect(() => {
+    let active = true;
     startLoading(async () => {
       const result = await loadConversationMessagesAction(conversation.id);
+      if (!active) return;
 
       if (result.error) {
         setLoadError(result.error);
@@ -275,8 +328,12 @@ function ConversationDialog({
       }
 
       setMessages(result.messages ?? []);
+      setLoadError(null);
     });
-  }, [conversation.id]);
+    return () => {
+      active = false;
+    };
+  }, [conversation.id, conversation.updatedAt]);
 
   useEffect(() => {
     if (takeoverState.success) {
@@ -319,6 +376,7 @@ function ConversationDialog({
             <p className="mt-0.5 text-sm text-muted-foreground">
               {formatBrazilianWhatsapp(conversation.whatsappNumber)}
             </p>
+            <ProcessingStatus conversation={conversation} />
           </div>
 
           <div className="flex items-center gap-2">
@@ -337,9 +395,33 @@ function ConversationDialog({
         </header>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+          {conversation.lastError ? (
+            <p
+              role="status"
+              className="rounded-xl border border-amber-500/30 p-3 text-sm"
+            >
+              {conversation.lastError === "notification_unknown"
+                ? "Não foi possível confirmar o envio da notificação. Confira seu WhatsApp antes de avisar novamente."
+                : conversation.lastError === "delivery_unknown"
+                  ? "Não foi possível confirmar uma entrega. Confira o WhatsApp e continue o atendimento pela equipe para evitar mensagens duplicadas."
+                  : "O atendimento automático encontrou uma falha. As mensagens foram preservadas. A equipe pode continuar e retomar a IA quando estiver tudo certo."}
+            </p>
+          ) : null}
+          {conversation.whatsappDisplayName ? (
+            <p className="text-xs text-muted-foreground">
+              Nome no perfil do WhatsApp: {conversation.whatsappDisplayName}{" "}
+              (não confirmado pelo lead).
+            </p>
+          ) : null}
           <dl className="grid grid-cols-2 gap-3 text-sm">
-            <DetailItem label="Veículo" value={orNotInformed(conversation.vehicle)} />
-            <DetailItem label="Ano" value={orNotInformed(conversation.vehicleYear)} />
+            <DetailItem
+              label="Veículo"
+              value={orNotInformed(conversation.vehicle)}
+            />
+            <DetailItem
+              label="Ano"
+              value={orNotInformed(conversation.vehicleYear)}
+            />
             <DetailItem
               label="Financiado"
               value={
@@ -350,7 +432,10 @@ function ConversationDialog({
                     : "Não"
               }
             />
-            <DetailItem label="Banco" value={orNotInformed(conversation.bank)} />
+            <DetailItem
+              label="Banco"
+              value={orNotInformed(conversation.bank)}
+            />
             <DetailItem
               label="Dívida aproximada"
               value={formatCurrency(conversation.debtAmount)}
@@ -382,7 +467,11 @@ function ConversationDialog({
 
           {conversation.unknownFields.length > 0 ? (
             <p className="text-xs text-muted-foreground">
-              O lead informou não saber: {conversation.unknownFields.join(", ")}.
+              O lead informou não saber:{" "}
+              {conversation.unknownFields
+                .map((field) => FIELD_LABELS[field] ?? "outro dado")
+                .join(", ")}
+              .
             </p>
           ) : null}
 
@@ -422,7 +511,11 @@ function ConversationDialog({
                       )}
                     >
                       <span className="mb-1 flex items-center gap-1.5 text-[0.6875rem] uppercase tracking-wide text-muted-foreground">
-                        {message.direction === "outbound" ? (
+                        {message.senderType === "human" ? (
+                          <>
+                            <CircleUser className="size-3" /> Equipe
+                          </>
+                        ) : message.senderType === "ai" ? (
                           <>
                             <Bot className="size-3" /> IA
                           </>
@@ -434,6 +527,11 @@ function ConversationDialog({
                         <span>· {formatDateTime(message.createdAt)}</span>
                       </span>
                       <p className="whitespace-pre-wrap">{message.body}</p>
+                      {message.status === "delivery_unknown" ? (
+                        <span className="text-xs text-amber-700 dark:text-amber-300">
+                          Entrega não confirmada
+                        </span>
+                      ) : null}
                     </div>
                   </li>
                 ))}
@@ -469,6 +567,12 @@ function ConversationDialog({
           {conversation.humanTakeoverRequested ? (
             <p className="mt-3 text-xs text-muted-foreground">
               O lead pediu para falar com uma pessoa.
+            </p>
+          ) : null}
+          {conversation.humanTakeover ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Ao retomar, a IA responderá apenas às novas mensagens. O histórico
+              permanece salvo.
             </p>
           ) : null}
         </footer>

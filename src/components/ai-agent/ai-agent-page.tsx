@@ -23,6 +23,10 @@ import {
   type AiAgentActionState,
 } from "@/app/dashboard/atendimento-ia/actions";
 import { AiLeadsPanel } from "@/components/ai-agent/ai-leads-panel";
+import {
+  AiKnowledgeSettings,
+  AiScheduleSettings,
+} from "./ai-knowledge-settings";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormPendingButton } from "@/components/ui/form-pending-button";
@@ -66,6 +70,7 @@ export function AiAgentPage({
       <div className="min-w-0 space-y-5">
         <StatusCard data={data} interactive={interactive} />
         <PromptCard data={data} />
+        <AiKnowledgeSettings settings={data.settings} />
         <AiLeadsPanel
           conversations={data.conversations}
           interactive={interactive}
@@ -75,6 +80,7 @@ export function AiAgentPage({
       <div className="min-w-0 space-y-5">
         <NotificationCard data={data} />
         <AdvancedCard data={data} />
+        <AiScheduleSettings settings={data.settings} />
       </div>
     </div>
   );
@@ -205,7 +211,7 @@ function StatusCard({
           <Sparkles className="mt-0.5 size-3.5 shrink-0" />
           {settings.alwaysOn
             ? "Atendimento 24 horas por dia, 7 dias por semana."
-            : "Atendimento fora do modo 24 horas."}
+            : `Atendimento conforme a agenda, no fuso ${settings.businessSchedule.timezone}.`}
         </p>
       </CardContent>
     </Card>
@@ -296,7 +302,8 @@ function NotificationCard({ data }: { data: AiAgentPageData }) {
         {data.settings.notificationWhatsapp ? (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <CheckCircle2 className="size-3.5 text-emerald-500" />
-            Salvo como {formatBrazilianWhatsapp(data.settings.notificationWhatsapp)}
+            Salvo como{" "}
+            {formatBrazilianWhatsapp(data.settings.notificationWhatsapp)}
           </p>
         ) : null}
       </CardContent>
@@ -309,7 +316,10 @@ function NotificationCard({ data }: { data: AiAgentPageData }) {
 // ---------------------------------------------------------------------------
 
 function PromptCard({ data }: { data: AiAgentPageData }) {
-  const [saveState, saveAction] = useActionState(saveAiPromptAction, initialState);
+  const [saveState, saveAction] = useActionState(
+    saveAiPromptAction,
+    initialState,
+  );
   const [restoreState, restoreAction] = useActionState(
     restoreAiPromptAction,
     initialState,
@@ -320,7 +330,8 @@ function PromptCard({ data }: { data: AiAgentPageData }) {
 
   // `key` faz o textarea recarregar o valor do servidor quando o prompt muda
   // (salvar ou restaurar), sem precisar espelhar o texto em estado.
-  const promptKey = data.settings.prompt.length + data.settings.prompt.slice(0, 32);
+  const promptKey =
+    data.settings.prompt.length + data.settings.prompt.slice(0, 32);
 
   return (
     <Card className="min-w-0">
@@ -331,7 +342,8 @@ function PromptCard({ data }: { data: AiAgentPageData }) {
         <div>
           <CardTitle className="font-display text-xl">Prompt da IA</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">
-            As instruções que definem como a IA conversa e o que ela coleta.
+            Personalize o tom da conversa. Dados da empresa ficam na base de
+            conhecimento; este texto não altera as regras de qualificação.
           </p>
         </div>
       </CardHeader>
@@ -499,7 +511,7 @@ function SecondsField({
           type="number"
           min={0}
           max={60}
-          step={0.5}
+          step={0.1}
           defaultValue={defaultValue}
           className="pr-10"
         />
