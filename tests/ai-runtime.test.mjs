@@ -50,6 +50,88 @@ function loader(overrides, fetchImpl) {
   return load;
 }
 const A = "10000000-0000-4000-8000-000000000001";
+test("WAHA usa webhook global padrão e respeita uma URL personalizada", async () => {
+  const integration = {
+    enabled: true,
+    config: {
+      base_url: "https://waha.example.com",
+      api_key: "test-key",
+      webhook_secret: "test-secret",
+    },
+  };
+  const load = loader({
+    [resolve("src/lib/integrations.ts")]: {
+      getIntegrationSettingByProvider: async () => integration,
+    },
+  });
+  const { getWahaConfig } = load("src/lib/waha.ts");
+  const expected = "https://automacaoowpp-n8n.xtto29.easypanel.host/webhook/waha-atendimento-ia";
+  assert.equal((await getWahaConfig()).aiWebhookUrl, expected);
+  integration.config.ai_webhook_url = "  ";
+  assert.equal((await getWahaConfig()).aiWebhookUrl, expected);
+  integration.config.ai_webhook_url = "https://n8n.example.com/webhook/ia";
+  assert.equal((await getWahaConfig()).aiWebhookUrl, integration.config.ai_webhook_url);
+});
+
+test("conectar registra IA para clientes diferentes e mantém message.any na reconexão", async () => {
+  const calls = [];
+  const records = new Map();
+  const remoteSessions = new Set();
+  const config = {
+    webhookSecret: "test-secret",
+    leadsWebhookUrl: "https://n8n.example.com/webhook/leads",
+    aiWebhookUrl: "https://automacaoowpp-n8n.xtto29.easypanel.host/webhook/waha-atendimento-ia",
+  };
+  const load = loader({
+    [resolve("src/lib/whatsapp-server.ts")]: {
+      authenticateWhatsappRequest: async (req) => ({ clientId: req.headers.get("test-client") }),
+      getWhatsappSessionRecord: async (id) => records.get(id),
+      ensureWhatsappSessionRecord: async (id) => {
+        const record = { session_name: `client-${id}` };
+        records.set(id, record);
+        return record;
+      },
+      updateWhatsappSessionRecord: async () => {},
+      whatsappErrorResponse: () => Response.json({}, { status: 500 }),
+    },
+    [resolve("src/lib/waha.ts")]: {
+      getWahaConfig: async () => config,
+      toWahaSessionStatus: (status) => status,
+      WahaRequestError: class extends Error {},
+      wahaFetchJson: async (_config, path, init) => {
+        calls.push({ path, ...init });
+        if (init.method === "GET") {
+          assert.ok(remoteSessions.has(path));
+          return { status: "WORKING" };
+        }
+        const payload = JSON.parse(init.body);
+        remoteSessions.add(`/api/sessions/${payload.name}`);
+        return { status: "WORKING" };
+      },
+    },
+  });
+  const { POST } = load("src/app/whatsapp/conectar/route.ts");
+  for (const client of ["one", "two", "one"]) {
+    const response = await POST(new Request("https://dashboard.example.com/whatsapp/conectar", {
+      method: "POST", headers: { "test-client": client },
+    }));
+    assert.equal(response.status, 200);
+  }
+  const writes = calls.filter((call) => call.body);
+  assert.deepEqual(writes.map((call) => call.method), ["POST", "POST", "PUT"]);
+  assert.deepEqual(writes.map((call) => JSON.parse(call.body).name), ["client-one", "client-two", "client-one"]);
+  for (const call of writes) {
+    const hooks = JSON.parse(call.body).config.webhooks;
+    assert.equal(hooks.length, 3);
+    assert.deepEqual(hooks[0].events, ["session.status"]);
+    const legacy = hooks.find((hook) => hook.url === config.leadsWebhookUrl);
+    assert.deepEqual(legacy.events, ["message"]);
+    const ai = hooks.find((hook) => hook.url === config.aiWebhookUrl);
+    assert.deepEqual(ai.events, ["message.any"]);
+    assert.deepEqual(ai.customHeaders, [{ name: "X-TrafegoAcademy-Secret", value: config.webhookSecret }]);
+  }
+});
+
 const readMigration = (name) =>
   readFileSync(resolve("supabase/migrations", name), "utf8");
 async function runtime() {

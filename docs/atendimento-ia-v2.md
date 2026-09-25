@@ -134,18 +134,24 @@ banco ou chave do DeepSeek no workflow.
 Consulta somente de leitura ao ambiente instalado: **WAHA 2026.6.2, GOWS, CORE**.
 Não foram alteradas sessões nem enviados WhatsApps reais nesta revisão.
 
-No webhook **exclusivo do Atendimento IA**, configurar `events: ["message.any"]`,
-mantendo URL e cabeçalho autenticado. Esse evento inclui mensagens recebidas e
+O site configura automaticamente o webhook **exclusivo do Atendimento IA** com
+`events: ["message.any"]`, URL e cabeçalho autenticado ao conectar/reconectar cada
+sessão. Esse evento inclui mensagens recebidas e
 enviadas pelo próprio número. Não alterar o webhook de ingestão de leads nem o de
 status da sessão. A documentação oficial confirma suporte a `message.any` no GOWS:
 [eventos WAHA](https://waha.devlike.pro/docs/how-to/events/).
 
-**Atenção operacional específica:** a rota compartilhada atual de conectar o
-WhatsApp recria o webhook de IA como `message`. Ela foi preservada porque também
-configura a ingestão de Conversões. Depois de reconectar uma sessão por esse fluxo,
-reaplicar `message.any` somente no webhook de IA. Sem isso, o takeover pelo painel
-funciona, mas mensagens manuais do aplicativo não chegam ao Atendimento IA. Esta
-configuração precisa fazer parte do teste piloto e do procedimento de reconexão.
+**Configuração global:** o padrão é
+`https://automacaoowpp-n8n.xtto29.easypanel.host/webhook/waha-atendimento-ia`.
+O campo de webhook da IA em Admin → Configurações → WAHA permite sobrescrever
+essa URL uma única vez para todos os clientes. Campo vazio usa o padrão.
+Um único workflow atende todas as sessões; o backend identifica o cliente pelo
+nome da sessão cadastrado no banco. Não duplicar o workflow por cliente.
+
+Após publicar esta atualização, sessões existentes precisam passar uma vez pelo
+botão conectar para receber a configuração nova. Novas conexões e reconexões já
+registram `message.any` automaticamente; não é mais necessário ajustar o evento
+manualmente no WAHA. A inscrição de Conversões continua usando `message`.
 
 Áudio tem uma fase posterior explícita: a interface `AudioTranscriber` e
 `prepareTurnInput` aceitam transcrição confiável no mesmo fluxo de texto, mas nenhum

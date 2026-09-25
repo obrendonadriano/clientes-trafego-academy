@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getIntegrationSettingByProvider } from "@/lib/integrations";
+import { DEFAULT_AI_WEBHOOK_URL } from "@/lib/waha-defaults";
 
 const WAHA_TIMEOUT_MS = 15_000;
 
@@ -175,7 +176,8 @@ export async function getWahaConfig(): Promise<WahaConfig> {
   const apiKey = integration?.config?.api_key ?? "";
   const webhookSecret = integration?.config?.webhook_secret ?? "";
   const leadsWebhookUrl = integration?.config?.leads_webhook_url ?? "";
-  const aiWebhookUrl = integration?.config?.ai_webhook_url ?? "";
+  const aiWebhookUrl =
+    integration?.config?.ai_webhook_url?.trim() || DEFAULT_AI_WEBHOOK_URL;
 
   if (!integration?.enabled || !baseUrl || !apiKey || !webhookSecret) {
     throw new WahaRequestError(

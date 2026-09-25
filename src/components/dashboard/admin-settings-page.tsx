@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { DEEPSEEK_MODELS } from "@/lib/services/deepseek-models";
+import { DEFAULT_AI_WEBHOOK_URL } from "@/lib/waha-defaults";
 import type { IntegrationSetting, MetaAdAccount } from "@/lib/types";
 
 export type SettingsView = "integracoes" | "contas";
@@ -284,14 +285,14 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
                     id="waha_ai_webhook_url"
                     name="config_ai_webhook_url"
                     type="url"
-                    placeholder="https://n8n.seudominio.com/webhook/waha-atendimento-ia"
-                    defaultValue={integration.config.ai_webhook_url ?? ""}
+                    placeholder={DEFAULT_AI_WEBHOOK_URL}
+                    defaultValue={integration.config.ai_webhook_url?.trim() || DEFAULT_AI_WEBHOOK_URL}
                   />
                   <p className="text-xs leading-5 text-muted-foreground">
-                    URL de produção do workflow de Atendimento IA. É ele que
-                    aplica o debounce e as esperas humanizadas. Depois de
-                    salvar, peça ao cliente para clicar em conectar de novo —
-                    a sessão é atualizada sem pedir um novo QR.
+                    Uma URL para todos os clientes, configurada automaticamente
+                    ao conectar ou reconectar o WhatsApp. Em branco, usa a URL
+                    padrão da TrafegoAcademy. Sessões já conectadas recebem a
+                    atualização ao clicar em conectar novamente.
                   </p>
                 </div>
                 <div className="space-y-2 md:col-span-2">

@@ -68,10 +68,13 @@ export async function POST(request: Request) {
         customHeaders: { name: string; value: string }[];
       };
 
-      function messageWebhook(url: string): LeadWebhook {
+      function messageWebhook(
+        url: string,
+        event: "message" | "message.any" = "message",
+      ): LeadWebhook {
         return {
           url,
-          events: ["message"],
+          events: [event],
           hmac: { key: config.webhookSecret },
           customHeaders: [
             {
@@ -94,10 +97,10 @@ export async function POST(request: Request) {
         webhooks.push(messageWebhook(config.leadsWebhookUrl));
       }
 
-      // Fluxo do atendimento por IA: recebe o mesmo evento "message" num
-      // webhook separado, para não interferir na ingestão de leads que já roda.
+      // A IA precisa também das respostas manuais (fromMe) para pausar o robô.
+      // Cada sessão usa o mesmo workflow; o backend resolve o cliente pela sessão.
       if (config.aiWebhookUrl && config.aiWebhookUrl !== config.leadsWebhookUrl) {
-        webhooks.push(messageWebhook(config.aiWebhookUrl));
+        webhooks.push(messageWebhook(config.aiWebhookUrl, "message.any"));
       }
 
       return {
