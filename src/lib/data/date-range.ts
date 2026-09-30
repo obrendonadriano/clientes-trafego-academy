@@ -27,6 +27,21 @@ function toIsoDay(date: Date) {
   return format(date, "yyyy-MM-dd");
 }
 
+// Fuso do negócio. Todas as janelas nascem daqui.
+export const BUSINESS_TIME_ZONE = "America/Sao_Paulo";
+
+/** O dia de hoje em São Paulo, como data local para as contas de calendário. */
+export function businessToday(now = new Date()): Date {
+  const day = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+
+  return startOfDay(parseISO(day));
+}
+
 function parseIsoDay(value: string | undefined | null): Date | null {
   if (!value) {
     return null;
@@ -39,7 +54,7 @@ function parseIsoDay(value: string | undefined | null): Date | null {
 // Janela padrão carregada pelas páginas: cobre todos os presets do
 // PeriodFilter ("Mês passado" alcança no máximo ~62 dias atrás).
 export function getDefaultMetricsWindow(now = new Date()): MetricsWindow {
-  const end = startOfDay(now);
+  const end = businessToday(now);
   return {
     startDate: toIsoDay(subDays(end, CLIENT_MAX_RANGE_DAYS - 1)),
     endDate: toIsoDay(end),
@@ -51,7 +66,7 @@ export function clampMetricsWindowForRole(
   window: MetricsWindow,
   now = new Date(),
 ): MetricsWindow {
-  const today = startOfDay(now);
+  const today = businessToday(now);
 
   let end = parseIsoDay(window.endDate) ?? today;
   if (end.getTime() > today.getTime()) {
@@ -92,7 +107,7 @@ function resolveCurrentPeriod(
   params: RangeSearchParams | undefined,
   now: Date,
 ): MetricsWindow {
-  const today = startOfDay(now);
+  const today = businessToday(now);
   const slug = firstValue(params?.periodo) ?? "d30";
 
   if (slug === "hoje") {

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import { test } from 'node:test';
 
 // Regressão de perda de dados.
@@ -93,23 +94,86 @@ test('as rotas antigas de conjunto/anúncio não deixam a URL trocar o nível', 
   }
 });
 
+test('o fechamento conta o dia de hoje, com aviso de que ainda corre', () => {
+  const closing = stripComments(
+    readFileSync(new URL('../src/lib/data/closing.ts', import.meta.url), 'utf8'),
+  );
+
+  // O descarte do dia corrente era o que zerava o fechamento de uma campanha
+  // que estreou hoje. O valor precisa valer para o instante em que é gerado.
+  assert.equal(
+    /filter\(\s*\(row\) => row\.date < currentDay/.test(closing),
+    false,
+    'o fechamento voltou a descartar o dia de hoje',
+  );
+  assert.match(closing, /includesToday/);
+
+  // A dedupe continua: é ela que torna seguro somar o dia corrente caso a
+  // janela algum dia passe a pedir também as linhas horárias.
+  assert.match(closing, /dedupeMetricRowsByDay\(source\.metricRows\)/);
+
+  // Tela e PDF precisam dizer que o dia ainda está em andamento.
+  const page = readFileSync(
+    new URL('../src/components/dashboard/closing-page.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.ok(page.includes('data.includesToday'));
+
+  const pdf = readFileSync(
+    new URL('../src/components/pdf/closing-document.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.ok(pdf.includes('data.includesToday'), 'o PDF de cobrança não avisa');
+});
+
+test('somar o dia de hoje não conta o mesmo gasto duas vezes', () => {
+  // dashboard-metrics.ts usa o alias "@/", que o Node não resolve. A função é
+  // isolada, então roda aqui a partir do próprio código-fonte — sem cópia, o
+  // que manteria o teste verde mesmo se a regra real mudasse.
+  const source = readFileSync(
+    new URL('../src/lib/dashboard-metrics.ts', import.meta.url),
+    'utf8',
+  );
+  const start = source.indexOf('export function dedupeMetricRowsByDay');
+  assert.ok(start > 0, 'dedupeMetricRowsByDay sumiu');
+
+  const end = source.indexOf('\n}', start) + 2;
+  const body = source
+    .slice(start, end)
+    .replace('export function', 'function')
+    .replace(': RawCampaignMetric[]', '');
+
+  const dedupeMetricRowsByDay = vm.runInNewContext(
+    `${body}; dedupeMetricRowsByDay`,
+    {},
+  );
+
+  // O sync grava o dia corrente nas duas granularidades. Se as duas entrassem
+  // na soma, o fechamento cobraria quase o dobro.
+  const hoje = '2026-09-29';
+  const linhas = [
+    { campaignId: 'c1', date: hoje, granularity: 'day', amountSpent: 36.23 },
+    { campaignId: 'c1', date: hoje, granularity: 'hour', amountSpent: 20 },
+    { campaignId: 'c1', date: hoje, granularity: 'hour', amountSpent: 16.23 },
+    { campaignId: 'c1', date: '2026-09-28', granularity: 'day', amountSpent: 10 },
+  ];
+
+  const total = dedupeMetricRowsByDay(linhas).reduce(
+    (soma, linha) => soma + linha.amountSpent,
+    0,
+  );
+
+  assert.equal(Number(total.toFixed(2)), 46.23);
+});
+
 test('o fechamento diz por que está zerado', () => {
   const closing = stripComments(
     readFileSync(new URL('../src/lib/data/closing.ts', import.meta.url), 'utf8'),
   );
 
-  for (const reason of [
-    'somente-hoje',
-    'so-comecou-hoje',
-    'filtro-sem-campanha',
-    'sem-metricas',
-  ]) {
+  for (const reason of ['filtro-sem-campanha', 'sem-metricas']) {
     assert.ok(closing.includes(reason), `falta o motivo ${reason}`);
   }
-
-  // Período que cobre apenas hoje nunca tem valor: o fechamento só conta dias
-  // encerrados, e no dia 1º o atalho "Este mês" cai exatamente nisso.
-  assert.match(closing, /coversOnlyToday\s*=\s*window\.startDate >= currentDay/);
 
   const page = readFileSync(
     new URL('../src/components/dashboard/closing-page.tsx', import.meta.url),

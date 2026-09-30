@@ -68,11 +68,10 @@ export type ClosingData = {
   // Por que o fechamento está zerado. Sem isso a tela dizia apenas "nenhuma
   // campanha com investimento", que é indistinguível de uma importação que não
   // gravou nada ou de um filtro de campanha preso na URL.
-  emptyReason?:
-    | "somente-hoje"
-    | "so-comecou-hoje"
-    | "sem-metricas"
-    | "filtro-sem-campanha";
+  emptyReason?: "sem-metricas" | "filtro-sem-campanha";
+  // O período alcança o dia de hoje, que ainda está em andamento: o total vale
+  // até a última importação, não até o fim do dia.
+  includesToday: boolean;
 };
 
 function formatDay(value: string) {
@@ -168,14 +167,17 @@ export async function getClosingData(
   const source = await getClosingSourceData(user, window, clientId);
 
   // Sem isso o mesmo dia entraria duas vezes (linha diária + linhas horárias)
-  // e o fechamento cobraria quase o dobro.
-  // Fechamento é cobrança, então usa somente dias consolidados. A Meta expõe
-  // valores intradiários no endpoint "Hoje", mas ainda não os inclui no total
-  // consolidado do Gerenciador; somá-los aqui fazia o fechamento ficar maior.
+  // e o fechamento cobraria quase o dobro. A janela do fechamento nunca pede
+  // as horárias, mas a proteção fica: a dedupe é o que torna seguro somar o
+  // dia corrente.
+  //
+  // O dia de hoje ENTRA na conta. O fechamento precisa valer para o instante
+  // em que é gerado — quem fecha um período já encerrado tem dias completos de
+  // qualquer forma, e quem fecha no meio do dia quer o número de agora. O valor
+  // de hoje é o acumulado que a Meta devolveu na última importação, então a
+  // tela e o PDF avisam que o dia ainda está em andamento.
   const currentDay = saoPauloIsoDay();
-  const allMetricRows = dedupeMetricRowsByDay(source.metricRows).filter(
-    (row) => row.date < currentDay,
-  );
+  const allMetricRows = dedupeMetricRowsByDay(source.metricRows);
   const campaignsWithSpend = new Set(
     allMetricRows
       .filter((row) => row.amountSpent > 0)
@@ -247,27 +249,14 @@ export async function getClosingData(
     .filter((campaign) => campaign.amountSpent > 0)
     .sort((a, b) => b.amountSpent - a.amountSpent);
 
-  // O fechamento é cobrança e só conta dias fechados, então um período que
-  // cobre apenas o dia corrente nunca tem valor — inclusive no dia 1º, quando
-  // o atalho "Este mês" começa e termina hoje.
-  const coversOnlyToday = window.startDate >= currentDay;
-  // Houve importação na janela, mas toda ela é do dia corrente — é o caso de
-  // uma campanha que estreou hoje. Dizer "nada importado" aqui mandaria o
-  // gestor sincronizar de novo à procura de um problema que não existe.
-  const onlyTodayHasData =
-    allMetricRows.length === 0 &&
-    dedupeMetricRowsByDay(source.metricRows).some(
-      (row) => row.amountSpent > 0 && row.date >= currentDay,
-    );
-  const emptyReason: ClosingData["emptyReason"] = coversOnlyToday
-    ? "somente-hoje"
-    : hasCampaignFilter && selectedCampaignIds.length === 0
+  const includesToday =
+    window.startDate <= currentDay && window.endDate >= currentDay;
+  const emptyReason: ClosingData["emptyReason"] =
+    hasCampaignFilter && selectedCampaignIds.length === 0
       ? "filtro-sem-campanha"
-      : onlyTodayHasData
-        ? "so-comecou-hoje"
-        : allMetricRows.length === 0
-          ? "sem-metricas"
-          : undefined;
+      : allMetricRows.length === 0
+        ? "sem-metricas"
+        : undefined;
 
   const overall = summarizeRows(metricRows, currentRates);
   const currency = resolveCurrency(metricRows);
@@ -309,5 +298,6 @@ export async function getClosingData(
     syncedAt: source.syncedAt,
     generatedAt: new Date().toISOString(),
     emptyReason,
+    includesToday,
   };
 }

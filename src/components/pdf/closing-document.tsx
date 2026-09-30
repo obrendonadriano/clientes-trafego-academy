@@ -169,6 +169,14 @@ export function ClosingDocument({ data }: { data: ClosingData }) {
               {data.periodLabel} · {data.dayCount}{" "}
               {data.dayCount === 1 ? "dia" : "dias"}
             </Text>
+            {/* O PDF é o documento de cobrança: se o período alcança um dia
+                ainda em andamento, isso precisa estar escrito nele, e não só
+                na tela de onde ele foi gerado. */}
+            {data.includesToday ? (
+              <Text style={styles.docMeta}>
+                Inclui o dia de hoje, ainda em andamento
+              </Text>
+            ) : null}
           </View>
         </View>
 
@@ -302,6 +310,9 @@ export function ClosingDocument({ data }: { data: ClosingData }) {
         <View style={styles.footer} fixed>
           <Text style={styles.footerText}>
             Gerado em {dateTime(data.generatedAt)} · Tráfego Academy
+            {data.includesToday
+              ? " · valores do dia de hoje sujeitos a alteração"
+              : ""}
           </Text>
           <Text
             style={styles.footerText}

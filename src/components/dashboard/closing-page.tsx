@@ -210,7 +210,18 @@ export function ClosingPage({
 
           {/* O último dia importado quase sempre está pela metade: a carga roda
               no meio do dia. Avisar evita fechar um período incompleto. */}
-          {data.lastMetricDate && data.lastMetricDate < data.window.endDate ? (
+          {data.includesToday ? (
+            <p className="flex items-start gap-2 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-700 dark:text-sky-300">
+              <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+              <span>
+                O período inclui <strong>hoje</strong>, que ainda está em
+                andamento. O total vale para o momento da última importação
+                {horario(data.syncedAt) ? ` (${horario(data.syncedAt)})` : ""} e
+                ainda pode subir até o fim do dia. Para um valor definitivo,
+                feche o período depois que o dia virar.
+              </span>
+            </p>
+          ) : data.lastMetricDate && data.lastMetricDate < data.window.endDate ? (
             <p className="flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-300">
               <TriangleAlert className="mt-0.5 size-4 shrink-0" />
               <span>
@@ -269,23 +280,11 @@ export function ClosingPage({
         <CardContent>
           {data.campaigns.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground">
-              {data.emptyReason === "somente-hoje" ? (
-                <>
-                  O período escolhido cobre apenas o dia de hoje. O fechamento
-                  usa só dias já encerrados, porque o gasto de hoje ainda muda —
-                  escolha um período que inclua ontem ou antes.
-                </>
-              ) : data.emptyReason === "filtro-sem-campanha" ? (
+              {data.emptyReason === "filtro-sem-campanha" ? (
                 <>
                   O filtro de campanhas não corresponde a nenhuma campanha com
                   investimento neste período. Limpe o filtro para ver o
                   fechamento completo.
-                </>
-              ) : data.emptyReason === "so-comecou-hoje" ? (
-                <>
-                  A veiculação deste período começou hoje. O fechamento conta
-                  apenas dias já encerrados, porque o gasto de hoje ainda muda —
-                  amanhã o dia de hoje entra no total.
                 </>
               ) : data.emptyReason === "sem-metricas" ? (
                 <>

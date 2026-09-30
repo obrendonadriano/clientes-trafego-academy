@@ -8,7 +8,11 @@ import {
   subDays,
   subMonths,
 } from "date-fns";
-import { clampMetricsWindowForRole, type MetricsWindow } from "@/lib/data/date-range";
+import {
+  businessToday,
+  clampMetricsWindowForRole,
+  type MetricsWindow,
+} from "@/lib/data/date-range";
 import type { Role } from "@/lib/types";
 
 // Atalhos de período do fechamento. O usuário também pode informar datas
@@ -32,7 +36,8 @@ export function getClosingPresetWindow(
   preset: ClosingPresetKey,
   now = new Date(),
 ): MetricsWindow {
-  const today = startOfDay(now);
+  // São Paulo, não o relógio do servidor: senão "Este mês" termina amanhã.
+  const today = businessToday(now);
 
   switch (preset) {
     case "mes-passado": {
