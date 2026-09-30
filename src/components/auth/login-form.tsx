@@ -52,8 +52,8 @@ export function LoginForm() {
           Acompanhe cada real investido virar resultado.
         </h1>
         <p className="text-[15.5px] leading-[1.55] text-pretty text-muted-foreground">
-          Métricas das suas campanhas, evolução dos resultados e relatórios da
-          operação em um só lugar.
+          Métricas das suas campanhas, evolução dos resultados e os leads que
+          chegaram, tudo em um só lugar.
         </p>
       </div>
 

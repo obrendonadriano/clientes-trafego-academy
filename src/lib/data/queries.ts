@@ -22,7 +22,6 @@ import {
   Client,
   IntegrationSetting,
   RawCampaignMetric,
-  ReportHistoryItem,
   SyncStatus,
   User,
 } from "@/lib/types";
@@ -38,7 +37,6 @@ export const CACHE_TAGS = {
   campaigns: "campaigns",
   permissions: "permissions",
   metrics: "metrics",
-  reports: "reports",
   sync: "sync",
 } as const;
 
@@ -122,21 +120,8 @@ type DbIntegrationRow = {
   config: Record<string, string> | null;
 };
 
-type DbReportRow = {
-  id: string;
-  client_id: string | null;
-  period_start: string | null;
-  period_end: string | null;
-  generated_text: string;
-  created_at: string;
-  clients?: Embedded<{
-    nome_empresa: string;
-    whatsapp: string | null;
-  }>;
-};
-
 type DbSyncStatusRow = {
-  provider: "meta_ads" | "gemini" | "supabase";
+  provider: "meta_ads" | "supabase";
   status: SyncStatus["status"];
   last_attempt_at: string | null;
   last_success_at: string | null;
@@ -153,18 +138,6 @@ export type CampaignBase = {
   clientName?: string;
   resultCategory: ResultCategory;
 };
-
-function formatReportPeriodLabel(periodStart: string | null, periodEnd: string | null) {
-  if (!periodStart || !periodEnd) {
-    return "Período não informado";
-  }
-
-  try {
-    return `${format(parseISO(periodStart), "dd/MM/yyyy")} a ${format(parseISO(periodEnd), "dd/MM/yyyy")}`;
-  } catch {
-    return "Período não informado";
-  }
-}
 
 function toNumber(value: number | string | null | undefined) {
   return Number(value ?? 0);
@@ -218,22 +191,6 @@ function mapCampaignBase(row: DbCampaignRow): CampaignBase {
     clientId: row.client_id,
     clientName: firstEmbedded(row.clients)?.nome_empresa,
     resultCategory: getResultCategoryFromObjective(row.objective),
-  };
-}
-
-function mapReport(row: DbReportRow): ReportHistoryItem {
-  return {
-    id: row.id,
-    clientId: row.client_id ?? undefined,
-    clientName: firstEmbedded(row.clients)?.nome_empresa ?? "Cliente removido",
-    whatsapp: firstEmbedded(row.clients)?.whatsapp ?? "",
-    periodLabel: formatReportPeriodLabel(row.period_start, row.period_end),
-    preview:
-      row.generated_text.length > 160
-        ? `${row.generated_text.slice(0, 160)}…`
-        : row.generated_text,
-    generatedText: row.generated_text,
-    createdAt: row.created_at,
   };
 }
 
@@ -649,32 +606,6 @@ function maxIsoDay(a: string, b: string) {
   return a > b ? a : b;
 }
 
-const fetchReportsCached = unstable_cache(
-  async (clientId: string | null) => {
-    let query = requireAdminClient()
-      .from("ai_reports")
-      .select(
-        "id, client_id, period_start, period_end, generated_text, created_at, clients(nome_empresa, whatsapp)",
-      )
-      .order("created_at", { ascending: false })
-      .limit(10);
-
-    if (clientId) {
-      query = query.eq("client_id", clientId);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    return ((data as DbReportRow[] | null) ?? []).map(mapReport);
-  },
-  ["reports"],
-  { tags: [CACHE_TAGS.reports], revalidate: 300 },
-);
-
 const fetchSyncStatusesCached = unstable_cache(
   async (): Promise<SyncStatus[]> => {
     const { data, error } = await requireAdminClient()
@@ -1043,79 +974,6 @@ export async function getClientPortalData(user: User, window: MetricsWindow) {
   };
 }
 
-export async function getReportsPageData() {
-  if (!isSupabaseAdminConfigured()) {
-    const snapshot = getMockSnapshot();
-    return {
-      clients: snapshot.clients,
-      campaigns: snapshot.campaigns,
-      clientUsers: snapshot.users.filter((user) => user.role === "client"),
-      permissions: snapshot.permissions,
-      reports: snapshot.reports,
-    };
-  }
-
-  const [clients, bases, users, permissions, reports] = await Promise.all([
-    fetchClientsCached(),
-    fetchCampaignBasesCached(),
-    fetchUsersCached(),
-    fetchPermissionsCached(),
-    fetchReportsCached(null),
-  ]);
-
-  return {
-    clients,
-    // O painel de relatórios só precisa de nome/cliente das campanhas.
-    campaigns: bases.map((base) => toCampaignWithMetrics(base)),
-    clientUsers: users.filter((user) => user.role === "client"),
-    permissions,
-    reports,
-  };
-}
-
-// Dados para a action de geração de relatório IA: busca direcionada por
-// cliente/campanhas e métricas do range exato (filtrado no banco).
-export async function getReportGenerationData(input: {
-  clientId: string;
-  campaignIds: string[];
-  window: MetricsWindow;
-}) {
-  if (!isSupabaseAdminConfigured()) {
-    const snapshot = getMockSnapshot();
-    const client =
-      snapshot.clients.find((item) => item.id === input.clientId) ?? null;
-    const campaigns = snapshot.campaigns.filter((campaign) =>
-      input.campaignIds.includes(campaign.id),
-    );
-
-    return {
-      client,
-      campaigns,
-      metricRows: snapshot.metricRows.filter((row) =>
-        input.campaignIds.includes(row.campaignId),
-      ),
-    };
-  }
-
-  const [clients, bases] = await Promise.all([
-    fetchClientsCached(),
-    fetchCampaignBasesCached(),
-  ]);
-
-  const client = clients.find((item) => item.id === input.clientId) ?? null;
-  const campaigns = bases.filter((base) => input.campaignIds.includes(base.id));
-  const metricRows = await fetchMetricsWindow(
-    input.window,
-    campaigns.map((campaign) => campaign.id),
-  );
-
-  return {
-    client,
-    campaigns: campaigns.map((base) => toCampaignWithMetrics(base)),
-    metricRows,
-  };
-}
-
 function getDefaultIntegrations(): IntegrationSetting[] {
   return [
     {
@@ -1137,14 +995,6 @@ function getDefaultIntegrations(): IntegrationSetting[] {
       status: "pending",
       title: "Meta Ads",
       description: "Conexão com campanhas e métricas via app do Meta for Developers.",
-      config: {},
-    },
-    {
-      provider: "gemini",
-      enabled: Boolean(process.env.GEMINI_API_KEY),
-      status: process.env.GEMINI_API_KEY ? "connected" : "pending",
-      title: "Gemini",
-      description: "Geração de análises consultivas e relatórios para clientes.",
       config: {},
     },
     {
@@ -1177,13 +1027,6 @@ function sanitizeIntegrationConfig(
       ad_account_id: config.ad_account_id ?? "",
       app_secret_configured: String(Boolean(config.app_secret)),
       access_token_configured: String(Boolean(config.access_token)),
-    };
-  }
-
-  if (provider === "gemini") {
-    return {
-      model: config.model ?? "",
-      api_key_configured: String(Boolean(config.api_key)),
     };
   }
 

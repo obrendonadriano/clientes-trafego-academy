@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Tráfego Academy",
     short_name: "Tráfego Academy",
     description:
-      "Portal privado para clientes da Tráfego Academy com dashboard e relatórios.",
+      "Portal privado para clientes da Tráfego Academy com dashboard e campanhas.",
     start_url: "/",
     display: "standalone",
     orientation: "portrait",

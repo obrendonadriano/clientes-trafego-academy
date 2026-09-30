@@ -15,8 +15,27 @@ type ProfileRow = {
   client_id: string | null;
   clients?: Embedded<{
     nome_empresa: string;
+    ativo: boolean;
   }>;
 };
+
+const PROFILE_COLUMNS =
+  "id, auth_user_id, nome, username, email, role, whatsapp, ativo, client_id, clients(nome_empresa, ativo)";
+
+// Sem acesso ao portal: usuário desativado, ou cliente cuja empresa está
+// inativa no cadastro. Vale no login e em toda requisição, então desativar a
+// empresa derruba na hora quem já estava logado.
+function hasPortalAccess(row: ProfileRow) {
+  if (!row.ativo) {
+    return false;
+  }
+
+  if (row.role === "client" && firstEmbedded(row.clients)?.ativo === false) {
+    return false;
+  }
+
+  return true;
+}
 
 function mapProfile(row: ProfileRow): User {
   return {
@@ -47,7 +66,7 @@ export async function signInWithSupabase(identifier: string, password: string) {
 
   const { data: profileRow, error: profileError } = await adminClient
     .from("users")
-    .select("id, auth_user_id, nome, username, email, role, whatsapp, ativo, client_id, clients(nome_empresa)")
+    .select(PROFILE_COLUMNS)
     .or(`username.eq.${normalizedIdentifier},email.eq.${normalizedIdentifier}`)
     .maybeSingle();
 
@@ -62,6 +81,13 @@ export async function signInWithSupabase(identifier: string, password: string) {
 
   if (authError) {
     return null;
+  }
+
+  // Senha certa, mas a empresa do cliente está inativa: encerra a sessão
+  // recém-criada e avisa o motivo (em vez de "senha inválida").
+  if (!hasPortalAccess(profileRow as ProfileRow)) {
+    await serverClient.auth.signOut();
+    return "blocked" as const;
   }
 
   return mapProfile(profileRow as ProfileRow);
@@ -97,11 +123,11 @@ export async function getSupabaseCurrentUser() {
 
   const { data: profileRow, error } = await adminClient
     .from("users")
-    .select("id, auth_user_id, nome, username, email, role, whatsapp, ativo, client_id, clients(nome_empresa)")
+    .select(PROFILE_COLUMNS)
     .eq("auth_user_id", authUserId)
     .maybeSingle();
 
-  if (error || !profileRow || !profileRow.ativo) {
+  if (error || !profileRow || !hasPortalAccess(profileRow as ProfileRow)) {
     return null;
   }
 

@@ -195,6 +195,38 @@ function getPrimaryResult(
   return { count: 0, label: getResultLabelForCategory(category) };
 }
 
+// Categoria de resultado de UM conjunto de anúncios: parte do objetivo da
+// campanha e é refinada pelo destino/meta de otimização do conjunto (ex.:
+// objetivo "Leads" com destino WhatsApp gera conversas, não leads no site).
+// Mesma precedência usada no nível de campanha em importMetaMetrics.
+function refineCategoryWithAdSet(
+  objectiveCategory: ResultCategory,
+  adSet?: { optimization_goal?: string; destination_type?: string },
+): ResultCategory {
+  if (!adSet) {
+    return objectiveCategory;
+  }
+
+  const refined = getResultCategoryFromAdSet(
+    adSet.optimization_goal,
+    adSet.destination_type,
+  );
+
+  if (!refined) {
+    return objectiveCategory;
+  }
+
+  return refined === "messaging" || !isStrongResultCategory(objectiveCategory)
+    ? refined
+    : objectiveCategory;
+}
+
+// Snapshots de conjuntos/anúncios gravados antes desta data usavam só o
+// objetivo da campanha (resultado zerado em campanhas de WhatsApp). Se nenhum
+// registro da conta foi regravado depois dela, a próxima sincronização refaz
+// a carga completa de 92 dias em vez da janela incremental de 7.
+const AD_LEVEL_RESULT_RULES_SINCE = "2026-09-30T00:00:00Z";
+
 async function persistSyncStatus(input: Omit<SyncStatusPayload, "provider" | "interval_minutes" | "updated_at">) {
   const adminClient = createSupabaseAdminClient();
 
@@ -438,6 +470,7 @@ export async function importMetaAdLevelMetrics(account: ResolvedMetaAccount) {
     .from("meta_ad_level_metrics")
     .select("id")
     .eq("ad_account_id", adAccountId)
+    .gte("updated_at", AD_LEVEL_RESULT_RULES_SINCE)
     .limit(1);
 
   if (existing.error) {
@@ -533,7 +566,11 @@ export async function importMetaAdLevelMetrics(account: ResolvedMetaAccount) {
         continue;
       }
 
-      const category = getResultCategoryFromObjective(campaign.objective);
+      const adSetId = level === "ad" ? insight.adset_id : externalId;
+      const category = refineCategoryWithAdSet(
+        getResultCategoryFromObjective(campaign.objective),
+        adSetId ? adSetById.get(adSetId) : undefined,
+      );
       const primaryResult = getPrimaryResult(insight.actions, category);
       const entity = level === "ad" ? adById.get(externalId) : adSetById.get(externalId);
       const rate = resolveRateForDay(dailyRates, insight.date_start, currentRate);

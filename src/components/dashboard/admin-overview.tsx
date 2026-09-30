@@ -5,8 +5,8 @@ import { useMemo } from "react";
 import {
   Activity,
   Coins,
-  FileText,
   MousePointerClick,
+  Sparkles,
   Target,
   TrendingUp,
   Users,
@@ -299,9 +299,9 @@ export function AdminOverview({
                       <Users className="size-[15px] text-brand-300" strokeWidth={1.75} />
                       Clientes
                     </PulseLink>
-                    <PulseLink href={scopedHref("/admin/relatorios-ia")}>
-                      <FileText className="size-[15px] text-brand-300" strokeWidth={1.75} />
-                      Relatórios IA
+                    <PulseLink href={scopedHref("/admin/conversoes")}>
+                      <Sparkles className="size-[15px] text-brand-300" strokeWidth={1.75} />
+                      Conversões
                     </PulseLink>
                   </>
                 }

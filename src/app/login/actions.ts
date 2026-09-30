@@ -18,12 +18,22 @@ export async function loginAction(
   const username = String(formData.get("username") ?? "");
   const password = String(formData.get("password") ?? "");
 
-  let result = isSupabaseConfigured()
+  const signIn = isSupabaseConfigured()
     ? await signInWithSupabase(username, password)
     : authenticateUser(username, password);
 
+  if (signIn === "blocked") {
+    return {
+      error:
+        "Seu acesso ao portal está desativado. Fale com a equipe da Tráfego Academy.",
+    };
+  }
+
+  let result = signIn;
+
   if (!result && isDevelopmentAuthFallbackEnabled()) {
-    result = authenticateUser(username, password);
+    const fallback = authenticateUser(username, password);
+    result = fallback === "blocked" ? null : fallback;
   }
 
   if (!result) {

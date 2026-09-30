@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarCheck, Megaphone, TrendingUp } from "lucide-react";
+import { MessageCircle, Megaphone, TrendingUp } from "lucide-react";
 import { LoginForm } from "@/components/auth/login-form";
 import { BrandLogo } from "@/components/shell/app-sidebar";
 
@@ -143,11 +143,11 @@ function ShowcasePanel() {
 
       <div className={`${FLOAT_CARD} bottom-[26%] left-[4%] px-4 py-3`} style={{ animationDelay: "700ms" }}>
         <span className="grid size-[34px] place-items-center rounded-[10px] bg-[#ecfdf3] text-[#067647]">
-          <CalendarCheck className="size-[18px]" strokeWidth={1.75} />
+          <MessageCircle className="size-[18px]" strokeWidth={1.75} />
         </span>
         <div>
-          <p className="text-sm font-semibold text-foreground">Relatório IA pronto</p>
-          <p className="text-xs text-muted-foreground">Resumo semanal · 08:00</p>
+          <p className="text-sm font-semibold text-foreground">Novo lead no WhatsApp</p>
+          <p className="text-xs text-muted-foreground">Campanha Lançamento · agora</p>
         </div>
       </div>
 

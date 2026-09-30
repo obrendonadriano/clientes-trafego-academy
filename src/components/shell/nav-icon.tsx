@@ -3,7 +3,6 @@
 import {
   BarChart3,
   Bot,
-  FileText,
   LayoutDashboard,
   Receipt,
   Settings,
@@ -17,7 +16,6 @@ const ICONS = {
   visao: LayoutDashboard,
   clientes: Users,
   campanhas: BarChart3,
-  relatorios: FileText,
   config: Settings,
   perfil: User,
   fechamento: Receipt,

@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Tráfego Academy Dashboard",
   description:
-    "Portal privado para clientes da Tráfego Academy com dashboard, permissões e relatórios com IA.",
+    "Portal privado para clientes da Tráfego Academy com dashboard, campanhas e conversões.",
   metadataBase: new URL("https://dashboard.trafegoacademy.online"),
   applicationName: "Tráfego Academy",
   // Favicon e apple-touch-icon vêm das convenções de arquivo do Next

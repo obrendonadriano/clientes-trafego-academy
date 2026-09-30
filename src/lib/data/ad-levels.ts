@@ -2,6 +2,8 @@ import { getMockAdLevelRows } from "@/lib/mock-data";
 import type { MetricsWindow } from "@/lib/data/date-range";
 import { isSupabaseAdminConfigured } from "@/lib/env";
 import { getCampaignIdsForClient } from "@/lib/data/queries";
+import { fetchMetaAdCreatives } from "@/lib/meta-ads";
+import { getSyncableMetaAccounts } from "@/lib/meta/accounts";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export type AdLevelRow = {
@@ -25,6 +27,10 @@ export type AdLevelRow = {
   exchangeRate: number;
   status: "Ativa" | "Pausada" | "Não sincronizado";
   effectiveStatus: string;
+  // Só no nível de anúncio, lidos ao vivo da Meta (URLs assinadas expiram).
+  thumbnailUrl?: string | null;
+  imageUrl?: string | null;
+  adUrl?: string | null;
 };
 
 export type AdLevelData = {
@@ -166,11 +172,7 @@ export async function getAdLevelData(
     }
   }
 
-  return {
-    notice: hasEnrichedSnapshots
-      ? undefined
-      : "A atualização de status está pronta no código e será exibida após aplicar a migration e sincronizar a Meta uma vez.",
-    rows: summaryRows.map((row) => {
+  const rows: AdLevelRow[] = summaryRows.map((row) => {
       const storedAmount = Number(row.amount_spent || 0);
       const exchangeRate =
         Number(row.exchange_rate || 0) || fallbackRates.get(row.campaign_id) || 1;
@@ -209,6 +211,48 @@ export async function getAdLevelData(
               : "Não sincronizado",
         effectiveStatus: row.effective_status ?? row.status ?? "UNKNOWN",
       };
-    }),
+    });
+
+  return {
+    notice: hasEnrichedSnapshots
+      ? undefined
+      : "A atualização de status está pronta no código e será exibida após aplicar a migration e sincronizar a Meta uma vez.",
+    rows: level === "ad" ? await withCreativePreviews(rows) : rows,
   };
+}
+
+// Anexa miniatura e link de cada anúncio. Todas as contas ficam na mesma
+// Business Manager, então tenta os tokens disponíveis até um responder; se
+// nenhum responder, a tabela segue sem miniaturas.
+async function withCreativePreviews(rows: AdLevelRow[]): Promise<AdLevelRow[]> {
+  if (rows.length === 0) {
+    return rows;
+  }
+
+  try {
+    const tokens = [
+      ...new Set((await getSyncableMetaAccounts()).map((account) => account.accessToken)),
+    ];
+
+    for (const accessToken of tokens) {
+      try {
+        const previews = await fetchMetaAdCreatives({
+          adIds: rows.map((row) => row.id),
+          accessToken,
+        });
+
+        return rows.map((row) => ({ ...row, ...previews.get(row.id) }));
+      } catch (error) {
+        console.warn("[ad-levels] miniaturas indisponíveis com este token", {
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  } catch (error) {
+    console.warn("[ad-levels] não foi possível listar as contas Meta", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  return rows;
 }

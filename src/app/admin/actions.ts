@@ -696,7 +696,6 @@ export async function deleteClientWorkspaceAction(
     CACHE_TAGS.clients,
     CACHE_TAGS.users,
     CACHE_TAGS.permissions,
-    CACHE_TAGS.reports,
   );
   revalidatePath("/admin");
   revalidatePath("/admin/clientes");

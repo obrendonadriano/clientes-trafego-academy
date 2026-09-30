@@ -20,7 +20,7 @@ type CampaignMultiSelectProps = {
   onChange?: (ids: string[]) => void;
   inputName?: string | null;
   showSelectionSummary?: boolean;
-  // Lista mais baixa para painéis estreitos (ex.: gerar relatório).
+  // Lista mais baixa para painéis estreitos.
   dense?: boolean;
 };
 

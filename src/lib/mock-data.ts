@@ -4,7 +4,6 @@ import {
   Client,
   PerformancePoint,
   RawCampaignMetric,
-  ReportHistoryItem,
   SyncStatus,
   User,
 } from "@/lib/types";
@@ -181,33 +180,6 @@ const performanceSeriesByUser: Record<string, PerformancePoint[]> = {
     { label: "Semana 4", amountSpent: 1360, leads: 17 },
   ],
 };
-
-const reportHistory: ReportHistoryItem[] = [
-  {
-    id: "report-1",
-    clientId: "client-alpha",
-    clientName: "Alpha Clinic",
-    whatsapp: "+5511999990001",
-    periodLabel: "01/04/2026 a 07/04/2026",
-    preview:
-      "A semana mostrou avanço consistente em leads qualificados, com destaque para a campanha de captação principal.",
-    generatedText:
-      "A semana mostrou avanço consistente em leads qualificados, com destaque para a campanha de captação principal.",
-    createdAt: "2026-04-07T10:00:00.000Z",
-  },
-  {
-    id: "report-2",
-    clientId: "client-bravo",
-    clientName: "Bravo Legal",
-    whatsapp: "+5511999990002",
-    periodLabel: "Março de 2026",
-    preview:
-      "O desempenho manteve ROAS saudável, mas ainda há espaço para reduzir CPC em grupos de anúncio específicos.",
-    generatedText:
-      "O desempenho manteve ROAS saudável, mas ainda há espaço para reduzir CPC em grupos de anúncio específicos.",
-    createdAt: "2026-03-31T18:30:00.000Z",
-  },
-];
 
 const metricRows: RawCampaignMetric[] = [
   {
@@ -443,9 +415,27 @@ export function getMockAdLevelRows(
         exchangeRate: 1,
         status: campaign.status,
         effectiveStatus: campaign.status === "Ativa" ? "ACTIVE" : "PAUSED",
+        ...(level === "ad"
+          ? {
+              thumbnailUrl: mockCreative(index),
+              imageUrl: mockCreative(index),
+              adUrl: "https://www.facebook.com/ads/library/",
+            }
+          : {}),
       };
     });
   });
+}
+
+// Criativo de exemplo (SVG embutido) para testar miniaturas sem a Meta.
+function mockCreative(index: number) {
+  const colors = [
+    ["#7c5cfa", "#3f2596"],
+    ["#12b76a", "#065f46"],
+    ["#f97316", "#9a3412"],
+  ][index % 3];
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${colors[0]}"/><stop offset="1" stop-color="${colors[1]}"/></linearGradient></defs><rect width="320" height="320" fill="url(#g)"/><text x="160" y="175" font-family="sans-serif" font-size="44" font-weight="700" fill="#fff" text-anchor="middle">Criativo ${String.fromCharCode(65 + index)}</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
 export function getMockSnapshot(): AppDataSnapshot {
@@ -465,28 +455,46 @@ export function getMockSnapshot(): AppDataSnapshot {
     clients,
     campaigns,
     permissions,
-    reports: reportHistory,
     metricRows,
     syncStatuses,
   };
 }
 
+// Mesma regra do Supabase: cliente de empresa inativa não acessa o portal.
+function hasPortalAccess(user: Pick<User, "active" | "role" | "clientId">) {
+  if (!user.active) {
+    return false;
+  }
+
+  if (user.role === "client" && user.clientId) {
+    return clients.find((client) => client.id === user.clientId)?.active !== false;
+  }
+
+  return true;
+}
+
 export function authenticateMockUser(username: string, password: string) {
-  return (
+  const user =
     users.find(
-      (user) =>
-        (user.username.toLowerCase() === username.toLowerCase() ||
-          user.email.toLowerCase() === username.toLowerCase()) &&
-        user.password === password &&
-        user.active,
-    ) ?? null
-  );
+      (item) =>
+        (item.username.toLowerCase() === username.toLowerCase() ||
+          item.email.toLowerCase() === username.toLowerCase()) &&
+        item.password === password &&
+        item.active,
+    ) ?? null;
+
+  // Senha certa, mas a empresa do cliente está inativa.
+  if (user && !hasPortalAccess(user)) {
+    return "blocked" as const;
+  }
+
+  return user;
 }
 
 export function getUserById(userId: string) {
   const user = users.find((item) => item.id === userId);
 
-  if (!user) {
+  if (!user || !hasPortalAccess(user)) {
     return null;
   }
 
@@ -526,6 +534,3 @@ export function getPerformanceSeriesForUser(userId: string) {
   return performanceSeriesByUser[userId] ?? performanceSeriesByUser["user-alpha"];
 }
 
-export function getReportHistory() {
-  return reportHistory;
-}

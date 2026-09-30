@@ -6,7 +6,6 @@ export type NavIconKey =
   | "visao"
   | "clientes"
   | "campanhas"
-  | "relatorios"
   | "config"
   | "perfil"
   | "fechamento"
@@ -72,11 +71,8 @@ const ADMIN_SECTIONS: NavSection[] = [
     href: "/admin/clientes",
     icon: "clientes",
     group: "Operação",
-    subTabs: [
-      { label: "Todos", href: "/admin/clientes", exact: true },
-      { label: "Sem acesso", href: "/admin/clientes?filtro=sem-acesso" },
-      { label: "Novo cliente", href: "/admin/clientes/novo" },
-    ],
+    // Filtros ficam na própria lista; "Novo cliente" abre pelo botão dela.
+    subTabs: [],
   },
   {
     key: "campanhas",
@@ -118,18 +114,6 @@ const ADMIN_SECTIONS: NavSection[] = [
     group: "Inteligência",
     subTabs: [
       { label: "Clientes", href: "/admin/atendimento-ia", exact: true },
-    ],
-  },
-  {
-    key: "relatorios",
-    label: "Relatórios",
-    title: "Relatórios IA",
-    href: "/admin/relatorios-ia",
-    icon: "relatorios",
-    group: "Inteligência",
-    subTabs: [
-      { label: "Gerar", href: "/admin/relatorios-ia", exact: true },
-      { label: "Histórico", href: "/admin/relatorios-ia/historico" },
     ],
   },
   {
@@ -253,7 +237,7 @@ export function isSubTabActive(
   const [tabPath, tabQuery] = tab.href.split("?");
 
   if (tabQuery) {
-    // Aba com filtro proprio (ex.: ?filtro=sem-acesso): so fica ativa quando
+    // Aba com filtro proprio (ex.: ?filtro=...): so fica ativa quando
     // o pathname bate E todos os parametros dela estao na URL.
     if (pathname !== tabPath) {
       return false;

@@ -143,7 +143,7 @@ export async function removeMetaAccountAction(
 }
 
 const integrationSchema = z.object({
-  provider: z.enum(["meta_ads", "gemini", "deepseek", "waha"]),
+  provider: z.enum(["meta_ads", "deepseek", "waha"]),
   enabled: z.string().optional(),
   fields: z.record(z.string(), z.string()),
 });
@@ -198,7 +198,6 @@ export async function saveIntegrationSettingsAction(
   const previousConfig = (existing.data?.config ?? {}) as Record<string, string>;
   const secretFields: Record<typeof parsed.data.provider, string[]> = {
     meta_ads: ["app_secret", "access_token"],
-    gemini: ["api_key"],
     deepseek: ["api_key"],
     waha: ["api_key", "webhook_secret"],
   };

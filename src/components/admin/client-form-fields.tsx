@@ -112,7 +112,7 @@ export const WHATSAPP_PATTERN = "\\+55 \\(\\d{2}\\) \\d{5}-\\d{4}";
 export const WHATSAPP_TITLE =
   "Informe o WhatsApp no formato +55 (DD) 99999-9999";
 
-// Seleção do nicho do cliente (dá contexto à IA dos relatórios). Presets +
+// Seleção do nicho do cliente. Presets +
 // "Outro" com descrição livre. Opcional — sem segmento, o texto sai genérico.
 export function SegmentField({
   defaultSegment,

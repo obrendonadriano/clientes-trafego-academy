@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Info, LoaderCircle } from "lucide-react";
 import { toggleAdLevelStatusAction } from "@/app/admin/campanhas/actions";
+import { AdCreativeThumb } from "@/components/dashboard/ad-creative-thumb";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { TaxInfo } from "@/components/dashboard/tax-info";
@@ -134,7 +135,15 @@ export function AdLevelTable({
                 className="dashboard-card rounded-[0.875rem] border p-4 text-foreground"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  {level === "ad" ? (
+                    <AdCreativeThumb
+                      name={row.name}
+                      thumbnailUrl={row.thumbnailUrl}
+                      imageUrl={row.imageUrl}
+                      adUrl={row.adUrl}
+                    />
+                  ) : null}
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium leading-snug">{row.name}</p>
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {level === "ad" && row.adSetName
@@ -193,12 +202,24 @@ export function AdLevelTable({
                   {sortedRows.map((row) => (
                     <tr key={row.id}>
                       <td className="min-w-[260px] border-b border-border/60 px-4 py-3 align-middle">
-                        <p className="font-medium leading-snug text-foreground">{row.name}</p>
-                        <p className="mt-0.5 max-w-[300px] truncate text-xs text-muted-foreground">
-                          {level === "ad" && row.adSetName
-                            ? `${row.campaignName} · ${row.adSetName}`
-                            : row.campaignName}
-                        </p>
+                        <div className="flex items-center gap-3">
+                          {level === "ad" ? (
+                            <AdCreativeThumb
+                              name={row.name}
+                              thumbnailUrl={row.thumbnailUrl}
+                              imageUrl={row.imageUrl}
+                              adUrl={row.adUrl}
+                            />
+                          ) : null}
+                          <div className="min-w-0">
+                            <p className="font-medium leading-snug text-foreground">{row.name}</p>
+                            <p className="mt-0.5 max-w-[300px] truncate text-xs text-muted-foreground">
+                              {level === "ad" && row.adSetName
+                                ? `${row.campaignName} · ${row.adSetName}`
+                                : row.campaignName}
+                            </p>
+                          </div>
+                        </div>
                       </td>
                       <td className="min-w-[120px] border-b border-border/60 px-4 py-3 align-middle">
                         <EntityStatus level={level} row={row} editable={editable} />

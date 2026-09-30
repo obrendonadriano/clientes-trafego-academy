@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { Bot, Brain, Database, MessageCircle, PlugZap } from "lucide-react";
+import { Bot, Database, MessageCircle, PlugZap } from "lucide-react";
 import { saveIntegrationSettingsAction, type SettingsActionState } from "@/app/admin/configuracoes/actions";
 import { MetaAccountsManager } from "@/components/admin/meta-accounts-manager";
 import { Badge } from "@/components/ui/badge";
@@ -24,15 +24,6 @@ type AdminSettingsPageProps = {
 };
 
 const initialState: SettingsActionState = {};
-
-const geminiModels = [
-  { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite (Recomendado)" },
-  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-  { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
-  { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
-  { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash" },
-] as const;
 
 function SaveButton({ testConnection = false }: { testConnection?: boolean }) {
   const { pending } = useFormStatus();
@@ -56,8 +47,6 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
   const icon =
     integration.provider === "meta_ads" ? (
       <PlugZap className="size-5" />
-    ) : integration.provider === "gemini" ? (
-      <Brain className="size-5" />
     ) : integration.provider === "deepseek" ? (
       <Bot className="size-5" />
     ) : integration.provider === "waha" ? (
@@ -159,38 +148,6 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
                 <div className="inline-flex items-center rounded-full border border-border/60 px-4 py-2 text-sm text-muted-foreground">
                   Callback: /api/meta/callback
                 </div>
-              </div>
-            </div>
-          ) : null}
-
-          {integration.provider === "gemini" ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="gemini_model">Modelo</Label>
-                <Select
-                  id="gemini_model"
-                  name="config_model"
-                  defaultValue={integration.config.model ?? "gemini-2.5-flash-lite"}
-                >
-                  {geminiModels.map((model) => (
-                    <option key={model.value} value={model.value}>
-                      {model.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="gemini_key_hint">API Key</Label>
-                <Input
-                  id="gemini_key_hint"
-                  name="config_api_key"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder={integration.config.api_key_configured === "true" ? "Chave salva — deixe vazio para manter" : "Cole a API Key"}
-                />
-              </div>
-              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3 text-sm text-muted-foreground md:col-span-2">
-                O modelo selecionado sera usado na geracao dos relatorios da pagina de IA.
               </div>
             </div>
           ) : null}

@@ -181,3 +181,25 @@ test('o fechamento diz por que está zerado', () => {
   );
   assert.ok(page.includes('data.emptyReason'), 'a tela ignora o motivo');
 });
+
+test('conjuntos e anúncios usam o destino do conjunto para achar o resultado', () => {
+  // O bug: o nível de anúncio olhava só o objetivo da campanha. Campanha de
+  // "Leads" com destino WhatsApp mostrava 7 conversas na campanha e 0 "Leads no
+  // site" nos conjuntos e anúncios.
+  const adLevel = code.slice(code.indexOf('export async function importMetaAdLevelMetrics'));
+
+  assert.match(
+    adLevel,
+    /const category = refineCategoryWithAdSet\(\s*getResultCategoryFromObjective\(campaign\.objective\),\s*adSetId \? adSetById\.get\(adSetId\) : undefined,\s*\);/,
+  );
+  assert.match(adLevel, /const adSetId = level === "ad" \? insight\.adset_id : externalId;/);
+  assert.equal(
+    /const category = getResultCategoryFromObjective\(campaign\.objective\);\s*const primaryResult = getPrimaryResult\(insight\.actions, category\);\s*const entity/.test(code),
+    false,
+    'o nível de anúncio voltou a ignorar o conjunto',
+  );
+});
+
+test('snapshots anteriores à correção disparam a recarga completa', () => {
+  assert.match(code, /\.gte\("updated_at", AD_LEVEL_RESULT_RULES_SINCE\)/);
+});

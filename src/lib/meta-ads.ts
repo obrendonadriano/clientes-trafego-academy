@@ -433,6 +433,72 @@ export async function fetchMetaAds(input: {
   return { data };
 }
 
+export type MetaAdCreativePreview = {
+  // Miniatura pequena (lista) e imagem maior (prévia ao passar o mouse).
+  thumbnailUrl: string | null;
+  imageUrl: string | null;
+  // Onde abrir o anúncio: prévia compartilhável da Meta, com o post como reserva.
+  adUrl: string | null;
+};
+
+const CREATIVE_BATCH_SIZE = 50;
+
+// Miniatura e link de cada anúncio, lidos ao vivo. As URLs de imagem da Meta
+// são assinadas e expiram, por isso não vão para o banco. Uma falha aqui só
+// deixa a tabela sem miniatura: nunca derruba a página.
+export async function fetchMetaAdCreatives(input: {
+  adIds: string[];
+  accessToken: string;
+}) {
+  const previews = new Map<string, MetaAdCreativePreview>();
+  const ids = [...new Set(input.adIds.filter(Boolean))];
+
+  for (let index = 0; index < ids.length; index += CREATIVE_BATCH_SIZE) {
+    const batch = ids.slice(index, index + CREATIVE_BATCH_SIZE);
+    const params = new URLSearchParams({
+      ids: batch.join(","),
+      fields:
+        "preview_shareable_link,creative.thumbnail_width(160).thumbnail_height(160){thumbnail_url,image_url,effective_object_story_id,instagram_permalink_url}",
+      access_token: input.accessToken,
+    });
+
+    const response = await fetchMetaPageWithRetry(
+      `https://graph.facebook.com/${META_GRAPH_VERSION}/?${params.toString()}`,
+    );
+    const payload = (await response.json()) as Record<
+      string,
+      {
+        preview_shareable_link?: string;
+        creative?: {
+          thumbnail_url?: string;
+          image_url?: string;
+          effective_object_story_id?: string;
+          instagram_permalink_url?: string;
+        };
+      }
+    >;
+
+    for (const [adId, ad] of Object.entries(payload)) {
+      const creative = ad.creative ?? {};
+      const storyUrl = creative.effective_object_story_id
+        ? `https://www.facebook.com/${creative.effective_object_story_id}`
+        : null;
+
+      previews.set(adId, {
+        thumbnailUrl: creative.thumbnail_url ?? creative.image_url ?? null,
+        imageUrl: creative.image_url ?? creative.thumbnail_url ?? null,
+        adUrl:
+          ad.preview_shareable_link ??
+          storyUrl ??
+          creative.instagram_permalink_url ??
+          null,
+      });
+    }
+  }
+
+  return previews;
+}
+
 export async function fetchMetaInsights(input: {
   adAccountId: string;
   accessToken: string;

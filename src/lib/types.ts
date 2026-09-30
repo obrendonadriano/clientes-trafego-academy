@@ -112,30 +112,17 @@ export type RawCampaignMetric = {
   exchangeRate?: number;
 };
 
-export type ReportHistoryItem = {
-  id: string;
-  clientId?: string;
-  clientName: string;
-  whatsapp?: string;
-  periodLabel: string;
-  preview: string;
-  generatedText?: string;
-  createdAt?: string;
-};
-
 export type AppDataSnapshot = {
   users: User[];
   clients: Client[];
   campaigns: CampaignWithMetrics[];
   permissions: CampaignPermission[];
-  reports: ReportHistoryItem[];
   metricRows: RawCampaignMetric[];
   syncStatuses: SyncStatus[];
 };
 
 export type IntegrationProvider =
   | "meta_ads"
-  | "gemini"
   | "deepseek"
   | "waha"
   | "supabase";
