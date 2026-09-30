@@ -16,22 +16,20 @@ export function initials(name: string) {
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "?";
 }
 
-// Logo quadrada (seta + "Tráfego Academy") com fundo transparente. A versão
-// "light" tem contornos mais escuros, feita para aparecer sobre fundo branco.
+// Logo quadrada (seta + "Tráfego Academy") com fundo transparente, feita
+// para a sidebar escura.
 export function BrandLogo({
   size = 88,
-  surface = "dark",
   className,
   priority,
 }: {
   size?: number;
-  surface?: "dark" | "light";
   className?: string;
   priority?: boolean;
 }) {
   return (
     <Image
-      src={surface === "light" ? "/brand/logo-login.webp" : "/brand/logo-square.webp"}
+      src="/brand/logo-square.webp"
       alt="Tráfego Academy"
       width={size}
       height={size}

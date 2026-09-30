@@ -1,7 +1,7 @@
+import Image from "next/image";
 import Link from "next/link";
 import { MessageCircle, Megaphone, TrendingUp } from "lucide-react";
 import { LoginForm } from "@/components/auth/login-form";
-import { BrandLogo } from "@/components/shell/app-sidebar";
 
 // Alturas das barras do mini-dashboard ilustrativo (últimas mais fortes).
 const MOCK_BARS = [34, 42, 38, 51, 46, 58, 49, 63, 57, 69, 64, 78, 72, 88];
@@ -165,19 +165,49 @@ function ShowcasePanel() {
   );
 }
 
+// Logo quadrada de fundo preto num quadradinho arredondado + nome ao lado.
+function BrandTile({ size, className }: { size: number; className?: string }) {
+  return (
+    <Image
+      src="/brand/logo-tile.webp"
+      alt=""
+      width={size}
+      height={size}
+      priority
+      className={`shrink-0 rounded-[12px] ring-1 ring-white/10 ${className ?? ""}`}
+    />
+  );
+}
+
 export function PublicLanding() {
   return (
-    <main className="flex min-h-screen bg-white">
-      <section className="flex min-w-0 max-w-full flex-[1_0_45%] flex-col px-6 py-8 sm:px-14 sm:py-10">
-        <div className="flex items-center">
-          <BrandLogo surface="light" size={112} priority className="size-[88px] sm:size-[112px]" />
+    <main className="flex min-h-dvh bg-white">
+      <section className="flex min-h-dvh min-w-0 max-w-full flex-[1_0_45%] flex-col lg:px-14 lg:py-10">
+        {/* Celular: faixa escura de ponta a ponta, como a marca aparece nas redes. */}
+        <div className="relative overflow-hidden bg-sidebar px-5 py-3.5 lg:hidden">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(260px_120px_at_85%_0%,rgba(124,92,250,0.45),transparent_70%),radial-gradient(200px_120px_at_0%_100%,rgba(124,92,250,0.22),transparent_70%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:28px_28px]" />
+          <div className="relative flex items-center gap-3">
+            <BrandTile size={44} />
+            <span className="text-[19px] font-bold tracking-[-0.02em] text-white">
+              Tráfego Academy
+            </span>
+          </div>
         </div>
 
-        <div className="flex flex-1 items-center">
+        {/* Desktop: quadradinho + nome em escuro sobre o branco. */}
+        <div className="hidden items-center gap-3 lg:flex">
+          <BrandTile size={48} />
+          <span className="text-[21px] font-bold tracking-[-0.02em] text-foreground">
+            Tráfego Academy
+          </span>
+        </div>
+
+        <div className="flex flex-1 items-center px-5 sm:px-14 lg:px-0">
           <LoginForm />
         </div>
 
-        <div className="flex flex-col gap-1 text-[12.5px] text-text-4">
+        <div className="flex flex-col gap-0.5 px-5 pb-4 text-[11.5px] leading-snug text-text-4 sm:px-14 lg:px-0 lg:pb-0 lg:text-[12.5px]">
           <p>
             Ao acessar você concorda com a{" "}
             <Link href="/politica-de-privacidade" className="underline underline-offset-2 transition hover:text-brand-600">

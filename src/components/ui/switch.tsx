@@ -10,7 +10,10 @@ export type SwitchProps = Omit<
 
 export function Switch({ className, ...props }: SwitchProps) {
   return (
-    <label className="inline-flex shrink-0 cursor-pointer items-center">
+    // `relative` prende o checkbox invisível (sr-only é absolute) dentro do
+    // interruptor. Sem isso, ao focar, o navegador rolava a moldura do painel
+    // até onde o checkbox "estava" e a tela subia deixando uma faixa vazia.
+    <label className="relative inline-flex shrink-0 cursor-pointer items-center">
       <input type="checkbox" className="peer sr-only" {...props} />
       <span
         className={cn(

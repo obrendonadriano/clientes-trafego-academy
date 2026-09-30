@@ -98,7 +98,9 @@ export function AppShell({
       enabled={user.role === "client"}
       initialSession={whatsappSession}
     >
-    <div className="fixed inset-x-0 bottom-[env(safe-area-inset-bottom)] top-[env(safe-area-inset-top)] flex min-h-0 w-full overflow-hidden bg-background">
+    {/* overflow-clip (e não hidden): hidden ainda pode ser rolado por foco ou
+        scrollIntoView, o que "subia" o painel inteiro; clip nunca rola. */}
+    <div className="fixed inset-x-0 bottom-[env(safe-area-inset-bottom)] top-[env(safe-area-inset-top)] flex min-h-0 w-full overflow-clip bg-background">
       <RevalidateOnFocus />
       <AppSidebar
         user={user}
@@ -107,7 +109,7 @@ export function AppShell({
         onCloseMobile={closeMobileNav}
       />
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-clip">
         <AppTopbar
           user={user}
           clients={clients}

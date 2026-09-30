@@ -19,7 +19,7 @@ function LoginFieldset({ children }: { children: React.ReactNode }) {
   const { pending } = useFormStatus();
 
   return (
-    <fieldset disabled={pending} className="flex flex-col gap-4">
+    <fieldset disabled={pending} className="flex flex-col gap-3 lg:gap-4">
       {children}
     </fieldset>
   );
@@ -46,12 +46,14 @@ export function LoginForm() {
   const [state, formAction] = useActionState(loginAction, initialState);
 
   return (
-    <div className="flex w-full max-w-[420px] flex-col gap-7 py-12">
-      <div className="flex flex-col gap-3.5">
-        <h1 className="text-[30px] font-semibold leading-[1.12] tracking-[-0.035em] text-balance text-foreground sm:text-[34px]">
+    // No celular tudo precisa caber numa tela só: espaços menores e a frase de
+    // apoio some em telas baixas (iPhone SE e afins).
+    <div className="flex w-full max-w-[420px] flex-col gap-5 py-5 lg:gap-7 lg:py-12">
+      <div className="flex flex-col gap-2 lg:gap-3.5">
+        <h1 className="text-[25px] font-semibold leading-[1.15] tracking-[-0.035em] text-balance text-foreground sm:text-[30px] lg:text-[34px]">
           Acompanhe cada real investido virar resultado.
         </h1>
-        <p className="text-[15.5px] leading-[1.55] text-pretty text-muted-foreground">
+        <p className="text-[14.5px] leading-[1.5] text-pretty text-muted-foreground lg:text-[15.5px] [@media(max-height:700px)]:hidden">
           Métricas das suas campanhas, evolução dos resultados e os leads que
           chegaram, tudo em um só lugar.
         </p>
