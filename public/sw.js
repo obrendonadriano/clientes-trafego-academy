@@ -6,7 +6,8 @@
 // HTML/RSC autenticado nunca entra no Cache Storage. Além de ficar obsoleto,
 // ele contém dados privados e não pode sobreviver à expiração/troca da sessão.
 
-const STATIC_CACHE = "ta-static-v1";
+// Trocar a versão descarta o cache antigo (ícones e logos novos do layout).
+const STATIC_CACHE = "ta-static-v2";
 const KEEP = [STATIC_CACHE];
 
 self.addEventListener("install", () => {

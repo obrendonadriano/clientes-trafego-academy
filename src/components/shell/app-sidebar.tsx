@@ -76,6 +76,10 @@ export function AppSidebar({
         aria-label="Navegação principal"
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex w-[280px] shrink-0 flex-col bg-sidebar text-sidebar-foreground transition-[width,transform] duration-300 ease-[cubic-bezier(.2,.8,.2,1)]",
+          // Gaveta do celular vai até a borda física da tela: sem estas folgas o
+          // rodapé (usuário e Sair) ficava atrás da barrinha do iPhone no app
+          // instalado. No desktop a moldura já cuida disso.
+          "pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] lg:pb-0 lg:pt-0",
           "lg:relative lg:z-30 lg:translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
           collapsed ? "lg:w-[76px]" : "lg:w-[264px]",
@@ -110,7 +114,7 @@ export function AppSidebar({
           </button>
         </div>
 
-        <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-4 pt-1">
+        <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 pb-4 pt-1 [-webkit-overflow-scrolling:touch]">
           {groups.map((group, index) => (
             <div key={group.label} className="mt-4">
               <p

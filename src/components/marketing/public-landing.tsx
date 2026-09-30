@@ -181,8 +181,8 @@ function BrandTile({ size, className }: { size: number; className?: string }) {
 
 export function PublicLanding() {
   return (
-    <main className="flex min-h-dvh bg-white">
-      <section className="flex min-h-dvh min-w-0 max-w-full flex-[1_0_45%] flex-col lg:px-14 lg:py-10">
+    <main className="min-h-app flex bg-background">
+      <section className="min-h-app flex min-w-0 max-w-full flex-[1_0_45%] flex-col lg:px-14 lg:py-10">
         {/* Celular: faixa escura de ponta a ponta, como a marca aparece nas redes. */}
         <div className="relative overflow-hidden bg-sidebar px-5 py-3.5 lg:hidden">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(260px_120px_at_85%_0%,rgba(124,92,250,0.45),transparent_70%),radial-gradient(200px_120px_at_0%_100%,rgba(124,92,250,0.22),transparent_70%)]" />

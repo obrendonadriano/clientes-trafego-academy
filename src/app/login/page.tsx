@@ -3,7 +3,7 @@ import { PublicLanding } from "@/components/marketing/public-landing";
 
 export const viewport: Viewport = {
   colorScheme: "light",
-  themeColor: "#ffffff",
+  themeColor: "#f7f8fa",
 };
 
 export default function LoginPage() {
