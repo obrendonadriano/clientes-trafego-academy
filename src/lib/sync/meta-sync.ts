@@ -498,6 +498,10 @@ export async function importMetaAdLevelMetrics(account: ResolvedMetaAccount) {
   );
   const now = new Date().toISOString();
   const rows: AdLevelMetricImportRow[] = [];
+  // Quantos insights a Meta devolveu mas não deram para gravar. Sem esta
+  // contagem, um vínculo errado entre campanha e conta de anúncio fazia a tela
+  // de conjuntos/anúncios ficar vazia sem nenhum aviso em lugar nenhum.
+  const skipped = { unmappedCampaign: 0, missingId: 0, missingDate: 0 };
   const currency = (
     adSetResult.data[0]?.account_currency ||
     adResult.data[0]?.account_currency ||
@@ -519,6 +523,13 @@ export async function importMetaAdLevelMetrics(account: ResolvedMetaAccount) {
       const externalId = level === "ad" ? insight.ad_id : insight.adset_id;
 
       if (!campaign || !externalId || !insight.date_start) {
+        if (!campaign) {
+          skipped.unmappedCampaign += 1;
+        } else if (!externalId) {
+          skipped.missingId += 1;
+        } else {
+          skipped.missingDate += 1;
+        }
         continue;
       }
 
@@ -553,7 +564,29 @@ export async function importMetaAdLevelMetrics(account: ResolvedMetaAccount) {
     }
   }
 
+  const received = adSetResult.data.length + adResult.data.length;
+
+  // Tudo que veio da Meta foi descartado: é falha de configuração, não ausência
+  // de dados. Falhar aqui faz o erro aparecer no status da sincronização em vez
+  // de deixar a tela vazia sem explicação.
+  if (received > 0 && rows.length === 0) {
+    throw new Error(
+      `A Meta devolveu ${received} registro(s) de conjuntos/anúncios, mas nenhum pôde ser gravado ` +
+        `(${skipped.unmappedCampaign} sem campanha correspondente, ${skipped.missingId} sem identificador, ` +
+        `${skipped.missingDate} sem data). Importe as campanhas desta conta e sincronize novamente.`,
+    );
+  }
+
   await upsertAdLevelMetricRows(rows);
+
+  if (skipped.unmappedCampaign > 0) {
+    console.warn("[meta-sync] insights de anúncio sem campanha local", {
+      adAccountId,
+      skipped: skipped.unmappedCampaign,
+      gravados: rows.length,
+    });
+  }
+
   return rows.length;
 }
 
@@ -827,8 +860,19 @@ export async function importMetaInsights(account: ResolvedMetaAccount) {
     await upsertMetricRows(uniqueRows);
   }
 
+  // A limpeza só pode alcançar as campanhas que ESTA conta acabou de importar.
+  //
+  // Antes ela recebia todas as campanhas mapeadas — e quando a conta vem da
+  // configuração antiga (sem id) o mapeamento é a tabela inteira. Resultado:
+  // sincronizar uma conta apagava os últimos 30 dias das campanhas das outras,
+  // porque elas não estavam no retrato dela. Com mais de uma conta ativa, cada
+  // uma zerava a anterior e o fechamento ficava vazio.
+  const importedCampaignIds = [
+    ...new Set(uniqueRows.map((row) => row.campaign_id)),
+  ];
+
   await removeStaleMetricRows({
-    campaignIds: (campaigns as CampaignLookupRow[]).map((campaign) => campaign.id),
+    campaignIds: importedCampaignIds,
     importedRows: uniqueRows,
     // last_30d fecha em ontem e a consulta "today" completa o dia corrente.
     startDate: saoPauloIsoDay(30),

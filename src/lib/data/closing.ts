@@ -65,6 +65,14 @@ export type ClosingData = {
   lastMetricDate: string | null;
   syncedAt: string | null;
   generatedAt: string;
+  // Por que o fechamento está zerado. Sem isso a tela dizia apenas "nenhuma
+  // campanha com investimento", que é indistinguível de uma importação que não
+  // gravou nada ou de um filtro de campanha preso na URL.
+  emptyReason?:
+    | "somente-hoje"
+    | "so-comecou-hoje"
+    | "sem-metricas"
+    | "filtro-sem-campanha";
 };
 
 function formatDay(value: string) {
@@ -239,6 +247,28 @@ export async function getClosingData(
     .filter((campaign) => campaign.amountSpent > 0)
     .sort((a, b) => b.amountSpent - a.amountSpent);
 
+  // O fechamento é cobrança e só conta dias fechados, então um período que
+  // cobre apenas o dia corrente nunca tem valor — inclusive no dia 1º, quando
+  // o atalho "Este mês" começa e termina hoje.
+  const coversOnlyToday = window.startDate >= currentDay;
+  // Houve importação na janela, mas toda ela é do dia corrente — é o caso de
+  // uma campanha que estreou hoje. Dizer "nada importado" aqui mandaria o
+  // gestor sincronizar de novo à procura de um problema que não existe.
+  const onlyTodayHasData =
+    allMetricRows.length === 0 &&
+    dedupeMetricRowsByDay(source.metricRows).some(
+      (row) => row.amountSpent > 0 && row.date >= currentDay,
+    );
+  const emptyReason: ClosingData["emptyReason"] = coversOnlyToday
+    ? "somente-hoje"
+    : hasCampaignFilter && selectedCampaignIds.length === 0
+      ? "filtro-sem-campanha"
+      : onlyTodayHasData
+        ? "so-comecou-hoje"
+        : allMetricRows.length === 0
+          ? "sem-metricas"
+          : undefined;
+
   const overall = summarizeRows(metricRows, currentRates);
   const currency = resolveCurrency(metricRows);
   // Até que dia o período já tem métrica gravada. O dia mais recente costuma
@@ -278,5 +308,6 @@ export async function getClosingData(
     lastMetricDate,
     syncedAt: source.syncedAt,
     generatedAt: new Date().toISOString(),
+    emptyReason,
   };
 }

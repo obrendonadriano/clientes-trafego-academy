@@ -269,7 +269,33 @@ export function ClosingPage({
         <CardContent>
           {data.campaigns.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground">
-              Nenhuma campanha com investimento nos dias escolhidos.
+              {data.emptyReason === "somente-hoje" ? (
+                <>
+                  O período escolhido cobre apenas o dia de hoje. O fechamento
+                  usa só dias já encerrados, porque o gasto de hoje ainda muda —
+                  escolha um período que inclua ontem ou antes.
+                </>
+              ) : data.emptyReason === "filtro-sem-campanha" ? (
+                <>
+                  O filtro de campanhas não corresponde a nenhuma campanha com
+                  investimento neste período. Limpe o filtro para ver o
+                  fechamento completo.
+                </>
+              ) : data.emptyReason === "so-comecou-hoje" ? (
+                <>
+                  A veiculação deste período começou hoje. O fechamento conta
+                  apenas dias já encerrados, porque o gasto de hoje ainda muda —
+                  amanhã o dia de hoje entra no total.
+                </>
+              ) : data.emptyReason === "sem-metricas" ? (
+                <>
+                  Nenhuma métrica importada para estes dias. Use{" "}
+                  <strong>Atualizar dados da Meta</strong> em Visão →
+                  Sincronização e confira a mensagem de status dela.
+                </>
+              ) : (
+                <>Nenhuma campanha com investimento nos dias escolhidos.</>
+              )}
             </div>
           ) : (
             <div className="min-w-0 overflow-x-auto rounded-2xl border border-border/60 dark:border-white/10">

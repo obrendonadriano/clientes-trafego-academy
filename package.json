@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:conversions": "node --test tests/conversion-events.test.mjs tests/conversion-payload.test.mjs tests/conversions-decoupling.test.mjs tests/onboarding-selection.test.mjs tests/legacy-n8n-payload.test.mjs",
-    "test:ai": "node --test tests/ai-attendance.test.mjs tests/ai-runtime.test.mjs"
+    "test:ai": "node --test tests/ai-attendance.test.mjs tests/ai-runtime.test.mjs",
+    "test:sync": "node --test tests/meta-sync-scope.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

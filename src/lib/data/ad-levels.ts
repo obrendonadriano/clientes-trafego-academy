@@ -102,14 +102,34 @@ export async function getAdLevelData(
   });
 
   if (error || !data) {
+    // A causa real importa: migration ausente e erro de permissão pedem ações
+    // diferentes, e antes as duas apareciam com a mesma mensagem.
+    console.error("[ad-levels] consulta recusada", {
+      level,
+      message: error?.message,
+      code: error?.code,
+    });
+
     return {
       rows: [],
       notice:
-        "Os snapshots de conjuntos e anúncios ainda não estão disponíveis. Aplique a migration e execute uma sincronização.",
+        "Não foi possível ler os conjuntos e anúncios. Se a sincronização está em dia, verifique se a migration dos snapshots foi aplicada.",
     };
   }
 
   const summaryRows = data as DbAdLevelSummaryRow[];
+
+  // Sem nenhuma linha a tela ficava vazia e calada: `every` devolve true para
+  // lista vazia, então nem o aviso de migração aparecia. Quem olhava não tinha
+  // como saber se era ausência de gasto ou sincronização que não gravou.
+  if (summaryRows.length === 0) {
+    return {
+      rows: [],
+      notice:
+        "Nenhum dado de conjuntos ou anúncios neste período. Se houve veiculação, rode a sincronização da Meta e confira a mensagem de status dela.",
+    };
+  }
+
   const hasEnrichedSnapshots = summaryRows.every(
     (row) => row.exchange_rate !== undefined && row.status !== undefined,
   );
