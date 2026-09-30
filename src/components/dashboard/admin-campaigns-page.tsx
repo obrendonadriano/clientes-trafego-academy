@@ -7,7 +7,7 @@ import {
   CampaignLevelTabs,
   type CampaignLevel,
 } from "@/components/dashboard/campaign-level-tabs";
-import { AdLevelTable } from "@/components/dashboard/ad-level-table";
+import { AdLevelPanel } from "@/components/dashboard/ad-level-panel";
 import { usePeriodScope } from "@/components/shell/period-scope";
 import { CampaignsTable } from "@/components/dashboard/campaigns-table";
 import { MetaSyncOverlay } from "@/components/dashboard/meta-sync-overlay";
@@ -38,15 +38,14 @@ import {
   summarizeMetrics,
 } from "@/lib/dashboard-metrics";
 import type { CampaignWithMetrics, RawCampaignMetric } from "@/lib/types";
-import type { AdLevelRow } from "@/lib/data/ad-levels";
+import type { AdLevelData } from "@/lib/data/ad-levels";
 
 type AdminCampaignsPageProps = {
   campaigns: CampaignWithMetrics[];
   metricRows: RawCampaignMetric[];
-  adSets: AdLevelRow[];
-  adSetsNotice?: string;
-  ads: AdLevelRow[];
-  adsNotice?: string;
+  // Promessas: conjuntos e anúncios chegam depois das campanhas (streaming).
+  adSets: Promise<AdLevelData>;
+  ads: Promise<AdLevelData>;
   initialLevel?: CampaignLevel;
 };
 
@@ -70,9 +69,7 @@ export function AdminCampaignsPage({
   campaigns,
   metricRows,
   adSets,
-  adSetsNotice,
   ads,
-  adsNotice,
   initialLevel = "campaign",
 }: AdminCampaignsPageProps) {
   const [activeLevel, setActiveLevel] = useState<CampaignLevel>(initialLevel);
@@ -241,14 +238,9 @@ export function AdminCampaignsPage({
         {activeLevel === "campaign" ? (
           <CampaignsTable campaigns={selected.campaigns} editable />
         ) : activeLevel === "adset" ? (
-          <AdLevelTable
-            level="adset"
-            rows={adSets}
-            notice={adSetsNotice}
-            editable
-          />
+          <AdLevelPanel level="adset" data={adSets} editable />
         ) : (
-          <AdLevelTable level="ad" rows={ads} notice={adsNotice} editable />
+          <AdLevelPanel level="ad" data={ads} editable />
         )}
       </div>
     </div>

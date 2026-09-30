@@ -2,8 +2,20 @@ import { Suspense } from "react";
 import { AdminCampaignsPage } from "@/components/dashboard/admin-campaigns-page";
 import { PageSectionSkeleton } from "@/components/dashboard/skeletons";
 import { resolveMetricsWindow } from "@/lib/data/date-range";
-import { getAdLevelData } from "@/lib/data/ad-levels";
+import { getAdLevelData, type AdLevelData } from "@/lib/data/ad-levels";
 import { getAdminCampaignsData } from "@/lib/data/queries";
+
+// Conjuntos/anúncios não seguram a página: começam junto com as campanhas e
+// são entregues por streaming. Uma falha vira aviso na aba, nunca erro solto.
+function settleAdLevel(promise: Promise<AdLevelData>): Promise<AdLevelData> {
+  return promise.catch((error: unknown) => {
+    console.error("[campanhas] falha ao ler conjuntos/anúncios", error);
+    return {
+      rows: [],
+      notice: "Não foi possível carregar agora. Atualize a página em instantes.",
+    };
+  });
+}
 
 type AdminCampaignsRouteProps = {
   searchParams: Promise<{
@@ -27,20 +39,16 @@ async function AdminCampaignsSection({
     ...params,
     comparar: "nenhum",
   });
-  const [data, adSets, ads] = await Promise.all([
-    getAdminCampaignsData(window, params.cliente),
-    getAdLevelData("adset", adLevelWindow, params.cliente),
-    getAdLevelData("ad", adLevelWindow, params.cliente),
-  ]);
+  const adSets = settleAdLevel(getAdLevelData("adset", adLevelWindow, params.cliente));
+  const ads = settleAdLevel(getAdLevelData("ad", adLevelWindow, params.cliente));
+  const data = await getAdminCampaignsData(window, params.cliente);
 
   return (
     <AdminCampaignsPage
       campaigns={data.campaigns}
       metricRows={data.metricRows}
-      adSets={adSets.rows}
-      adSetsNotice={adSets.notice}
-      ads={ads.rows}
-      adsNotice={ads.notice}
+      adSets={adSets}
+      ads={ads}
       initialLevel={
         params.nivel === "adset" || params.nivel === "ad"
           ? params.nivel

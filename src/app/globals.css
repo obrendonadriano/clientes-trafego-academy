@@ -132,6 +132,16 @@ h3,
   letter-spacing: -0.02em;
 }
 
+/* O Tailwind 4 tirou o cursor de mãozinha dos botões; volta para todo
+   elemento clicável que não esteja desabilitado. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+select:not(:disabled),
+label[for],
+summary {
+  cursor: pointer;
+}
+
 input::placeholder,
 textarea::placeholder {
   color: var(--text-4);

@@ -442,6 +442,23 @@ export type MetaAdCreativePreview = {
 };
 
 const CREATIVE_BATCH_SIZE = 50;
+// Miniaturas quase nunca mudam e a URL assinada da Meta vale por dias: uma
+// hora de cache evita repetir a chamada (que é lenta) a cada abertura da aba.
+const CREATIVE_CACHE_SECONDS = 60 * 60;
+const CREATIVE_TIMEOUT_MS = 12_000;
+
+type MetaAdCreativePayload = Record<
+  string,
+  {
+    preview_shareable_link?: string;
+    creative?: {
+      thumbnail_url?: string;
+      image_url?: string;
+      effective_object_story_id?: string;
+      instagram_permalink_url?: string;
+    };
+  }
+>;
 
 // Miniatura e link de cada anúncio, lidos ao vivo. As URLs de imagem da Meta
 // são assinadas e expiram, por isso não vão para o banco. Uma falha aqui só
@@ -451,33 +468,48 @@ export async function fetchMetaAdCreatives(input: {
   accessToken: string;
 }) {
   const previews = new Map<string, MetaAdCreativePreview>();
-  const ids = [...new Set(input.adIds.filter(Boolean))];
+  // Ordenados: o mesmo conjunto de anúncios gera sempre os mesmos lotes, e o
+  // cache de dados do Next reaproveita a resposta.
+  const ids = [...new Set(input.adIds.filter(Boolean))].sort();
+  const batches: string[][] = [];
 
   for (let index = 0; index < ids.length; index += CREATIVE_BATCH_SIZE) {
-    const batch = ids.slice(index, index + CREATIVE_BATCH_SIZE);
-    const params = new URLSearchParams({
-      ids: batch.join(","),
-      fields:
-        "preview_shareable_link,creative.thumbnail_width(160).thumbnail_height(160){thumbnail_url,image_url,effective_object_story_id,instagram_permalink_url}",
-      access_token: input.accessToken,
-    });
+    batches.push(ids.slice(index, index + CREATIVE_BATCH_SIZE));
+  }
 
-    const response = await fetchMetaPageWithRetry(
-      `https://graph.facebook.com/${META_GRAPH_VERSION}/?${params.toString()}`,
-    );
-    const payload = (await response.json()) as Record<
-      string,
-      {
-        preview_shareable_link?: string;
-        creative?: {
-          thumbnail_url?: string;
-          image_url?: string;
-          effective_object_story_id?: string;
-          instagram_permalink_url?: string;
-        };
+  // Lotes em paralelo: um a um, 270 anúncios levavam ~9s; juntos, ~1,5s.
+  const payloads = await Promise.all(
+    batches.map(async (batch) => {
+      const params = new URLSearchParams({
+        ids: batch.join(","),
+        fields:
+          "preview_shareable_link,creative.thumbnail_width(160).thumbnail_height(160){thumbnail_url,image_url,effective_object_story_id,instagram_permalink_url}",
+        access_token: input.accessToken,
+      });
+
+      const response = await fetch(
+        `https://graph.facebook.com/${META_GRAPH_VERSION}/?${params.toString()}`,
+        {
+          next: { revalidate: CREATIVE_CACHE_SECONDS },
+          signal: AbortSignal.timeout(CREATIVE_TIMEOUT_MS),
+        },
+      );
+
+      if (!response.ok) {
+        let body: MetaGraphError = {};
+        try {
+          body = (await response.json()) as MetaGraphError;
+        } catch {
+          // Corpo não-JSON: segue para o erro genérico.
+        }
+        throwForMetaError(response.status, body);
       }
-    >;
 
+      return (await response.json()) as MetaAdCreativePayload;
+    }),
+  );
+
+  for (const payload of payloads) {
     for (const [adId, ad] of Object.entries(payload)) {
       const creative = ad.creative ?? {};
       const storyUrl = creative.effective_object_story_id
