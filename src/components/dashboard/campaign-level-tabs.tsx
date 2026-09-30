@@ -23,7 +23,7 @@ export function CampaignLevelTabs({
   return (
     <nav
       aria-label="Nível dos dados de campanhas"
-      className="scrollbar-hidden min-w-0 overflow-x-auto overflow-y-hidden border-b border-border/70 dark:border-white/10"
+      className="scrollbar-hidden min-w-0 overflow-x-auto overflow-y-hidden border-b border-border/70"
     >
       <div className="flex min-w-max items-end gap-6 px-1 sm:gap-8">
         {TABS.map((tab) => {

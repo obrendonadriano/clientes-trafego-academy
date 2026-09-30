@@ -61,7 +61,7 @@ export function ClosingCampaignFilter({
   }
 
   return (
-    <details className="group rounded-2xl border border-border/60 bg-background/40 dark:border-white/10 dark:bg-black/15">
+    <details className="group rounded-2xl border border-border/60 bg-background/40">
       <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:content-none">
         <span className="min-w-0">
           <span className="block text-xs text-muted-foreground">
@@ -77,7 +77,7 @@ export function ClosingCampaignFilter({
         />
       </summary>
 
-      <div className="space-y-3 border-t border-border/60 p-4 dark:border-white/10">
+      <div className="space-y-3 border-t border-border/60 p-4">
         <CampaignMultiSelect
           campaigns={campaigns}
           value={draft}

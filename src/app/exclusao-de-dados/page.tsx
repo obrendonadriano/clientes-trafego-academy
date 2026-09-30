@@ -24,7 +24,7 @@ export default function DataDeletionPage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">1. Como solicitar</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">1. Como solicitar</h2>
         <p className="mt-3">
           Envie uma solicitação para <strong className="text-foreground">contatobrendon@hotmail.com</strong>,
           informando no assunto <strong className="text-foreground">Solicitação de exclusão de dados</strong>.
@@ -32,7 +32,7 @@ export default function DataDeletionPage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">2. Informações recomendadas</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">2. Informações recomendadas</h2>
         <p className="mt-3">
           Para agilizar o atendimento, informe seu nome, empresa vinculada, email de acesso
           utilizado no portal e uma descrição clara do pedido.
@@ -40,7 +40,7 @@ export default function DataDeletionPage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">3. Validação da solicitação</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">3. Validação da solicitação</h2>
         <p className="mt-3">
           A solicitação poderá passar por processo de validação de identidade para proteção
           do titular e prevenção de exclusões indevidas ou fraudulentas.
@@ -48,7 +48,7 @@ export default function DataDeletionPage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">4. Análise e retenção legal</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">4. Análise e retenção legal</h2>
         <p className="mt-3">
           O pedido será analisado em prazo razoável, considerando obrigações legais,
           regulatórias, contratuais e necessidades legítimas de retenção aplicáveis ao caso.
@@ -56,7 +56,7 @@ export default function DataDeletionPage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">5. Confirmação de atendimento</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">5. Confirmação de atendimento</h2>
         <p className="mt-3">
           Após a conclusão da análise, a Tráfego Academy poderá responder pelo mesmo canal
           utilizado no pedido com informações sobre a execução, limitação ou impossibilidade

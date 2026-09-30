@@ -46,10 +46,10 @@ export function useToast() {
 
 const TONE_STYLES: Record<ToastTone, string> = {
   sucesso:
-    "border-emerald-500/30 bg-emerald-500/[0.12] text-emerald-700 dark:text-emerald-300",
+    "border-emerald-500/30 bg-emerald-500/[0.12] text-emerald-700",
   erro: "border-destructive/30 bg-destructive/[0.12] text-destructive",
   aviso:
-    "border-amber-500/30 bg-amber-500/[0.12] text-amber-700 dark:text-amber-300",
+    "border-amber-500/30 bg-amber-500/[0.12] text-amber-700",
 };
 
 function ToastIcon({ tone }: { tone: ToastTone }) {

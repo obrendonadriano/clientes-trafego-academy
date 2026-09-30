@@ -57,27 +57,27 @@ export function ComparisonChart({
   const hasAnyData = data.some((item) => item.atual > 0 || item.anterior > 0);
 
   return (
-    <div className="dashboard-card border p-[1.05rem] text-foreground">
-      <div className="mb-[1.05rem]">
-        <h3 className="font-display text-base font-medium">
+    <div className="flex min-w-0 flex-col gap-4 rounded-[18px] border border-border bg-card p-5 text-foreground sm:p-6">
+      <div>
+        <h3 className="text-base font-semibold tracking-[-0.01em]">
           Comparativo de períodos
         </h3>
-        <p className="mt-1 text-xs text-muted-foreground">{periodLabel}</p>
+        <p className="mt-0.5 text-[13px] text-muted-foreground">{periodLabel}</p>
       </div>
-      <div className="h-[220px]">
+      <div className="h-[240px]">
         {hasAnyData ? (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
-              <CartesianGrid vertical={false} stroke="rgba(148,163,184,0.15)" />
+              <CartesianGrid vertical={false} stroke="#f2f4f7" />
               <XAxis
                 dataKey="label"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: "currentColor", fontSize: 12 }}
+                tick={{ fill: "#475467", fontSize: 12.5 }}
               />
               <YAxis hide />
               <Tooltip
-                cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                cursor={{ fill: "rgba(106,69,232,0.05)" }}
                 formatter={(value, name, item) => {
                   const formatted = item?.payload?.isCurrency
                     ? formatCurrency(Number(value))
@@ -86,24 +86,31 @@ export function ComparisonChart({
                   return [formatted, name === "atual" ? "Período atual" : "Período anterior"];
                 }}
                 contentStyle={{
-                  borderRadius: 8,
-                  border: "1px solid rgba(148,163,184,0.18)",
-                  background: "rgba(9,18,29,0.92)",
-                  color: "#f8fafc",
+                  borderRadius: 10,
+                  border: "none",
+                  background: "#111827",
+                  color: "#ffffff",
+                  fontSize: 12,
+                  padding: "8px 12px",
+                  boxShadow: "0 10px 24px -8px rgba(0,0,0,0.35)",
                 }}
+                labelStyle={{ color: "#98a2b3", fontSize: 11, marginBottom: 2 }}
+                itemStyle={{ color: "#ffffff", padding: 0 }}
               />
               <Legend
                 formatter={(value) =>
                   value === "atual" ? "Período atual" : "Período anterior"
                 }
-                wrapperStyle={{ fontSize: 12 }}
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: 12.5, color: "#475467" }}
               />
-              <Bar dataKey="anterior" fill="rgba(125,104,245,0.35)" radius={[8, 8, 0, 0]} />
-              <Bar dataKey="atual" fill="#7d68f5" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="anterior" fill="#d9cfff" radius={[6, 6, 2, 2]} maxBarSize={56} />
+              <Bar dataKey="atual" fill="#6a45e8" radius={[6, 6, 2, 2]} maxBarSize={56} />
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/50 px-6 text-center text-sm leading-6 text-muted-foreground">
+          <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-input bg-surface-2 px-6 text-center text-sm leading-6 text-muted-foreground">
             Ative a comparação com o período anterior para visualizar este gráfico.
           </div>
         )}

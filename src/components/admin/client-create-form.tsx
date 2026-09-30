@@ -217,7 +217,7 @@ export function ClientCreateForm({ campaigns }: ClientCreateFormProps) {
             <User className="size-5" />
           </span>
           <div className="min-w-0">
-            <h3 className="font-display text-2xl font-semibold text-foreground">
+            <h3 className="text-lg tracking-[-0.02em] font-semibold text-foreground">
               Novo cliente
             </h3>
             <p className="text-sm text-muted-foreground">
@@ -237,7 +237,7 @@ export function ClientCreateForm({ campaigns }: ClientCreateFormProps) {
         >
           {/* Cabeçalho do passo ativo — dá contexto, principalmente no mobile
               onde os rótulos do stepper ficam ocultos. */}
-          <div className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/40 px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]">
+          <div className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/40 px-4 py-3">
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary">
               <activeStep.icon className="size-4" />
             </span>
@@ -507,7 +507,7 @@ export function ClientCreateForm({ campaigns }: ClientCreateFormProps) {
           ) : null}
 
           {/* Navegação do wizard */}
-          <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-5 dark:border-white/10">
+          <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-5">
             <Button
               type="button"
               variant="outline"

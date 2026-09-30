@@ -139,7 +139,7 @@ export function ClosingPage({
                     "h-10 rounded-full border px-4 text-sm transition",
                     isActive
                       ? "border-primary bg-primary/[0.12] font-medium text-primary"
-                      : "border-border/70 text-muted-foreground hover:text-foreground dark:border-white/10",
+                      : "border-border/70 text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {preset.label}
@@ -160,7 +160,7 @@ export function ClosingPage({
                 onChange={(event) =>
                   setRange((current) => ({ ...current, inicio: event.target.value }))
                 }
-                className="h-11 min-w-0 rounded-xl border border-border/70 bg-background/60 px-3 text-sm text-foreground outline-none focus:border-primary dark:border-white/10 dark:bg-black/25"
+                className="h-11 min-w-0 rounded-xl border border-border/70 bg-background/60 px-3 text-sm text-foreground outline-none focus:border-primary"
               />
             </label>
 
@@ -173,14 +173,14 @@ export function ClosingPage({
                 onChange={(event) =>
                   setRange((current) => ({ ...current, fim: event.target.value }))
                 }
-                className="h-11 min-w-0 rounded-xl border border-border/70 bg-background/60 px-3 text-sm text-foreground outline-none focus:border-primary dark:border-white/10 dark:bg-black/25"
+                className="h-11 min-w-0 rounded-xl border border-border/70 bg-background/60 px-3 text-sm text-foreground outline-none focus:border-primary"
               />
             </label>
 
             <button
               type="button"
               onClick={applyRange}
-              className="inline-flex h-11 items-center gap-2 rounded-full border border-border/70 px-5 text-sm font-medium text-foreground transition hover:border-primary/40 dark:border-white/10"
+              className="inline-flex h-11 items-center gap-2 rounded-full border border-border/70 px-5 text-sm font-medium text-foreground transition hover:border-primary/40"
             >
               {isPending ? (
                 <LoaderCircle className="size-4 animate-spin" />
@@ -211,7 +211,7 @@ export function ClosingPage({
           {/* O último dia importado quase sempre está pela metade: a carga roda
               no meio do dia. Avisar evita fechar um período incompleto. */}
           {data.includesToday ? (
-            <p className="flex items-start gap-2 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-700 dark:text-sky-300">
+            <p className="flex items-start gap-2 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-700">
               <TriangleAlert className="mt-0.5 size-4 shrink-0" />
               <span>
                 O período inclui <strong>hoje</strong>, que ainda está em
@@ -222,7 +222,7 @@ export function ClosingPage({
               </span>
             </p>
           ) : data.lastMetricDate && data.lastMetricDate < data.window.endDate ? (
-            <p className="flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-300">
+            <p className="flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
               <TriangleAlert className="mt-0.5 size-4 shrink-0" />
               <span>
                 Os dados vão até{" "}
@@ -248,7 +248,7 @@ export function ClosingPage({
               Total do período
               <TaxInfo />
             </p>
-            <p className="mt-2 font-display text-3xl font-semibold text-foreground">
+            <p className="mt-2 text-[26px] tracking-[-0.03em] font-semibold text-foreground">
               {money(data.taxes.gross)}
             </p>
           </CardContent>
@@ -256,7 +256,7 @@ export function ClosingPage({
         <Card>
           <CardContent className="py-5">
             <p className="text-sm text-muted-foreground">Resultados</p>
-            <p className="mt-2 font-display text-3xl font-semibold text-foreground">
+            <p className="mt-2 text-[26px] tracking-[-0.03em] font-semibold text-foreground">
               {integer(data.results)}
             </p>
           </CardContent>
@@ -264,7 +264,7 @@ export function ClosingPage({
         <Card>
           <CardContent className="py-5">
             <p className="text-sm text-muted-foreground">Custo por resultado</p>
-            <p className="mt-2 font-display text-3xl font-semibold text-foreground">
+            <p className="mt-2 text-[26px] tracking-[-0.03em] font-semibold text-foreground">
               {data.results > 0 ? money(data.taxes.gross / data.results) : "—"}
             </p>
           </CardContent>
@@ -273,7 +273,7 @@ export function ClosingPage({
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-display text-2xl">
+          <CardTitle className="text-lg tracking-[-0.02em]">
             Campanhas incluídas no fechamento
           </CardTitle>
         </CardHeader>
@@ -297,10 +297,10 @@ export function ClosingPage({
               )}
             </div>
           ) : (
-            <div className="min-w-0 overflow-x-auto rounded-2xl border border-border/60 dark:border-white/10">
+            <div className="min-w-0 overflow-x-auto rounded-2xl border border-border/60">
               <table className="w-full min-w-[38rem] border-collapse text-sm">
                 <thead>
-                  <tr className="border-b border-border/60 text-left text-xs uppercase tracking-[0.08em] text-muted-foreground dark:border-white/10">
+                  <tr className="border-b border-border/60 text-left text-xs uppercase tracking-[0.08em] text-muted-foreground">
                     <th className="px-4 py-3 font-medium">Campanha</th>
                     <th className="px-4 py-3 text-right font-medium">Veiculação</th>
                     <th className="px-4 py-3 text-right font-medium">Resultados</th>
@@ -313,7 +313,7 @@ export function ClosingPage({
                   {data.campaigns.map((campaign) => (
                     <tr
                       key={campaign.id}
-                      className="border-b border-border/40 last:border-b-0 dark:border-white/[0.06]"
+                      className="border-b border-border/40 last:border-b-0"
                     >
                       <td className="max-w-[22rem] px-4 py-3">
                         <span className="block truncate text-foreground">
@@ -352,25 +352,25 @@ export function ClosingPage({
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-display text-2xl">
+          <CardTitle className="text-lg tracking-[-0.02em]">
             Resumo para cobrança
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="overflow-hidden rounded-2xl border border-border/60 dark:border-white/10">
-            <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3 text-sm dark:border-white/10">
+          <div className="overflow-hidden rounded-2xl border border-border/60">
+            <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3 text-sm">
               <span className="text-muted-foreground">
                 Veiculação de anúncios (valor da Meta)
               </span>
               <span className="text-foreground">{money(data.taxes.net)}</span>
             </div>
-            <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3 text-sm dark:border-white/10">
+            <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3 text-sm">
               <span className="text-muted-foreground">
                 PIS/COFINS ({formatRate(PIS_COFINS_RATE)})
               </span>
               <span className="text-foreground">{money(data.taxes.pisCofins)}</span>
             </div>
-            <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3 text-sm dark:border-white/10">
+            <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3 text-sm">
               <span className="text-muted-foreground">
                 ISS · Imposto Sobre Serviços ({formatRate(ISS_RATE)})
               </span>

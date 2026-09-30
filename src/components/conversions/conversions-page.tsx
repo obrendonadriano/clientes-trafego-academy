@@ -203,7 +203,7 @@ export function ConversionsPage({
           <Card key={item.label}>
             <CardContent className="py-4">
               <p className="text-sm text-muted-foreground">{item.label}</p>
-              <p className="mt-2 font-display text-3xl font-semibold">
+              <p className="mt-2 text-[26px] tracking-[-0.03em] font-semibold">
                 {item.value}
               </p>
             </CardContent>

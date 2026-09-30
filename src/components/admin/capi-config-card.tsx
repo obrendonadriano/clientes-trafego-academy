@@ -68,7 +68,7 @@ export function CapiConfigCard({ config }: { config: CapiConfig }) {
   return (
     <Card className="min-w-0 border-border/60 bg-background/60">
       <CardHeader>
-        <CardTitle className="font-display text-2xl">
+        <CardTitle className="text-lg tracking-[-0.02em]">
           Integração Meta (Conversions API)
         </CardTitle>
         <p className="text-sm leading-6 text-muted-foreground">
@@ -133,12 +133,12 @@ export function CapiConfigCard({ config }: { config: CapiConfig }) {
               />
 
               {config.tokenConfigurado ? (
-                <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-700">
                   <CircleCheck className="size-3.5" />
                   Token configurado — preencha apenas para substituir
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border/70 px-3 py-1.5 text-xs text-muted-foreground dark:border-white/10">
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border/70 px-3 py-1.5 text-xs text-muted-foreground">
                   <KeyRound className="size-3.5" />
                   Não configurado
                 </span>
@@ -183,7 +183,7 @@ export function CapiConfigCard({ config }: { config: CapiConfig }) {
         </form>
 
         {config.tokenConfigurado ? (
-          <form action={clear} className="border-t border-border/60 pt-4 dark:border-white/10">
+          <form action={clear} className="border-t border-border/60 pt-4">
             <input type="hidden" name="clientId" value={config.clientId} />
             <FormPendingButton
               variant="outline"

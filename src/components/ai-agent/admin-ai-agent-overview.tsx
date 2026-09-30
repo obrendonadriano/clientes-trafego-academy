@@ -138,7 +138,7 @@ function SummaryTile({ label, value }: { label: string; value: number }) {
   return (
     <div className="dashboard-card rounded-[1.5rem] border px-5 py-4">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 font-display text-2xl text-foreground">{value}</p>
+      <p className="mt-1 text-lg tracking-[-0.02em] text-foreground">{value}</p>
     </div>
   );
 }

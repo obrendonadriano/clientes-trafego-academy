@@ -264,10 +264,10 @@ export function AdminClientProfilePage({
             {client.companyName.charAt(0).toUpperCase()}
           </span>
           <div className="min-w-0">
-            <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-4">
               Perfil do cliente
             </p>
-            <h3 className="font-display text-3xl font-semibold">
+            <h3 className="text-[26px] tracking-[-0.03em] font-semibold">
               {client.companyName}
             </h3>
           </div>
@@ -318,7 +318,7 @@ export function AdminClientProfilePage({
         <Card className="min-w-0 border-border/60 bg-background/60">
           <CardHeader className="space-y-5">
             <div>
-              <CardTitle className="font-display text-2xl">Editar cliente</CardTitle>
+              <CardTitle className="text-lg tracking-[-0.02em]">Editar cliente</CardTitle>
               <p className="mt-1 text-sm text-muted-foreground">
                 Empresa, acesso e campanhas em três passos.
               </p>
@@ -336,7 +336,7 @@ export function AdminClientProfilePage({
               <input type="hidden" name="userId" value={linkedUser?.id ?? ""} />
               <input type="hidden" name="authUserId" value={linkedUser?.authUserId ?? ""} />
 
-              <div className="flex items-start justify-between gap-3 rounded-2xl border border-border/60 bg-muted/40 px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]">
+              <div className="flex items-start justify-between gap-3 rounded-2xl border border-border/60 bg-muted/40 px-4 py-3">
                 <div className="flex min-w-0 items-start gap-3">
                   <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary">
                     <activeStep.icon className="size-4" />
@@ -552,7 +552,7 @@ export function AdminClientProfilePage({
                 </p>
               ) : null}
 
-              <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-5 dark:border-white/10">
+              <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-5">
                 <Button
                   type="button"
                   variant="outline"
@@ -593,7 +593,7 @@ export function AdminClientProfilePage({
 
           <Card className="border-border/60 bg-background/60">
             <CardHeader>
-              <CardTitle className="font-display text-2xl">Resumo do perfil</CardTitle>
+              <CardTitle className="text-lg tracking-[-0.02em]">Resumo do perfil</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               <div className="flex items-center gap-2 rounded-2xl border border-border/60 bg-card px-4 py-3">
@@ -632,7 +632,7 @@ export function AdminClientProfilePage({
 
           <Card className="border-destructive/30 bg-background/60">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 font-display text-2xl text-destructive">
+              <CardTitle className="flex items-center gap-2 text-lg tracking-[-0.02em] text-destructive">
                 <Trash2 className="size-5" />
                 Excluir cliente
               </CardTitle>

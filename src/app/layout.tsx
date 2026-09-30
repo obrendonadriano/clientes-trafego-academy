@@ -1,24 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Manrope, Space_Grotesk } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
-import { ThemeMetaSync } from "@/components/theme-meta-sync";
-import { ThemeProvider } from "@/components/theme-provider";
 
-const manrope = Manrope({
-  variable: "--font-manrope",
+const geist = Geist({
+  variable: "--font-geist",
   subsets: ["latin"],
 });
 
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
   subsets: ["latin"],
+  weight: ["400", "500"],
 });
-
-// Aplica o tema antes da página pintar, evitando o "flash" de tema errado.
-// Padrão por área (espelha o ThemeProvider): app (admin/dashboard) abre escuro,
-// login/público abre claro; a escolha salva por área tem prioridade.
-const themeInitScript = `(function(){try{var p=location.pathname;var app=p.indexOf("/admin")===0||p.indexOf("/dashboard")===0;var s=localStorage.getItem(app?"ta-theme-app":"ta-theme-public");var dark=s?s==="dark":app;var e=document.documentElement;e.classList.toggle("dark",dark);e.style.colorScheme=dark?"dark":"light";}catch(e){}})();`;
 
 export const metadata: Metadata = {
   title: "Tráfego Academy Dashboard",
@@ -33,7 +27,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "Tráfego Academy",
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
   },
   // Este Next só emite `mobile-web-app-capable`; iPhones mais antigos ainda
   // exigem a meta legada `apple-mobile-web-app-capable` para abrir em tela cheia.
@@ -43,8 +37,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  colorScheme: "dark light",
-  themeColor: "#08070d",
+  // Tema único claro: a barra do navegador acompanha o fundo do painel.
+  colorScheme: "light",
+  themeColor: "#f7f8fa",
   // Permite que o conteúdo use a tela inteira (atrás do notch); o body
   // compensa com safe-area-inset no globals.css.
   viewportFit: "cover",
@@ -58,19 +53,16 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
+      data-scroll-behavior="smooth"
       suppressHydrationWarning
-      className={`${manrope.variable} ${spaceGrotesk.variable}`}
+      className={`${geist.variable} ${geistMono.variable}`}
     >
       <body
         suppressHydrationWarning
         className="min-h-screen bg-background font-sans text-foreground antialiased"
       >
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-        <ThemeProvider>
-          <ServiceWorkerRegister />
-          <ThemeMetaSync />
-          {children}
-        </ThemeProvider>
+        <ServiceWorkerRegister />
+        {children}
       </body>
     </html>
   );

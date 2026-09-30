@@ -38,7 +38,7 @@ export function TaxInfo({ className }: { className?: string }) {
       {isOpen ? (
         <span
           role="tooltip"
-          className="absolute left-1/2 top-[calc(100%+0.5rem)] z-40 w-[min(20rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-border/70 bg-popover p-3 text-left shadow-2xl dark:border-white/10"
+          className="absolute left-1/2 top-[calc(100%+0.5rem)] z-40 w-[min(20rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-border/70 bg-popover p-3 text-left shadow-2xl"
         >
           <span className="block text-sm font-medium text-foreground">
             Por que o valor é maior que na Meta?
@@ -49,12 +49,12 @@ export function TaxInfo({ className }: { className?: string }) {
             painel já soma os dois para você ver o custo real.
           </span>
 
-          <span className="mt-2.5 block overflow-hidden rounded-lg border border-border/60 dark:border-white/10">
-            <span className="flex items-center justify-between gap-3 border-b border-border/60 px-2.5 py-1.5 text-xs dark:border-white/10">
+          <span className="mt-2.5 block overflow-hidden rounded-lg border border-border/60">
+            <span className="flex items-center justify-between gap-3 border-b border-border/60 px-2.5 py-1.5 text-xs">
               <span className="text-muted-foreground">PIS/COFINS</span>
               <span className="text-foreground">{formatRate(PIS_COFINS_RATE)}</span>
             </span>
-            <span className="flex items-center justify-between gap-3 border-b border-border/60 px-2.5 py-1.5 text-xs dark:border-white/10">
+            <span className="flex items-center justify-between gap-3 border-b border-border/60 px-2.5 py-1.5 text-xs">
               <span className="text-muted-foreground">
                 ISS (Imposto Sobre Serviços)
               </span>

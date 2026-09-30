@@ -54,7 +54,7 @@ export function SyncPill({
     <span
       title={status.message ?? undefined}
       className={cn(
-        "inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-background px-2.5 text-[0.72rem] text-muted-foreground",
+        "inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-[10px] border border-border bg-card px-2.5 text-[0.72rem] text-muted-foreground",
         className,
       )}
     >

@@ -350,13 +350,13 @@ function ConnectionOnboarding({
       <CardContent className="p-0">
         <div className="grid min-h-[32rem] lg:grid-cols-[1.15fr_0.85fr]">
           <div className="flex flex-col justify-center p-6 sm:p-9 lg:p-12">
-            <span className="mb-5 flex size-14 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
+            <span className="mb-5 flex size-14 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600">
               <WhatsappLogo className="size-7" />
             </span>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
               Atendimento automático por IA
             </p>
-            <h2 className="mt-2 max-w-2xl font-display text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            <h2 className="mt-2 max-w-2xl text-[26px] tracking-[-0.03em] font-semibold tracking-tight text-foreground sm:text-4xl">
               Conecte seu WhatsApp para a IA começar a atender
             </h2>
             <div className="mt-5 max-w-2xl space-y-3 text-[0.95rem] leading-7 text-muted-foreground">
@@ -381,7 +381,7 @@ function ConnectionOnboarding({
 
             <div
               role="alert"
-              className="mt-6 flex max-w-2xl gap-3 rounded-2xl border border-red-500/50 bg-red-500/10 px-4 py-3.5 text-sm leading-6 text-red-800 dark:border-red-500/40 dark:text-red-200"
+              className="mt-6 flex max-w-2xl gap-3 rounded-2xl border border-red-500/50 bg-red-500/10 px-4 py-3.5 text-sm leading-6 text-red-800"
             >
               <AlertCircle className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
               <div>
@@ -412,7 +412,7 @@ function ConnectionOnboarding({
               {isRetry ? "Tentar conectar novamente" : "Conectar meu WhatsApp"}
             </Button>
 
-            <details className="group mt-6 max-w-2xl rounded-2xl border border-border/70 bg-background/40 px-4 py-3 dark:border-white/10">
+            <details className="group mt-6 max-w-2xl rounded-2xl border border-border/70 bg-background/40 px-4 py-3">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 O que a IA faz com as conversas?
                 <ChevronDown className="size-4 transition group-open:rotate-180" aria-hidden="true" />
@@ -427,7 +427,7 @@ function ConnectionOnboarding({
             </details>
           </div>
 
-          <div className="flex flex-col justify-center gap-4 border-t border-border/60 bg-primary/[0.055] p-6 dark:border-white/10 lg:border-l lg:border-t-0 lg:p-10">
+          <div className="flex flex-col justify-center gap-4 border-t border-border/60 bg-primary/[0.055] p-6 lg:border-l lg:border-t-0 lg:p-10">
             <OnboardingBenefit
               icon={MonitorSmartphone}
               title="É como o WhatsApp Web"
@@ -460,7 +460,7 @@ function OnboardingBenefit({
   text: string;
 }) {
   return (
-    <div className="flex gap-3 rounded-2xl border border-border/60 bg-background/75 p-4 dark:border-white/10">
+    <div className="flex gap-3 rounded-2xl border border-border/60 bg-background/75 p-4">
       <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
         <Icon className="size-5" aria-hidden={true} />
       </span>
@@ -532,10 +532,10 @@ function PreparingConnection({
       <CardContent className="flex min-h-[30rem] flex-col items-center justify-center px-6 text-center">
         {timedOut ? (
           <>
-            <span className="flex size-16 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-300">
+            <span className="flex size-16 items-center justify-center rounded-full bg-amber-500/15 text-amber-600">
               <RefreshCw className="size-7" aria-hidden="true" />
             </span>
-            <h2 className="mt-5 font-display text-3xl font-semibold text-foreground">
+            <h2 className="mt-5 text-[26px] tracking-[-0.03em] font-semibold text-foreground">
               Vamos tentar de novo?
             </h2>
             <p className="mt-3 max-w-lg leading-7 text-muted-foreground">
@@ -557,7 +557,7 @@ function PreparingConnection({
               <WhatsappLogo className="size-9" />
               <LoaderCircle className="absolute -right-1 -top-1 size-6 animate-spin" aria-hidden="true" />
             </span>
-            <h2 className="mt-6 font-display text-3xl font-semibold text-foreground">
+            <h2 className="mt-6 text-[26px] tracking-[-0.03em] font-semibold text-foreground">
               Preparando sua conexão…
             </h2>
             <p className="mt-3 max-w-lg leading-7 text-muted-foreground">
@@ -699,8 +699,8 @@ function QrConnection({
     return (
       <Card>
         <CardContent className="flex min-h-[30rem] flex-col items-center justify-center px-6 text-center">
-          <RefreshCw className="size-12 text-amber-600 dark:text-amber-300" aria-hidden="true" />
-          <h2 className="mt-5 font-display text-3xl font-semibold text-foreground">Vamos tentar de novo?</h2>
+          <RefreshCw className="size-12 text-amber-600" aria-hidden="true" />
+          <h2 className="mt-5 text-[26px] tracking-[-0.03em] font-semibold text-foreground">Vamos tentar de novo?</h2>
           <p className="mt-3 max-w-lg leading-7 text-muted-foreground">
             O código ficou aberto por cinco minutos sem conexão. Vamos reiniciar
             o processo com um código novinho.
@@ -729,7 +729,7 @@ function QrConnection({
         <div className="grid lg:grid-cols-[1fr_0.9fr]">
           <section className="p-6 sm:p-8 lg:p-10" aria-labelledby="qr-instructions-title">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Último passo</p>
-            <h2 id="qr-instructions-title" className="mt-2 font-display text-3xl font-semibold text-foreground">
+            <h2 id="qr-instructions-title" className="mt-2 text-[26px] tracking-[-0.03em] font-semibold text-foreground">
               Escaneie o código com o WhatsApp
             </h2>
             <ol className="mt-7 space-y-3">
@@ -745,7 +745,7 @@ function QrConnection({
               ))}
             </ol>
 
-            <div className="mt-6 flex gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm leading-6 text-amber-800 dark:text-amber-200 lg:hidden">
+            <div className="mt-6 flex gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm leading-6 text-amber-800 lg:hidden">
               <MonitorSmartphone className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
               <p>
                 Se você abriu este painel no celular, vai precisar de um segundo aparelho para escanear. Se puder, abra o painel no computador.
@@ -753,7 +753,7 @@ function QrConnection({
             </div>
           </section>
 
-          <section className="flex flex-col items-center justify-center border-t border-border/60 bg-primary/[0.045] p-5 sm:p-8 dark:border-white/10 lg:border-l lg:border-t-0" aria-label="Código QR do WhatsApp">
+          <section className="flex flex-col items-center justify-center border-t border-border/60 bg-primary/[0.045] p-5 sm:p-8 lg:border-l lg:border-t-0" aria-label="Código QR do WhatsApp">
             <div className="relative aspect-square w-full max-w-[20rem] p-5">
               <svg className="absolute inset-0 size-full -rotate-90" viewBox="0 0 320 320" aria-hidden="true">
                 <circle cx="160" cy="160" r="154" fill="none" stroke="currentColor" strokeWidth="5" className="text-border" />
@@ -819,10 +819,10 @@ function ConnectionSuccess({ phone }: { phone: string | null }) {
   return (
     <Card>
       <CardContent className="flex min-h-[30rem] flex-col items-center justify-center px-6 text-center">
-        <span className="flex size-20 animate-[pulse_700ms_ease-out_1] items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
+        <span className="flex size-20 animate-[pulse_700ms_ease-out_1] items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600">
           <Check className="size-10" strokeWidth={3} aria-hidden="true" />
         </span>
-        <h2 className="mt-6 font-display text-3xl font-semibold text-foreground sm:text-4xl">
+        <h2 className="mt-6 text-[26px] tracking-[-0.03em] font-semibold text-foreground sm:text-4xl">
           Pronto! Seu WhatsApp está conectado.
         </h2>
         {formattedPhone ? (
@@ -863,10 +863,10 @@ function ConnectionStatusBar({
     <div
       role="status"
       className={connected
-        ? "flex flex-col gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 sm:flex-row sm:items-center dark:text-emerald-200"
+        ? "flex flex-col gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 sm:flex-row sm:items-center"
         : connecting
-          ? "flex flex-col gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 sm:flex-row sm:items-center dark:text-amber-200"
-          : "flex flex-col gap-3 rounded-2xl border border-red-500/50 bg-red-500/15 px-4 py-3 text-sm text-red-800 sm:flex-row sm:items-center dark:text-red-200"}
+          ? "flex flex-col gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 sm:flex-row sm:items-center"
+          : "flex flex-col gap-3 rounded-2xl border border-red-500/50 bg-red-500/15 px-4 py-3 text-sm text-red-800 sm:flex-row sm:items-center"}
     >
       <span className="flex min-w-0 flex-1 items-center gap-2">
         <span className={connected ? "size-2.5 rounded-full bg-emerald-500" : connecting ? "size-2.5 animate-pulse rounded-full bg-amber-500" : "size-2.5 rounded-full bg-red-500"} />
@@ -916,14 +916,14 @@ function DisconnectDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="disconnect-title" className="w-full max-w-md rounded-3xl border border-border bg-background p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
-          <span className="flex size-11 items-center justify-center rounded-2xl bg-red-500/12 text-red-600 dark:text-red-300">
+          <span className="flex size-11 items-center justify-center rounded-2xl bg-red-500/12 text-red-600">
             <Unplug className="size-5" aria-hidden="true" />
           </span>
           <button type="button" onClick={onCancel} aria-label="Fechar" className="rounded-lg p-2 text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">
             <X className="size-5" />
           </button>
         </div>
-        <h2 id="disconnect-title" className="mt-5 font-display text-2xl font-semibold text-foreground">Desconectar o WhatsApp?</h2>
+        <h2 id="disconnect-title" className="mt-5 text-lg tracking-[-0.02em] font-semibold text-foreground">Desconectar o WhatsApp?</h2>
         <p className="mt-3 leading-7 text-muted-foreground">
           Você vai parar de receber novos leads nesta tela. Os leads que já chegaram continuam salvos. Você pode reconectar quando quiser.
         </p>
@@ -941,7 +941,7 @@ function DisconnectDialog({
 
 function InlineError({ message }: { message: string }) {
   return (
-    <p role="alert" className="flex items-start gap-2 rounded-2xl border border-red-500/35 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-700 dark:text-red-200">
+    <p role="alert" className="flex items-start gap-2 rounded-2xl border border-red-500/35 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-700">
       <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
       {message}
     </p>

@@ -1,49 +1,52 @@
 @import "tailwindcss";
-@custom-variant dark (&:where(.dark, .dark *));
 
+/* Tema único (claro), no padrão visual do IMOBI.AI com o roxo da marca no
+   lugar do azul. Os nomes seguem os tokens usados pelos componentes. */
 :root {
-  --background: #f6f7ff;
-  --foreground: #181426;
-  --card: rgba(255, 255, 255, 0.96);
-  --card-foreground: #181426;
+  --background: #f7f8fa;
+  --foreground: #111827;
+  --card: #ffffff;
+  --card-foreground: #111827;
   --popover: #ffffff;
-  --popover-foreground: #181426;
-  --primary: #7d68f5;
+  --popover-foreground: #111827;
+  --primary: #6a45e8;
   --primary-foreground: #ffffff;
-  --secondary: #ecebff;
-  --secondary-foreground: #2a1f61;
-  --muted: #eef1fb;
-  --muted-foreground: #76809a;
-  --accent: #e8ebff;
-  --accent-foreground: #2d245c;
-  --destructive: #c43d4b;
-  --destructive-foreground: #fff1f3;
-  --border: rgba(74, 88, 130, 0.14);
-  --input: rgba(120, 129, 168, 0.1);
-  --ring: rgba(125, 104, 245, 0.22);
-  --radius: 1.25rem;
-}
+  --secondary: #f2f4f7;
+  --secondary-foreground: #344054;
+  --muted: #f2f4f7;
+  --muted-foreground: #667085;
+  --accent: #f4f1ff;
+  --accent-foreground: #4b2fb8;
+  --destructive: #d92d20;
+  --destructive-foreground: #ffffff;
+  --border: #eaecf0;
+  --input: #d0d5dd;
+  --ring: rgba(106, 69, 232, 0.14);
+  --radius: 12px;
 
-.dark {
-  --background: #08070d;
-  --foreground: #f3f2ff;
-  --card: rgba(11, 14, 28, 0.84);
-  --card-foreground: #f3f2ff;
-  --popover: #0b0d18;
-  --popover-foreground: #f3f2ff;
-  --primary: #8b78ff;
-  --primary-foreground: #ffffff;
-  --secondary: #171a30;
-  --secondary-foreground: #d8dcf2;
-  --muted: #121528;
-  --muted-foreground: #95a0bb;
-  --accent: #1a1f38;
-  --accent-foreground: #ecebff;
-  --destructive: #ff7289;
-  --destructive-foreground: #2d0810;
-  --border: rgba(214, 220, 255, 0.12);
-  --input: rgba(214, 220, 255, 0.08);
-  --ring: rgba(122, 105, 245, 0.28);
+  /* Escala da marca (equivalentes roxos do azul do design). */
+  --brand-50: #f5f2ff;
+  --brand-100: #ede8ff;
+  --brand-200: #d9cfff;
+  --brand-300: #b9a8ff;
+  --brand-400: #9a82ff;
+  --brand-500: #7c5cfa;
+  --brand-600: #6a45e8;
+  --brand-700: #5634cc;
+  --brand-800: #3f2596;
+
+  /* Sidebar escura. */
+  --sidebar: #100b22;
+  --sidebar-foreground: #cdc8de;
+  --sidebar-muted: #6e6788;
+  --sidebar-active: #9b82ff;
+
+  /* Texto secundário do design. */
+  --text-2: #344054;
+  --text-3: #475467;
+  --text-4: #98a2b3;
+  --surface-2: #f9fafb;
+  --line-soft: #f2f4f7;
 }
 
 @theme inline {
@@ -66,12 +69,33 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 8px);
-  --radius-md: calc(var(--radius) - 4px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 8px);
-  --font-sans: var(--font-manrope);
-  --font-display: var(--font-space-grotesk);
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-text-4: var(--text-4);
+  --color-surface-2: var(--surface-2);
+  --color-line-soft: var(--line-soft);
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 18px;
+  --radius-3xl: 24px;
+  --font-sans: var(--font-geist);
+  --font-display: var(--font-geist);
+  --font-mono: var(--font-geist-mono);
 }
 
 @layer base {
@@ -84,14 +108,14 @@ html {
   scroll-behavior: smooth;
   overflow-x: hidden;
   background: var(--background);
+  color-scheme: light;
 }
 
 body {
-  background:
-    radial-gradient(circle at top, rgba(125, 104, 245, 0.12), transparent 30%),
-    radial-gradient(circle at 85% 10%, rgba(86, 126, 255, 0.08), transparent 24%),
-    var(--background);
+  background: var(--background);
   color: var(--foreground);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
   /* Respeita o notch/relógio quando instalado como app (iOS standalone com
      viewport-fit=cover). Em navegador comum esses valores são 0. */
@@ -99,6 +123,18 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  letter-spacing: -0.02em;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-4);
 }
 
 input[type="checkbox"],
@@ -138,138 +174,175 @@ input[type="date"]::-webkit-date-and-time-value {
   display: none;
 }
 
-.dark body {
-  background:
-    linear-gradient(rgba(2, 3, 6, 0.8), rgba(2, 3, 6, 0.86)),
-    linear-gradient(rgba(255, 255, 255, 0.17) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.17) 1px, transparent 1px),
-    #020306;
-  background-size: auto, 28px 28px, 28px 28px, auto;
-}
-
-/* Moldura das áreas autenticadas. As variáveis ficam escopadas aqui para o
-   login manter sua identidade atual e o painel seguir o protótipo compacto. */
-.app-shell-frame {
-  --background: #f2f2f6;
-  --foreground: #292b31;
-  --card: #ffffff;
-  --card-foreground: #292b31;
-  --popover: #ffffff;
-  --popover-foreground: #292b31;
-  --primary: #5d5294;
-  --muted: #e9e9ef;
-  --muted-foreground: #74767d;
-  --border: rgba(41, 43, 49, 0.12);
-  --input: rgba(41, 43, 49, 0.07);
-  --font-display: var(--font-manrope);
-  --radius: 8px;
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 8px;
-  --radius-xl: 14px;
-  --radius-2xl: 14px;
-  --radius-3xl: 14px;
-}
-
-.dark .app-shell-frame {
-  --background: #161826;
-  --foreground: #e9e9ed;
-  --card: #232532;
-  --card-foreground: #e9e9ed;
-  --popover: #272936;
-  --popover-foreground: #e9e9ed;
-  --primary: #9184d9;
-  --muted: #2b2d3a;
-  --muted-foreground: #92939a;
-  --border: rgba(233, 233, 237, 0.11);
-  --input: rgba(233, 233, 237, 0.08);
-}
-
-.app-shell-frame .dashboard-glass,
-.app-shell-frame .dashboard-card {
-  border-radius: 0.875rem;
+/* Superfícies: cartão branco, borda fina e sombra quase imperceptível. */
+.dashboard-glass,
+.dashboard-card {
+  border-radius: 18px;
   background: var(--card);
   border-color: var(--border);
-  box-shadow: none;
-  backdrop-filter: none;
-}
-
-.app-shell-frame .dashboard-row {
-  background: color-mix(in srgb, var(--card) 92%, var(--background));
-  border-color: var(--border);
-}
-
-.dashboard-glass {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 245, 255, 0.9));
-  border-color: rgba(74, 88, 130, 0.14);
-  box-shadow:
-    0 24px 60px -40px rgba(31, 28, 64, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(18px);
-}
-
-.dashboard-card {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 247, 255, 0.82));
-  border-color: rgba(74, 88, 130, 0.14);
-  box-shadow:
-    0 22px 54px -42px rgba(31, 28, 64, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.74);
-  backdrop-filter: blur(16px);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
 }
 
 .dashboard-row {
-  background: rgba(255, 255, 255, 0.74);
-  border-color: rgba(74, 88, 130, 0.12);
+  background: var(--surface-2);
+  border-color: var(--line-soft);
 }
 
-.dark .dashboard-glass {
-  background:
-    linear-gradient(180deg, rgba(14, 17, 30, 0.72), rgba(8, 10, 19, 0.58));
-  border-color: rgba(214, 220, 255, 0.14);
-  box-shadow:
-    0 24px 70px -48px rgba(94, 120, 255, 0.9),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+/* Cartão com leve elevação ao passar o mouse (KPIs e atalhos). */
+.card-lift {
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
 }
 
-.dark .dashboard-card {
-  background:
-    linear-gradient(180deg, rgba(15, 18, 32, 0.78), rgba(8, 10, 20, 0.68));
-  border-color: rgba(214, 220, 255, 0.13);
-  box-shadow:
-    0 22px 64px -46px rgba(104, 136, 255, 0.9),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px -14px rgba(16, 24, 40, 0.18);
 }
 
-.dark .dashboard-row {
-  background: rgba(255, 255, 255, 0.035);
-  border-color: rgba(214, 220, 255, 0.11);
+/* Sidebar escura: rolagem discreta. */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
 }
 
-.dark .app-shell-frame .dashboard-glass,
-.dark .app-shell-frame .dashboard-card {
-  background: var(--card);
-  border-color: var(--border);
-  box-shadow: none;
-  backdrop-filter: none;
+/* Skeleton com brilho deslizante. */
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #f2f4f7 0, #e4e7ec 50%, #f2f4f7 100%);
+  background-size: 1200px 100%;
+  animation: ta-shimmer 1.3s linear infinite;
 }
 
-.dark .app-shell-frame .dashboard-row {
-  background: color-mix(in srgb, var(--card) 92%, var(--background));
-  border-color: var(--border);
+.animate-ta-in {
+  animation: ta-in 0.2s ease;
 }
 
-@media (max-width: 1023px) {
-  /* Login no mobile: branco no tema claro, escuro no tema escuro (padrão). */
-  html[data-surface="login"],
-  html[data-surface="login"] body {
-    background: #ffffff;
+.animate-ta-fade {
+  animation: ta-fade 0.2s ease;
+}
+
+.animate-ta-pulse {
+  animation: ta-pulse 2s infinite;
+}
+
+.animate-ta-page {
+  animation: ta-page 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Entradas escalonadas (cards do dashboard, login). */
+.animate-ta-rise {
+  animation: ta-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Barras (funil, participação) crescendo da esquerda. */
+.animate-ta-grow {
+  animation: ta-grow 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes ta-grow {
+  from {
+    transform: scaleX(0);
   }
+  to {
+    transform: scaleX(1);
+  }
+}
 
-  html[data-surface="login"].dark,
-  html[data-surface="login"].dark body {
-    background: #070611;
+.animate-ta-grow-y {
+  animation: ta-grow-y 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes ta-grow-y {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes ta-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ta-shimmer {
+  0% {
+    background-position: -600px 0;
+  }
+  100% {
+    background-position: 600px 0;
+  }
+}
+
+@keyframes ta-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(18, 183, 106, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(18, 183, 106, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(18, 183, 106, 0);
+  }
+}
+
+@keyframes ta-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ta-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ta-page {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ta-rise {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-ta-in,
+  .animate-ta-fade,
+  .animate-ta-page,
+  .animate-ta-rise,
+  .animate-ta-grow,
+  .animate-ta-grow-y,
+  .animate-ta-pulse,
+  .skeleton-shimmer,
+  .card-lift {
+    animation: none !important;
+    transition: none !important;
   }
 }
 
@@ -279,6 +352,8 @@ input[type="date"]::-webkit-date-and-time-value {
 }
 
 ::-webkit-scrollbar-thumb {
-  border-radius: 9999px;
-  background: rgba(97, 125, 131, 0.4);
+  background: #d0d5dd;
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: content-box;
 }

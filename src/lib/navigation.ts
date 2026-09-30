@@ -11,8 +11,7 @@ export type NavIconKey =
   | "perfil"
   | "fechamento"
   | "conversoes"
-  | "atendimento-ia"
-  | "mais";
+  | "atendimento-ia";
 
 export type NavSubTab = {
   label: string;
@@ -26,7 +25,7 @@ export type NavSection = {
   label: string;
   href: string;
   icon: NavIconKey;
-  // Rótulo do grupo no trilho ("Oper", "IA", "Sist", "Conta").
+  // Título do grupo na sidebar ("Operação", "Inteligência", "Sistema", "Conta").
   group: string;
   subTabs: NavSubTab[];
   // Rótulo do cabeçalho da página; cai para `label` quando ausente.
@@ -59,7 +58,7 @@ const ADMIN_SECTIONS: NavSection[] = [
     title: "Dashboard geral",
     href: "/admin",
     icon: "visao",
-    group: "Oper",
+    group: "Operação",
     subTabs: [
       { label: "Visão geral", href: "/admin", exact: true },
       { label: "Comparativo", href: "/admin/comparativo" },
@@ -72,7 +71,7 @@ const ADMIN_SECTIONS: NavSection[] = [
     title: "Clientes",
     href: "/admin/clientes",
     icon: "clientes",
-    group: "Oper",
+    group: "Operação",
     subTabs: [
       { label: "Todos", href: "/admin/clientes", exact: true },
       { label: "Sem acesso", href: "/admin/clientes?filtro=sem-acesso" },
@@ -86,7 +85,7 @@ const ADMIN_SECTIONS: NavSection[] = [
     title: "Campanhas",
     href: "/admin/campanhas",
     icon: "campanhas",
-    group: "Oper",
+    group: "Operação",
     subTabs: ADMIN_CAMPAIGN_TABS,
   },
   {
@@ -95,7 +94,7 @@ const ADMIN_SECTIONS: NavSection[] = [
     title: "Conversões",
     href: "/admin/conversoes",
     icon: "conversoes",
-    group: "Oper",
+    group: "Operação",
     subTabs: [
       { label: "Leads", href: "/admin/conversoes", exact: true },
       { label: "Integração com o Meta", href: "/admin/conversoes/integracao" },
@@ -107,7 +106,7 @@ const ADMIN_SECTIONS: NavSection[] = [
     title: "Fechamento",
     href: "/admin/fechamento",
     icon: "fechamento",
-    group: "Oper",
+    group: "Operação",
     subTabs: [{ label: "Do período", href: "/admin/fechamento", exact: true }],
   },
   {
@@ -116,7 +115,7 @@ const ADMIN_SECTIONS: NavSection[] = [
     title: "Atendimento IA dos clientes",
     href: "/admin/atendimento-ia",
     icon: "atendimento-ia",
-    group: "IA",
+    group: "Inteligência",
     subTabs: [
       { label: "Clientes", href: "/admin/atendimento-ia", exact: true },
     ],
@@ -127,7 +126,7 @@ const ADMIN_SECTIONS: NavSection[] = [
     title: "Relatórios IA",
     href: "/admin/relatorios-ia",
     icon: "relatorios",
-    group: "IA",
+    group: "Inteligência",
     subTabs: [
       { label: "Gerar", href: "/admin/relatorios-ia", exact: true },
       { label: "Histórico", href: "/admin/relatorios-ia/historico" },
@@ -135,11 +134,11 @@ const ADMIN_SECTIONS: NavSection[] = [
   },
   {
     key: "config",
-    label: "Config",
+    label: "Configurações",
     title: "Conexões e integrações",
     href: "/admin/configuracoes",
     icon: "config",
-    group: "Sist",
+    group: "Sistema",
     subTabs: [
       { label: "Integrações", href: "/admin/configuracoes", exact: true },
       { label: "Contas Meta", href: "/admin/configuracoes/contas" },
@@ -156,7 +155,7 @@ const CLIENT_SECTIONS: NavSection[] = [
     title: "Dashboard",
     href: "/dashboard",
     icon: "visao",
-    group: "Oper",
+    group: "Operação",
     subTabs: [{ label: "Visão geral", href: "/dashboard", exact: true }],
   },
   {
@@ -166,7 +165,7 @@ const CLIENT_SECTIONS: NavSection[] = [
     title: "Campanhas",
     href: "/dashboard/campanhas",
     icon: "campanhas",
-    group: "Oper",
+    group: "Operação",
     subTabs: CLIENT_CAMPAIGN_TABS,
   },
   {
@@ -175,7 +174,7 @@ const CLIENT_SECTIONS: NavSection[] = [
     title: "Conversões",
     href: "/dashboard/conversoes",
     icon: "conversoes",
-    group: "Oper",
+    group: "Operação",
     subTabs: [{ label: "Kanban de leads", href: "/dashboard/conversoes", exact: true }],
   },
   {
@@ -184,7 +183,7 @@ const CLIENT_SECTIONS: NavSection[] = [
     title: "Fechamento",
     href: "/dashboard/fechamento",
     icon: "fechamento",
-    group: "Oper",
+    group: "Operação",
     subTabs: [{ label: "Do período", href: "/dashboard/fechamento", exact: true }],
   },
   {
@@ -193,7 +192,7 @@ const CLIENT_SECTIONS: NavSection[] = [
     title: "Atendimento IA",
     href: "/dashboard/atendimento-ia",
     icon: "atendimento-ia",
-    group: "IA",
+    group: "Inteligência",
     subTabs: [
       { label: "Visão geral", href: "/dashboard/atendimento-ia", exact: true },
     ],
@@ -213,7 +212,7 @@ export function getSections(role: Role): NavSection[] {
   return role === "admin" ? ADMIN_SECTIONS : CLIENT_SECTIONS;
 }
 
-// Agrupa as seções na ordem em que os grupos aparecem, para o trilho lateral.
+// Agrupa as seções na ordem em que os grupos aparecem, para a sidebar.
 export function getSectionGroups(role: Role) {
   const groups: { label: string; sections: NavSection[] }[] = [];
 
@@ -286,15 +285,4 @@ export function isSubTabActive(
 function hasSiblingFilter(tab: NavSubTab, searchParams?: URLSearchParams) {
   void tab;
   return searchParams?.has("filtro") ?? false;
-}
-
-// Itens da barra inferior no celular: 3 seções + "Mais" quando sobra alguma.
-export function getMobileNav(role: Role) {
-  const sections = getSections(role);
-
-  if (sections.length <= 4) {
-    return { primary: sections, overflow: [] as NavSection[] };
-  }
-
-  return { primary: sections.slice(0, 3), overflow: sections.slice(3) };
 }

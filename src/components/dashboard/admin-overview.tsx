@@ -2,8 +2,26 @@
 
 import dynamic from "next/dynamic";
 import { useMemo } from "react";
+import {
+  Activity,
+  Coins,
+  FileText,
+  MousePointerClick,
+  Target,
+  TrendingUp,
+  Users,
+  Wallet,
+} from "lucide-react";
+import { MetricCard } from "@/components/dashboard/metric-card";
+import {
+  FunnelBars,
+  Panel,
+  PanelLink,
+  PulseLink,
+  PulsePanel,
+} from "@/components/dashboard/overview-panels";
 import { TaxInfo } from "@/components/dashboard/tax-info";
-import { usePeriodScope } from "@/components/shell/period-scope";
+import { usePeriodScope, useScopedHref } from "@/components/shell/period-scope";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   buildPerformanceSeries,
@@ -17,7 +35,6 @@ import {
   summarizeMetrics,
 } from "@/lib/dashboard-metrics";
 import { RawCampaignMetric } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 const DashboardChart = dynamic(
   () =>
@@ -27,8 +44,8 @@ const DashboardChart = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="dashboard-card rounded-[1.5rem] border p-4">
-        <div className="h-[280px] animate-pulse rounded-[1.25rem] bg-muted/70 dark:bg-white/[0.08]" />
+      <div className="rounded-[18px] border border-border bg-card p-6">
+        <div className="skeleton-shimmer h-[292px] rounded-xl" />
       </div>
     ),
   },
@@ -41,6 +58,13 @@ export type AdminOverviewView = "geral" | "comparativo";
 type AdminOverviewProps = {
   view?: AdminOverviewView;
   metricRows: RawCampaignMetric[];
+  // Contadores da carteira para o card "Pulso da operação".
+  counts?: {
+    clientCount: number;
+    activeClientCount: number;
+    campaignCount: number;
+    activeCampaignCount: number;
+  };
 };
 
 function formatCurrency(value: number) {
@@ -64,10 +88,16 @@ function formatChange(value: number, suffix = "%") {
   return `${signal}${value.toFixed(1).replace(".", ",")}${suffix}`;
 }
 
+function formatInt(value: number) {
+  return Math.round(value).toLocaleString("pt-BR");
+}
+
 export function AdminOverview({
   view = "geral",
   metricRows,
+  counts,
 }: AdminOverviewProps) {
+  const scopedHref = useScopedHref();
   const scope = usePeriodScope();
   const { period, customRange, comparePrevious } = scope;
 
@@ -92,7 +122,8 @@ export function AdminOverview({
       hasPreviousData: previousRows.length > 0,
       cards: [
         {
-          label: "Investimento total",
+          label: "Investimento",
+          icon: Wallet,
           // Exibe com impostos; a comparação segue sobre o valor puro (a
           // proporção é a mesma, então a variação % não muda).
           hasTax: true,
@@ -110,6 +141,7 @@ export function AdminOverview({
         },
         {
           label: "Leads gerados",
+          icon: Target,
           hasTax: false,
           value: String(Math.round(totals.leads)),
           sub: undefined,
@@ -120,6 +152,7 @@ export function AdminOverview({
         },
         {
           label: "CTR médio",
+          icon: MousePointerClick,
           hasTax: false,
           value: formatPercent(totals.ctr),
           sub: undefined,
@@ -130,6 +163,7 @@ export function AdminOverview({
         },
         {
           label: "ROAS médio",
+          icon: TrendingUp,
           hasTax: false,
           value: formatMultiplier(totals.roas),
           sub: undefined,
@@ -138,42 +172,52 @@ export function AdminOverview({
             : "período atual",
           positive: totals.roas >= previousTotals.roas,
         },
+        {
+          label: "Custo por resultado",
+          icon: Coins,
+          hasTax: false,
+          value: formatCurrency(totals.costPerLead),
+          sub: undefined,
+          change: comparePrevious
+            ? formatChange(
+                calculateChange(totals.costPerLead, previousTotals.costPerLead),
+              )
+            : "período atual",
+          positive: totals.costPerLead <= previousTotals.costPerLead,
+        },
+        {
+          label: "Cliques",
+          icon: Activity,
+          hasTax: false,
+          value: formatInt(totals.clicks),
+          sub: undefined,
+          change: comparePrevious
+            ? formatChange(calculateChange(totals.clicks, previousTotals.clicks))
+            : "período atual",
+          positive: totals.clicks >= previousTotals.clicks,
+        },
       ],
       chart,
     };
   }, [comparePrevious, customRange, metricRows, period]);
 
+  const { totals } = selected;
+  const periodText = selected.periodLabel.toLowerCase();
+
   return (
-    <div className="space-y-[1.05rem]">
-      <div className="grid gap-px overflow-hidden rounded-[0.875rem] border bg-border sm:grid-cols-2 xl:grid-cols-4">
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 min-[1680px]:grid-cols-6">
         {selected.cards.map((card) => (
-          <div
+          <MetricCard
             key={card.label}
-            className="bg-card p-[1.05rem] text-foreground"
-          >
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              {card.label}
-              {card.hasTax ? <TaxInfo /> : null}
-            </p>
-            <p className="mt-2 whitespace-nowrap font-display text-[clamp(1.7rem,1.8vw,2rem)] font-medium leading-none">
-              {card.value}
-            </p>
-            <div className="mt-2 flex min-w-0 items-center gap-1.5 text-xs">
-              <span
-                className={cn(
-                  "truncate",
-                  card.positive ? "text-emerald-400" : "text-destructive",
-                )}
-              >
-                {card.change}
-              </span>
-              {card.sub ? (
-                <span className="ml-auto truncate text-xs text-muted-foreground">
-                  {card.sub}
-                </span>
-              ) : null}
-            </div>
-          </div>
+            label={card.label}
+            icon={card.icon}
+            info={card.hasTax ? <TaxInfo /> : undefined}
+            value={card.value}
+            change={card.change}
+            positive={card.positive}
+            sub={card.sub}
+          />
         ))}
       </div>
 
@@ -195,12 +239,83 @@ export function AdminOverview({
           </Card>
         )
       ) : (
-        <DashboardChart
-          kind="performance"
-          data={selected.chart}
-          periodLabel={selected.periodLabel}
-          emptyMessage="Importe métricas da Meta Ads para visualizar a curva real de investimento e resultados."
-        />
+        <>
+          <div className="flex flex-wrap gap-5">
+            <Panel
+              className="flex-[1.7_1_520px]"
+              title="Funil das campanhas"
+              subtitle={`Da impressão ao resultado · ${periodText}`}
+              action={<PanelLink href={scopedHref("/admin/campanhas")}>Ver campanhas</PanelLink>}
+            >
+              {selected.hasData ? (
+                <FunnelBars
+                  steps={[
+                    { label: "Impressões", value: totals.impressions },
+                    { label: "Cliques", value: totals.clicks },
+                    { label: "Resultados", value: totals.results },
+                  ]}
+                />
+              ) : (
+                <p className="rounded-xl border border-dashed border-input bg-surface-2 px-6 py-10 text-center text-sm text-muted-foreground">
+                  Importe métricas da Meta Ads para visualizar o funil do período.
+                </p>
+              )}
+            </Panel>
+
+            <div className="flex min-w-0 flex-[1_1_320px]">
+              <PulsePanel
+                stamp={selected.periodLabel}
+                lines={[
+                  ...(counts
+                    ? [
+                        {
+                          strong: `${counts.activeClientCount} de ${counts.clientCount}`,
+                          after: " clientes ativos na carteira.",
+                        },
+                        {
+                          strong: `${counts.activeCampaignCount} campanhas ativas`,
+                          after: ` de ${counts.campaignCount} sincronizadas.`,
+                        },
+                      ]
+                    : []),
+                  {
+                    before: "Investimento de ",
+                    strong: formatCurrency(totals.amountSpentWithTax),
+                    after: ` · ${periodText}.`,
+                  },
+                  {
+                    strong: `${formatInt(totals.results)} resultados`,
+                    after: ` a ${formatCurrency(totals.costPerLead)} cada, em média.`,
+                  },
+                  {
+                    before: "CTR médio de ",
+                    strong: formatPercent(totals.ctr),
+                    after: ` em ${formatInt(totals.impressions)} impressões.`,
+                  },
+                ]}
+                footer={
+                  <>
+                    <PulseLink href={scopedHref("/admin/clientes")}>
+                      <Users className="size-[15px] text-brand-300" strokeWidth={1.75} />
+                      Clientes
+                    </PulseLink>
+                    <PulseLink href={scopedHref("/admin/relatorios-ia")}>
+                      <FileText className="size-[15px] text-brand-300" strokeWidth={1.75} />
+                      Relatórios IA
+                    </PulseLink>
+                  </>
+                }
+              />
+            </div>
+          </div>
+
+          <DashboardChart
+            kind="performance"
+            data={selected.chart}
+            periodLabel={selected.periodLabel}
+            emptyMessage="Importe métricas da Meta Ads para visualizar a curva real de investimento e resultados."
+          />
+        </>
       )}
     </div>
   );

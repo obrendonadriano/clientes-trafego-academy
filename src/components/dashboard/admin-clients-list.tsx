@@ -143,17 +143,17 @@ export function AdminClientsList({
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-muted/70 px-3 py-1 text-xs text-muted-foreground dark:bg-white/[0.045]">
+                  <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-muted/70 px-3 py-1 text-xs text-muted-foreground">
                     <Megaphone className="size-3.5 shrink-0" />
                     {allowedCampaignCount} campanha
                     {allowedCampaignCount === 1 ? "" : "s"}
                   </span>
-                  <span className="inline-flex max-w-full items-center gap-1.5 break-all rounded-full bg-muted/70 px-3 py-1 text-xs text-muted-foreground dark:bg-white/[0.045]">
+                  <span className="inline-flex max-w-full items-center gap-1.5 break-all rounded-full bg-muted/70 px-3 py-1 text-xs text-muted-foreground">
                     <Phone className="size-3.5 shrink-0" />
                     {client.whatsapp}
                   </span>
                   {client.campaignCode ? (
-                    <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-muted/70 px-3 py-1 text-xs text-muted-foreground dark:bg-white/[0.045]">
+                    <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-muted/70 px-3 py-1 text-xs text-muted-foreground">
                       <Hash className="size-3.5 shrink-0" />
                       Codigo {client.campaignCode}
                     </span>

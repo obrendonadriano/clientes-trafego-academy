@@ -112,7 +112,7 @@ export function CampaignMultiSelect({
           )}
         >
           {filteredCampaigns.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border/70 dark:border-white/10 px-4 py-6 text-sm text-muted-foreground">
+            <div className="rounded-2xl border border-dashed border-border/70 px-4 py-6 text-sm text-muted-foreground">
               Nenhuma campanha encontrada com esse nome.
             </div>
           ) : (
@@ -122,7 +122,7 @@ export function CampaignMultiSelect({
               return (
                 <label
                   key={campaign.id}
-                  className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border/70 bg-background/50 px-4 py-3 transition hover:border-primary/35 hover:bg-muted/70 dark:border-white/10 dark:bg-black/20 dark:hover:bg-white/[0.045]"
+                  className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border/70 bg-background/50 px-4 py-3 transition hover:border-primary/35 hover:bg-muted/70"
                 >
                   <input
                     type="checkbox"

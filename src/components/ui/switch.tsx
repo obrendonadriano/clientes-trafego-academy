@@ -14,13 +14,12 @@ export function Switch({ className, ...props }: SwitchProps) {
       <input type="checkbox" className="peer sr-only" {...props} />
       <span
         className={cn(
-          "relative h-7 w-12 rounded-full bg-muted transition-colors",
+          "relative h-6 w-11 rounded-full bg-[#e4e7ec] transition-colors duration-200",
           "peer-checked:bg-primary",
           "peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring",
           "peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
-          "after:absolute after:left-1 after:top-1 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition-transform after:content-['']",
+          "after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-[0_1px_3px_rgba(16,24,40,0.2)] after:transition-transform after:content-['']",
           "peer-checked:after:translate-x-5",
-          "dark:bg-white/15",
           className,
         )}
       />

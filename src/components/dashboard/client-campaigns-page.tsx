@@ -172,7 +172,7 @@ export function ClientCampaignsPage({
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm text-muted-foreground">Meta Ads</p>
-            <h4 className="mt-1 font-display text-2xl font-semibold text-foreground">
+            <h4 className="mt-1 text-lg tracking-[-0.02em] font-semibold text-foreground">
               Atualizar métricas
             </h4>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">

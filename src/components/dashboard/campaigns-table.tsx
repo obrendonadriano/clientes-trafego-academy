@@ -412,7 +412,7 @@ export function CampaignsTable({
               <CampaignStatus campaign={campaign} editable={editable} />
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-              <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
+              <div className="rounded-2xl bg-muted/50 px-3 py-2">
                 <p className="text-xs text-muted-foreground">Investido</p>
                 <p className="mt-0.5 font-semibold">{campaign.metrics.amountSpent}</p>
                 {campaign.metrics.amountSpentOriginal ? (
@@ -421,21 +421,21 @@ export function CampaignsTable({
                   </p>
                 ) : null}
               </div>
-              <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
+              <div className="rounded-2xl bg-muted/50 px-3 py-2">
                 <p className="text-xs text-muted-foreground">
                   {campaign.metrics.resultLabel}
                 </p>
                 <p className="mt-0.5 font-semibold">{campaign.metrics.results}</p>
               </div>
-              <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
+              <div className="rounded-2xl bg-muted/50 px-3 py-2">
                 <p className="text-xs text-muted-foreground">Cliques</p>
                 <p className="mt-0.5 font-semibold">{campaign.metrics.clicks}</p>
               </div>
-              <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
+              <div className="rounded-2xl bg-muted/50 px-3 py-2">
                 <p className="text-xs text-muted-foreground">CTR</p>
                 <p className="mt-0.5 font-semibold">{campaign.metrics.ctr}</p>
               </div>
-              <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
+              <div className="rounded-2xl bg-muted/50 px-3 py-2">
                 <p className="text-xs text-muted-foreground">Custo/result.</p>
                 <p className="mt-0.5 font-semibold">{campaign.metrics.costPerLead}</p>
                 {campaign.metrics.costPerLeadOriginal ? (
@@ -444,7 +444,7 @@ export function CampaignsTable({
                   </p>
                 ) : null}
               </div>
-              <div className="rounded-2xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
+              <div className="rounded-2xl bg-muted/50 px-3 py-2">
                 <p className="text-xs text-muted-foreground">ROAS</p>
                 <p className="mt-0.5 font-semibold">{campaign.metrics.roas}</p>
               </div>
@@ -487,7 +487,7 @@ export function CampaignsTable({
       <div className="dashboard-card hidden overflow-hidden rounded-[0.875rem] border text-foreground md:block">
       <div className="overflow-x-auto">
         <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
-          <thead className="sticky top-0 z-10 bg-muted/95 text-muted-foreground backdrop-blur dark:bg-[#111525]/95">
+          <thead className="sticky top-0 z-10 bg-muted/95 text-muted-foreground backdrop-blur">
             <tr>
               {columns.map((column) => {
                 const active = sortKey === column.key;
@@ -496,7 +496,7 @@ export function CampaignsTable({
                   <th
                     key={column.key}
                     className={cn(
-                      "border-b border-border/70 dark:border-white/10 px-4 py-3 font-medium",
+                      "border-b border-border/70 px-4 py-3 font-medium",
                       column.className,
                     )}
                   >
@@ -518,20 +518,20 @@ export function CampaignsTable({
                 );
               })}
               {showDrilldown ? (
-                <th className="w-12 border-b border-border/70 px-2 py-3 dark:border-white/10" />
+                <th className="w-12 border-b border-border/70 px-2 py-3" />
               ) : null}
             </tr>
           </thead>
           <tbody>
             {sortedCampaigns.map((campaign) => (
-              <tr key={campaign.id} className="border-b border-border/60 dark:border-white/10 last:border-b-0">
-                <td className="min-w-[260px] border-b border-border/60 dark:border-white/10 px-4 py-3 align-middle">
+              <tr key={campaign.id} className="border-b border-border/60 last:border-b-0">
+                <td className="min-w-[260px] border-b border-border/60 px-4 py-3 align-middle">
                   <CampaignName campaign={campaign} editable={editable} />
                 </td>
-                <td className="min-w-[120px] border-b border-border/60 dark:border-white/10 px-4 py-3 align-middle">
+                <td className="min-w-[120px] border-b border-border/60 px-4 py-3 align-middle">
                   <CampaignStatus campaign={campaign} editable={editable} />
                 </td>
-                <td className="min-w-[116px] border-b border-border/60 dark:border-white/10 px-4 py-3 align-middle">
+                <td className="min-w-[116px] border-b border-border/60 px-4 py-3 align-middle">
                   {campaign.metrics.amountSpent}
                   {campaign.metrics.amountSpentOriginal ? (
                     <span className="mt-0.5 block text-xs text-muted-foreground">
@@ -539,13 +539,13 @@ export function CampaignsTable({
                     </span>
                   ) : null}
                 </td>
-                <td className="min-w-[90px] border-b border-border/60 dark:border-white/10 px-4 py-3 align-middle">
+                <td className="min-w-[90px] border-b border-border/60 px-4 py-3 align-middle">
                   {campaign.metrics.clicks}
                 </td>
-                <td className="min-w-[88px] border-b border-border/60 dark:border-white/10 px-4 py-3 align-middle">
+                <td className="min-w-[88px] border-b border-border/60 px-4 py-3 align-middle">
                   {campaign.metrics.ctr}
                 </td>
-                <td className="min-w-[128px] border-b border-border/60 dark:border-white/10 px-4 py-3 align-middle">
+                <td className="min-w-[128px] border-b border-border/60 px-4 py-3 align-middle">
                   <div>
                     <p className="font-medium leading-none text-foreground">{campaign.metrics.results}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -553,7 +553,7 @@ export function CampaignsTable({
                     </p>
                   </div>
                 </td>
-                <td className="min-w-[108px] border-b border-border/60 dark:border-white/10 px-4 py-3 align-middle">
+                <td className="min-w-[108px] border-b border-border/60 px-4 py-3 align-middle">
                   {campaign.metrics.costPerLead}
                   {campaign.metrics.costPerLeadOriginal ? (
                     <span className="mt-0.5 block text-xs text-muted-foreground">
@@ -561,18 +561,18 @@ export function CampaignsTable({
                     </span>
                   ) : null}
                 </td>
-                <td className="min-w-[88px] border-b border-border/60 dark:border-white/10 px-4 py-3 align-middle">
+                <td className="min-w-[88px] border-b border-border/60 px-4 py-3 align-middle">
                   {campaign.metrics.roas}
                 </td>
                 {showDrilldown && detailBasePath ? (
-                  <td className="border-b border-border/60 px-2 py-3 text-right align-middle dark:border-white/10">
+                  <td className="border-b border-border/60 px-2 py-3 text-right align-middle">
                     <Link
                       href={scopedHref(
                         `${detailBasePath}/conjuntos?campanha=${encodeURIComponent(campaign.id)}`,
                       )}
                       aria-label={`Ver conjuntos de ${campaign.name}`}
                       title="Ver conjuntos de anúncios"
-                      className="inline-grid size-8 place-items-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground dark:hover:bg-white/[0.06]"
+                      className="inline-grid size-8 place-items-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
                     >
                       <ChevronRight className="size-4" />
                     </Link>
@@ -583,26 +583,26 @@ export function CampaignsTable({
           </tbody>
           <tfoot className="bg-card">
             <tr className="text-foreground">
-              <td className="border-t border-border/70 dark:border-white/10 px-4 py-3 font-semibold">Totais</td>
-              <td className="border-t border-border/70 dark:border-white/10 px-4 py-3 text-sm text-muted-foreground">
+              <td className="border-t border-border/70 px-4 py-3 font-semibold">Totais</td>
+              <td className="border-t border-border/70 px-4 py-3 text-sm text-muted-foreground">
                 {sortedCampaigns.length} campanhas
               </td>
-              <td className="border-t border-border/70 dark:border-white/10 px-4 py-3 font-semibold">
+              <td className="border-t border-border/70 px-4 py-3 font-semibold">
                 {formatCurrency(totals.amountSpent)}
               </td>
-              <td className="border-t border-border/70 dark:border-white/10 px-4 py-3 font-semibold">
+              <td className="border-t border-border/70 px-4 py-3 font-semibold">
                 {totals.clicks.toLocaleString("pt-BR")}
               </td>
-              <td className="border-t border-border/70 dark:border-white/10 px-4 py-3 font-semibold">
+              <td className="border-t border-border/70 px-4 py-3 font-semibold">
                 {formatPercent(averageCtr)}
               </td>
-              <td className="border-t border-border/70 dark:border-white/10 px-4 py-3 font-semibold">
+              <td className="border-t border-border/70 px-4 py-3 font-semibold">
                 {totals.results.toLocaleString("pt-BR")}
               </td>
-              <td className="border-t border-border/70 dark:border-white/10 px-4 py-3 font-semibold">
+              <td className="border-t border-border/70 px-4 py-3 font-semibold">
                 {formatCurrency(averageCostPerLead)}
               </td>
-              <td className="border-t border-border/70 dark:border-white/10 px-4 py-3 font-semibold">
+              <td className="border-t border-border/70 px-4 py-3 font-semibold">
                 {formatMultiplier(averageRoas)}
               </td>
             </tr>

@@ -73,7 +73,7 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
           <div className="flex items-center gap-3">
             <div className="rounded-2xl bg-primary/12 p-3 text-primary">{icon}</div>
             <div>
-              <CardTitle className="font-display text-2xl">
+              <CardTitle className="text-lg tracking-[-0.02em]">
                 {integration.title}
               </CardTitle>
               <p className="mt-1 text-sm text-muted-foreground">

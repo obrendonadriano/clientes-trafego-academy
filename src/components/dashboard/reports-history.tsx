@@ -141,7 +141,7 @@ export function ReportsHistory({
 
               {isOpen ? (
                 <div className="mt-3 space-y-3">
-                  <p className="whitespace-pre-wrap rounded-2xl border border-border/60 bg-background/50 px-4 py-3 text-sm leading-7 text-foreground dark:border-white/10 dark:bg-white/[0.03]">
+                  <p className="whitespace-pre-wrap rounded-2xl border border-border/60 bg-background/50 px-4 py-3 text-sm leading-7 text-foreground">
                     {report.generatedText || report.preview}
                   </p>
 
@@ -149,7 +149,7 @@ export function ReportsHistory({
                     <button
                       type="button"
                       onClick={() => copy(report)}
-                      className="inline-flex h-10 items-center gap-2 rounded-full border border-border/70 px-4 text-sm text-foreground transition hover:border-primary/40 dark:border-white/10"
+                      className="inline-flex h-10 items-center gap-2 rounded-full border border-border/70 px-4 text-sm text-foreground transition hover:border-primary/40"
                     >
                       <Copy className="size-3.5" />
                       {copiedId === report.id ? "Copiado!" : "Copiar texto"}

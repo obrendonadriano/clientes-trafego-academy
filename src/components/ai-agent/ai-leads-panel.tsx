@@ -528,7 +528,7 @@ function ConversationDialog({
                       </span>
                       <p className="whitespace-pre-wrap">{message.body}</p>
                       {message.status === "delivery_unknown" ? (
-                        <span className="text-xs text-amber-700 dark:text-amber-300">
+                        <span className="text-xs text-amber-700">
                           Entrega não confirmada
                         </span>
                       ) : null}

@@ -1,75 +1,25 @@
 "use client";
+
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { loginAction, type LoginState } from "@/app/login/actions";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 const initialState: LoginState = {};
 
-export function InstagramIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-8" fill="none">
-      <rect x="3.25" y="3.25" width="17.5" height="17.5" rx="5.5" stroke="currentColor" strokeWidth="1.9" />
-      <circle cx="12" cy="12" r="4.1" stroke="currentColor" strokeWidth="1.9" />
-      <circle cx="17.4" cy="6.7" r="1.2" fill="currentColor" />
-    </svg>
-  );
-}
+// Destino do CTA "Quero ser cliente" (site de captação da Tráfego Academy).
+const BECOME_CLIENT_HREF = "https://site-trafego-academy.vercel.app/";
 
-export function YoutubeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-8" fill="none">
-      <rect x="3.5" y="5" width="17" height="14" rx="4.5" stroke="currentColor" strokeWidth="1.9" />
-      <path d="M10 9.2 15.4 12 10 14.8V9.2Z" fill="currentColor" />
-    </svg>
-  );
-}
-
-export function TikTokIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-8" fill="none">
-      <path
-        d="M13.2 4.2v8.2a3.6 3.6 0 1 1-3-3.54"
-        stroke="currentColor"
-        strokeWidth="1.9"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M13.2 4.2c.7 1.88 2.2 3.16 4.6 3.42"
-        stroke="currentColor"
-        strokeWidth="1.9"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-export function BrandBIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-8" fill="none">
-      <path
-        d="M7 4.2h5.7c2.5 0 4 1.33 4 3.4 0 1.53-.8 2.6-2.18 3.04C16.42 11.03 18 12.3 18 14.7c0 2.9-2.17 4.1-5.35 4.1H7V4.2Z"
-        stroke="currentColor"
-        strokeWidth="1.9"
-        strokeLinejoin="round"
-      />
-      <path d="M9.1 6.5h3.05c1.53 0 2.35.63 2.35 1.75S13.68 10 12.15 10H9.1V6.5Z" fill="currentColor" />
-      <path d="M9.1 12.2h3.45c1.8 0 2.75.72 2.75 2.02 0 1.35-.95 2.08-2.75 2.08H9.1V12.2Z" fill="currentColor" />
-    </svg>
-  );
-}
+const FIELD =
+  "h-[46px] w-full rounded-xl border border-input bg-white px-3.5 text-foreground outline-none transition-all duration-200 placeholder:text-text-4 focus:border-primary focus:shadow-[0_0_0_4px_var(--ring)] disabled:bg-surface-2";
 
 // Desabilita os campos enquanto o login está em andamento, para que o clique
-// em "Acessar portal" tenha feedback imediato e não aceite edições no meio.
+// em "Entrar" tenha feedback imediato e não aceite edições no meio.
 function LoginFieldset({ children }: { children: React.ReactNode }) {
   const { pending } = useFormStatus();
 
   return (
-    <fieldset disabled={pending} className="space-y-3 sm:space-y-5">
+    <fieldset disabled={pending} className="flex flex-col gap-4">
       {children}
     </fieldset>
   );
@@ -79,14 +29,16 @@ function SubmitButton() {
   const { pending } = useFormStatus();
 
   return (
-    <Button
-      className="h-14 w-full rounded-2xl bg-[linear-gradient(135deg,#4d7cff_0%,#815cff_55%,#b787ff_100%)] text-sm font-extrabold uppercase tracking-[0.08em] text-white shadow-[0_16px_40px_rgba(114,92,255,0.28)] hover:brightness-105"
-      size="lg"
+    <button
+      type="submit"
       disabled={pending}
+      className="flex h-12 items-center justify-center gap-2.5 rounded-xl bg-[linear-gradient(180deg,var(--brand-500),var(--brand-600))] text-[15px] font-semibold text-white shadow-[0_1px_2px_rgba(16,24,40,0.1),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all duration-200 hover:shadow-[0_8px_20px_-8px_rgba(106,69,232,0.6)] hover:brightness-[1.07] disabled:cursor-wait"
     >
-      <span>{pending ? "Entrando..." : "Acessar portal"}</span>
-      <ArrowRight className="size-5" />
-    </Button>
+      {pending ? (
+        <span className="size-4 animate-spin rounded-full border-2 border-white/35 border-t-white" />
+      ) : null}
+      {pending ? "Entrando..." : "Entrar"}
+    </button>
   );
 }
 
@@ -94,75 +46,71 @@ export function LoginForm() {
   const [state, formAction] = useActionState(loginAction, initialState);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div>
-        <p className="text-[0.78rem] font-semibold text-[#a4a8b0] sm:text-base">
-          Seja bem-vindo ao portal
-        </p>
-        <h2 className="mt-1 font-display text-[2rem] leading-[0.92] tracking-[-0.07em] text-[#090909] max-lg:dark:text-white sm:mt-3 sm:max-w-[13ch] sm:text-[3.2rem]">
-          <span className="block whitespace-nowrap">Faça login para acompanhar</span>
-          <span className="block">suas campanhas</span>
-        </h2>
-        <p className="mt-2 max-w-2xl text-[0.84rem] leading-5 text-[#7f8794] max-lg:dark:text-slate-400 sm:mt-4 sm:text-base sm:leading-7">
-          Use o acesso liberado manualmente pela equipe da Tráfego Academy para
-          entrar no seu dashboard de métricas.
+    <div className="flex w-full max-w-[420px] flex-col gap-7 py-12">
+      <div className="flex flex-col gap-3.5">
+        <h1 className="text-[30px] font-semibold leading-[1.12] tracking-[-0.035em] text-balance text-foreground sm:text-[34px]">
+          Acompanhe cada real investido virar resultado.
+        </h1>
+        <p className="text-[15.5px] leading-[1.55] text-pretty text-muted-foreground">
+          Métricas das suas campanhas, evolução dos resultados e relatórios da
+          operação em um só lugar.
         </p>
       </div>
 
-      <form action={formAction} className="mt-3 sm:mt-8">
+      <form action={formAction}>
         <LoginFieldset>
-        <div className="space-y-2">
-          <Label
-            htmlFor="username"
-            className="text-sm font-semibold text-[#636b78] max-lg:dark:text-slate-300"
-          >
-            Usuário
-          </Label>
-          <Input
-            id="username"
-            name="username"
-            placeholder="Digite seu usuário"
-            autoComplete="username"
-            required
-            className="h-[50px] rounded-[18px] border border-[#e4e8f2] bg-white/95 px-4 text-base text-[#131313] shadow-[0_12px_28px_rgba(31,28,64,0.05),inset_0_1px_0_rgba(255,255,255,0.95)] placeholder:text-[#9aa4b5] focus-visible:border-[#8f87ff] lg:focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15 lg:dark:border-[#e4e8f2] lg:dark:bg-white/95 lg:dark:text-[#131313] lg:dark:placeholder:text-[#9aa4b5] sm:h-[62px] sm:rounded-[20px] sm:px-6"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label
-            htmlFor="password"
-            className="text-sm font-semibold text-[#636b78] max-lg:dark:text-slate-300"
-          >
-            Senha
-          </Label>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            placeholder="Digite sua senha"
-            autoComplete="current-password"
-            required
-            className="h-[50px] rounded-[18px] border border-[#e4e8f2] bg-white/95 px-4 text-base text-[#131313] shadow-[0_12px_28px_rgba(31,28,64,0.05),inset_0_1px_0_rgba(255,255,255,0.95)] placeholder:text-[#9aa4b5] focus-visible:border-[#8f87ff] lg:focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f87ff]/15 lg:dark:border-[#e4e8f2] lg:dark:bg-white/95 lg:dark:text-[#131313] lg:dark:placeholder:text-[#9aa4b5] sm:h-[62px] sm:rounded-[20px] sm:px-6"
-          />
-        </div>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-medium text-text-2">Usuário</span>
+            <input
+              id="username"
+              name="username"
+              placeholder="Digite seu usuário"
+              autoComplete="username"
+              required
+              className={FIELD}
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-medium text-text-2">Senha</span>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              placeholder="Digite sua senha"
+              autoComplete="current-password"
+              required
+              className={FIELD}
+            />
+          </label>
 
-        {state.error ? (
-          <p className="rounded-[18px] border border-[#f0b1b8] bg-[#fff2f4] px-5 py-4 text-sm text-[#c43d4b] max-lg:dark:border-red-400/30 max-lg:dark:bg-red-500/10 max-lg:dark:text-red-300">
-            {state.error}
-          </p>
-        ) : null}
+          {state.error ? (
+            <p
+              role="alert"
+              className="animate-ta-in rounded-xl border border-[#fecdca] bg-[#fef3f2] px-3.5 py-3 text-[13.5px] text-[#b42318]"
+            >
+              {state.error}
+            </p>
+          ) : null}
 
-        <div className="flex justify-end">
-          <div className="w-full max-w-full sm:max-w-[260px]">
-            <SubmitButton />
+          <SubmitButton />
+
+          <div className="flex items-center gap-3 text-[12.5px] text-text-4">
+            <span className="h-px flex-1 bg-border" />
+            ou
+            <span className="h-px flex-1 bg-border" />
           </div>
-        </div>
+
+          <a
+            href={BECOME_CLIENT_HREF}
+            target="_blank"
+            rel="noreferrer"
+            className="flex h-[46px] items-center justify-center gap-2 rounded-xl border border-input bg-white font-medium text-text-2 transition hover:bg-surface-2"
+          >
+            Ainda não é cliente? Fale com a gente
+            <ArrowUpRight className="size-4" strokeWidth={1.75} />
+          </a>
         </LoginFieldset>
       </form>
-
-      <p className="mt-5 flex items-center justify-center gap-2 text-center text-[0.72rem] leading-5 text-[#8f96a3] sm:hidden">
-        <ShieldCheck className="size-3.5 shrink-0 text-[#7d68f5]" />
-        Ambiente privado com acessos definidos pela equipe Tráfego Academy.
-      </p>
     </div>
   );
 }

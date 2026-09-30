@@ -50,7 +50,7 @@ export function CampaignBreakdownChart({
     <div className="dashboard-card rounded-[1.5rem] border p-4 text-foreground">
       <div className="mb-4">
         <p className="text-sm leading-6 text-muted-foreground">{periodLabel}</p>
-        <h3 className="mt-1 font-display text-2xl font-semibold">
+        <h3 className="mt-1 text-lg tracking-[-0.02em] font-semibold">
           Investimento por campanha
         </h3>
       </div>
@@ -102,7 +102,7 @@ export function CampaignBreakdownChart({
           </ResponsiveContainer>
         </div>
       ) : (
-        <div className="flex h-[220px] items-center justify-center rounded-[1.25rem] border border-dashed border-border/70 bg-background/50 px-6 text-center text-sm leading-6 text-muted-foreground dark:border-white/[0.12] dark:bg-white/[0.035]">
+        <div className="flex h-[220px] items-center justify-center rounded-[1.25rem] border border-dashed border-border/70 bg-background/50 px-6 text-center text-sm leading-6 text-muted-foreground">
           Nenhuma campanha com investimento no período selecionado.
         </div>
       )}

@@ -8,7 +8,7 @@ export function WabaHelp({ creationFlow = false }: { creationFlow?: boolean }) {
     <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-foreground">
       <div className="flex items-start gap-2.5">
         <Info
-          className="mt-1 size-4 shrink-0 text-amber-600 dark:text-amber-300"
+          className="mt-1 size-4 shrink-0 text-amber-600"
           aria-hidden="true"
         />
         <div className="min-w-0">

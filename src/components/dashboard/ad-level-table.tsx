@@ -113,7 +113,7 @@ export function AdLevelTable({
   return (
     <div className="min-w-0 space-y-4">
       {notice ? (
-        <p className="flex items-start gap-2 rounded-[0.875rem] border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-300">
+        <p className="flex items-start gap-2 rounded-[0.875rem] border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
           <Info className="mt-0.5 size-4 shrink-0" />
           {notice}
         </p>
@@ -145,7 +145,7 @@ export function AdLevelTable({
                   <EntityStatus level={level} row={row} editable={editable} />
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                  <div className="rounded-xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
+                  <div className="rounded-xl bg-muted/50 px-3 py-2">
                     <p className="text-xs text-muted-foreground">Investido</p>
                     <p className="mt-0.5 font-semibold">
                       {money(withMetaTaxes(row.amountSpent))}
@@ -156,15 +156,15 @@ export function AdLevelTable({
                       </p>
                     ) : null}
                   </div>
-                  <div className="rounded-xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
+                  <div className="rounded-xl bg-muted/50 px-3 py-2">
                     <p className="text-xs text-muted-foreground">Resultados</p>
                     <p className="mt-0.5 font-semibold">{row.results}</p>
                   </div>
-                  <div className="rounded-xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
+                  <div className="rounded-xl bg-muted/50 px-3 py-2">
                     <p className="text-xs text-muted-foreground">Cliques</p>
                     <p className="mt-0.5 font-semibold">{row.clicks}</p>
                   </div>
-                  <div className="rounded-xl bg-muted/50 px-3 py-2 dark:bg-white/[0.045]">
+                  <div className="rounded-xl bg-muted/50 px-3 py-2">
                     <p className="text-xs text-muted-foreground">CTR</p>
                     <p className="mt-0.5 font-semibold">{percent(row.ctr)}</p>
                   </div>
@@ -176,12 +176,12 @@ export function AdLevelTable({
           <div className="dashboard-card hidden overflow-hidden rounded-[0.875rem] border text-foreground md:block">
             <div className="overflow-x-auto">
               <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
-                <thead className="sticky top-0 z-10 bg-muted/95 text-muted-foreground backdrop-blur dark:bg-[#111525]/95">
+                <thead className="sticky top-0 z-10 bg-muted/95 text-muted-foreground backdrop-blur">
                   <tr>
                     {[entityLabel, "Status", "Investido", "Cliques", "CTR", "Resultados", "Custo/result.", "ROAS"].map((label) => (
                       <th
                         key={label}
-                        className="border-b border-border/70 px-4 py-3 font-medium dark:border-white/10"
+                        className="border-b border-border/70 px-4 py-3 font-medium"
                       >
                         {label}
                         {label === "Investido" ? <TaxInfo className="ml-1.5 align-middle" /> : null}
@@ -192,7 +192,7 @@ export function AdLevelTable({
                 <tbody>
                   {sortedRows.map((row) => (
                     <tr key={row.id}>
-                      <td className="min-w-[260px] border-b border-border/60 px-4 py-3 align-middle dark:border-white/10">
+                      <td className="min-w-[260px] border-b border-border/60 px-4 py-3 align-middle">
                         <p className="font-medium leading-snug text-foreground">{row.name}</p>
                         <p className="mt-0.5 max-w-[300px] truncate text-xs text-muted-foreground">
                           {level === "ad" && row.adSetName
@@ -200,10 +200,10 @@ export function AdLevelTable({
                             : row.campaignName}
                         </p>
                       </td>
-                      <td className="min-w-[120px] border-b border-border/60 px-4 py-3 align-middle dark:border-white/10">
+                      <td className="min-w-[120px] border-b border-border/60 px-4 py-3 align-middle">
                         <EntityStatus level={level} row={row} editable={editable} />
                       </td>
-                      <td className="min-w-[116px] border-b border-border/60 px-4 py-3 align-middle dark:border-white/10">
+                      <td className="min-w-[116px] border-b border-border/60 px-4 py-3 align-middle">
                         {money(withMetaTaxes(row.amountSpent))}
                         {row.currency !== "BRL" ? (
                           <span className="mt-0.5 block text-xs text-muted-foreground">
@@ -211,13 +211,13 @@ export function AdLevelTable({
                           </span>
                         ) : null}
                       </td>
-                      <td className="border-b border-border/60 px-4 py-3 dark:border-white/10">{row.clicks}</td>
-                      <td className="border-b border-border/60 px-4 py-3 dark:border-white/10">{percent(row.ctr)}</td>
-                      <td className="border-b border-border/60 px-4 py-3 dark:border-white/10">
+                      <td className="border-b border-border/60 px-4 py-3">{row.clicks}</td>
+                      <td className="border-b border-border/60 px-4 py-3">{percent(row.ctr)}</td>
+                      <td className="border-b border-border/60 px-4 py-3">
                         <p className="font-medium leading-none">{row.results}</p>
                         <p className="mt-1 text-xs text-muted-foreground">{row.resultLabel}</p>
                       </td>
-                      <td className="border-b border-border/60 px-4 py-3 dark:border-white/10">
+                      <td className="border-b border-border/60 px-4 py-3">
                         {row.results > 0 ? money(row.costPerResult) : "—"}
                         {row.currency !== "BRL" && row.results > 0 ? (
                           <span className="mt-0.5 block text-xs text-muted-foreground">
@@ -225,28 +225,28 @@ export function AdLevelTable({
                           </span>
                         ) : null}
                       </td>
-                      <td className="border-b border-border/60 px-4 py-3 dark:border-white/10">0,00x</td>
+                      <td className="border-b border-border/60 px-4 py-3">0,00x</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="bg-card">
                   <tr>
-                    <td className="border-t border-border/70 px-4 py-3 font-semibold dark:border-white/10">Totais</td>
-                    <td className="border-t border-border/70 px-4 py-3 text-muted-foreground dark:border-white/10">
+                    <td className="border-t border-border/70 px-4 py-3 font-semibold">Totais</td>
+                    <td className="border-t border-border/70 px-4 py-3 text-muted-foreground">
                       {sortedRows.length} {pluralLabel}
                     </td>
-                    <td className="border-t border-border/70 px-4 py-3 font-semibold dark:border-white/10">
+                    <td className="border-t border-border/70 px-4 py-3 font-semibold">
                       {money(withMetaTaxes(totals.amountSpent))}
                     </td>
-                    <td className="border-t border-border/70 px-4 py-3 font-semibold dark:border-white/10">{totals.clicks}</td>
-                    <td className="border-t border-border/70 px-4 py-3 font-semibold dark:border-white/10">
+                    <td className="border-t border-border/70 px-4 py-3 font-semibold">{totals.clicks}</td>
+                    <td className="border-t border-border/70 px-4 py-3 font-semibold">
                       {percent(totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0)}
                     </td>
-                    <td className="border-t border-border/70 px-4 py-3 font-semibold dark:border-white/10">{totals.results}</td>
-                    <td className="border-t border-border/70 px-4 py-3 font-semibold dark:border-white/10">
+                    <td className="border-t border-border/70 px-4 py-3 font-semibold">{totals.results}</td>
+                    <td className="border-t border-border/70 px-4 py-3 font-semibold">
                       {totals.results > 0 ? money(totals.amountSpent / totals.results) : "—"}
                     </td>
-                    <td className="border-t border-border/70 px-4 py-3 font-semibold dark:border-white/10">0,00x</td>
+                    <td className="border-t border-border/70 px-4 py-3 font-semibold">0,00x</td>
                   </tr>
                 </tfoot>
               </table>

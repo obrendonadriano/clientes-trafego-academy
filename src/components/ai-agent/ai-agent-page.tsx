@@ -149,7 +149,7 @@ function StatusCard({
             <span
               className={cn(
                 "relative h-7 w-12 rounded-full transition-colors",
-                settings.enabled ? "bg-primary" : "bg-muted dark:bg-white/15",
+                settings.enabled ? "bg-primary" : "bg-muted",
                 "after:absolute after:left-1 after:top-1 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition-transform after:content-['']",
                 settings.enabled && "after:translate-x-5",
               )}
@@ -189,7 +189,7 @@ function StatusCard({
         </div>
 
         {!whatsappConnected ? (
-          <p className="flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/[0.12] px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+          <p className="flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/[0.12] px-4 py-3 text-sm text-amber-700">
             <PlugZap className="mt-0.5 size-4 shrink-0" />
             <span>
               Conecte seu WhatsApp antes de ativar o atendimento automático.

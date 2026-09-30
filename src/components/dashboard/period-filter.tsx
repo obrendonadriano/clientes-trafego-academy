@@ -140,7 +140,7 @@ export function PeriodFilter({
                 "min-h-11 rounded-full border px-4 py-2 text-sm font-semibold leading-5 transition active:scale-[0.985] sm:px-5",
                 active === period
                   ? "border-primary bg-primary text-white shadow-[0_16px_34px_-18px_rgba(125,104,245,0.9)]"
-                  : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/30 hover:text-foreground dark:border-white/10 dark:bg-white/[0.035] dark:hover:border-white/20 dark:hover:bg-white/[0.06] dark:hover:text-white",
+                  : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/30 hover:text-foreground",
               )}
             >
               {period}
@@ -156,7 +156,7 @@ export function PeriodFilter({
             !compact && "2xl:w-auto",
             comparePrevious
               ? "border-primary/25 bg-primary/[0.15] text-primary"
-              : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/30 hover:text-foreground dark:border-white/10 dark:bg-white/[0.035] dark:hover:border-white/20 dark:hover:bg-white/[0.06] dark:hover:text-white",
+              : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/30 hover:text-foreground",
           )}
         >
           <SlidersHorizontal className="size-4" />
@@ -165,7 +165,7 @@ export function PeriodFilter({
       </div>
 
       {active === "Personalizado" ? (
-        <div className="mt-4 grid min-w-0 gap-3 rounded-[1.25rem] border border-border/70 bg-background/50 p-3 dark:border-white/10 dark:bg-white/[0.035] sm:p-4 md:grid-cols-[1fr_1fr_auto]">
+        <div className="mt-4 grid min-w-0 gap-3 rounded-[1.25rem] border border-border/70 bg-background/50 p-3 sm:p-4 md:grid-cols-[1fr_1fr_auto]">
           <label className="min-w-0 space-y-2">
             <span className="text-sm font-medium text-foreground">Data inicial</span>
             <input
@@ -175,7 +175,7 @@ export function PeriodFilter({
               onChange={(event) =>
                 handleRangeChange({ start: event.target.value, end })
               }
-              className="flex h-12 min-w-0 w-full max-w-full overflow-hidden rounded-2xl border border-input bg-background/70 px-3 py-3 text-[0.95rem] text-foreground outline-none transition focus:border-primary focus:ring-4 focus:ring-ring dark:border-white/10 dark:bg-black/30 dark:text-white sm:px-4 sm:text-sm"
+              className="flex h-12 min-w-0 w-full max-w-full overflow-hidden rounded-2xl border border-input bg-background/70 px-3 py-3 text-[0.95rem] text-foreground outline-none transition focus:border-primary focus:ring-4 focus:ring-ring sm:px-4 sm:text-sm"
             />
           </label>
           <label className="min-w-0 space-y-2">
@@ -187,7 +187,7 @@ export function PeriodFilter({
               onChange={(event) =>
                 handleRangeChange({ start, end: event.target.value })
               }
-              className="flex h-12 min-w-0 w-full max-w-full overflow-hidden rounded-2xl border border-input bg-background/70 px-3 py-3 text-[0.95rem] text-foreground outline-none transition focus:border-primary focus:ring-4 focus:ring-ring dark:border-white/10 dark:bg-black/30 dark:text-white sm:px-4 sm:text-sm"
+              className="flex h-12 min-w-0 w-full max-w-full overflow-hidden rounded-2xl border border-input bg-background/70 px-3 py-3 text-[0.95rem] text-foreground outline-none transition focus:border-primary focus:ring-4 focus:ring-ring sm:px-4 sm:text-sm"
             />
           </label>
           <div className="flex min-w-0 items-end">
@@ -221,7 +221,7 @@ export function PeriodFilter({
       ) : null}
 
       {/* Aviso do período em visualização (atualiza ao aplicar). */}
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/60 px-1 pt-3 text-sm dark:border-white/10 sm:px-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/60 px-1 pt-3 text-sm sm:px-2">
         {isApplying ? (
           <span className="inline-flex items-center gap-2 rounded-full bg-primary/[0.15] px-3 py-1 font-medium text-primary">
             <LoaderCircle className="size-3.5 animate-spin" />

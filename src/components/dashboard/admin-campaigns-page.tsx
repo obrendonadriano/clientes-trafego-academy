@@ -23,7 +23,7 @@ const CampaignBreakdownChart = dynamic(
     ssr: false,
     loading: () => (
       <div className="dashboard-card rounded-[1.5rem] border p-4">
-        <div className="h-[260px] animate-pulse rounded-[1.25rem] bg-muted/70 dark:bg-white/[0.08]" />
+        <div className="h-[260px] animate-pulse rounded-[1.25rem] bg-muted/70" />
       </div>
     ),
   },
@@ -149,10 +149,10 @@ export function AdminCampaignsPage({
       <MetaSyncOverlay open={isSyncing} />
 
       <div>
-        <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-4">
           Campanhas
         </p>
-        <h3 className="mt-2 font-display text-3xl font-semibold text-foreground">
+        <h3 className="mt-2 text-[26px] tracking-[-0.03em] font-semibold text-foreground">
           Gestão de campanhas
         </h3>
         <p className="mt-2 max-w-3xl leading-7 text-muted-foreground">
@@ -189,7 +189,7 @@ export function AdminCampaignsPage({
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm text-muted-foreground">Importação externa</p>
-            <h4 className="mt-1 font-display text-2xl font-semibold text-foreground">
+            <h4 className="mt-1 text-lg tracking-[-0.02em] font-semibold text-foreground">
               Meta Ads
             </h4>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">

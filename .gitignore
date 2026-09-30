@@ -45,3 +45,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# store local do pnpm (o projeto usa npm/package-lock)
+.pnpm-store/

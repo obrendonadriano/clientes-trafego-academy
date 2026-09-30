@@ -66,7 +66,7 @@ export function MetaSyncOverlay({ open }: { open: boolean }) {
 
         <h2
           id="meta-sync-title"
-          className="mt-6 font-display text-2xl font-semibold text-foreground"
+          className="mt-6 text-lg tracking-[-0.02em] font-semibold text-foreground"
         >
           Sincronizando dados com a Meta
         </h2>

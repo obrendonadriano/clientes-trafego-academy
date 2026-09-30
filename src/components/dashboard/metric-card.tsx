@@ -1,72 +1,88 @@
 import type { ReactNode } from "react";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, type LucideIcon } from "lucide-react";
+import { CountUp } from "@/components/dashboard/count-up";
 import { cn } from "@/lib/utils";
 
 type MetricCardProps = {
   label: string;
   // Marcador opcional ao lado do rótulo (ex.: o "(?)" dos impostos).
   info?: ReactNode;
+  icon?: LucideIcon;
   value: string;
+  // Variação ("+12,5%") ou uma nota curta ("período atual").
   change: string;
   positive?: boolean;
-  // Valor secundário (ex.: "US$ 39,14") exibido abaixo do valor principal.
+  // Valor secundário (ex.: "US$ 39,14") exibido ao lado da variação.
   sub?: string;
+  className?: string;
 };
+
+// Só variações percentuais ("+12,5%") viram pílula; o resto é nota em cinza.
+const DELTA_PATTERN = /^[+-]?\d[\d.,]*%$/;
 
 export function MetricCard({
   label,
   info,
+  icon: Icon,
   value,
   change,
   positive = true,
   sub,
+  className,
 }: MetricCardProps) {
+  const isDelta = DELTA_PATTERN.test(change.trim());
+  const isFlat = isDelta && Number(change.replace(/[^\d,-]/g, "").replace(",", ".")) === 0;
+  // A seta segue o sinal da variação; a cor diz se isso é bom ou ruim
+  // (custo subindo é seta para cima em vermelho).
+  const goesDown = change.trim().startsWith("-");
+
   return (
-    <div className="dashboard-card relative min-h-[242px] rounded-[1.5rem] border p-5 text-foreground">
-      <div className="absolute inset-x-5 top-0 h-1 rounded-b-full bg-[linear-gradient(90deg,rgba(62,214,184,0.18),rgba(122,142,255,0.95),rgba(139,120,255,0.22))]" />
-      <div className="flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 text-sm leading-6 text-muted-foreground">
-            {label}
-            {info}
-          </p>
-        </div>
-        <div
-          className={cn(
-            "inline-flex max-w-[56%] shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold leading-5 sm:text-sm",
-            positive
-              ? "bg-primary/[0.18] text-primary dark:text-[#a99cff]"
-              : "bg-destructive/[0.18] text-destructive",
-          )}
-        >
-          {positive ? (
-            <ArrowUpRight className="size-4 shrink-0" />
-          ) : (
-            <ArrowDownRight className="size-4 shrink-0" />
-          )}
-          <span className="min-w-0 break-words">{change}</span>
-        </div>
+    <div
+      className={cn(
+        "card-lift flex min-w-0 flex-col gap-3 rounded-2xl border border-border bg-card p-3.5 sm:p-[18px] text-foreground shadow-[0_1px_2px_rgba(16,24,40,0.04)]",
+        className,
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
+          <span className="truncate">{label}</span>
+          {info}
+        </p>
+        {Icon ? (
+          <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-secondary text-text-3">
+            <Icon className="size-[15px]" strokeWidth={1.75} />
+          </span>
+        ) : null}
       </div>
-      <p className="mt-5 whitespace-nowrap font-display text-[clamp(2.25rem,2.7vw,2.75rem)] font-semibold leading-none text-foreground">
-        {value}
+
+      <p className="whitespace-nowrap text-[22px] font-semibold sm:text-[28px] leading-none tracking-[-0.035em] tabular-nums">
+        <CountUp value={value} />
       </p>
-      {sub ? (
-        <p className="mt-2 text-sm font-medium text-muted-foreground">{sub}</p>
-      ) : null}
-      <div className="mt-7 h-px bg-border/70 dark:bg-white/10" />
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-          Indicador
-        </p>
-        <p className="text-xs text-muted-foreground">Atualizado agora</p>
-      </div>
-      <div className="mt-3 flex items-end justify-between gap-4">
-        <p className="text-sm leading-6 text-muted-foreground">
-          Leitura executiva da operação atual.
-        </p>
-        <p className="sr-only font-display text-3xl font-semibold">
-          {value}
-        </p>
+
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        {isDelta ? (
+          <span
+            className={cn(
+              "inline-flex items-center gap-0.5 rounded-full px-[7px] py-0.5 font-semibold",
+              isFlat
+                ? "bg-secondary text-text-3"
+                : positive
+                  ? "bg-[#ecfdf3] text-[#067647]"
+                  : "bg-[#fef3f2] text-[#b42318]",
+            )}
+          >
+            {isFlat ? null : !goesDown ? (
+              <ArrowUpRight className="size-3" strokeWidth={2.25} />
+            ) : (
+              <ArrowDownRight className="size-3" strokeWidth={2.25} />
+            )}
+            {change}
+          </span>
+        ) : (
+          <span className="text-text-4">{change}</span>
+        )}
+        {isDelta ? <span className="text-text-4">vs. período anterior</span> : null}
+        {sub ? <span className="ml-auto text-muted-foreground">{sub}</span> : null}
       </div>
     </div>
   );

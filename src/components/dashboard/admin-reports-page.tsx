@@ -32,10 +32,10 @@ export function AdminReportsPage({
           <Sparkles className="size-5" />
         </span>
         <div className="min-w-0">
-          <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-4">
             Análise com IA
           </p>
-          <h3 className="font-display text-3xl font-semibold">
+          <h3 className="text-[26px] tracking-[-0.03em] font-semibold">
             Gerar relatório para o cliente
           </h3>
         </div>

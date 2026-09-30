@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 type LegalPageShellProps = {
   eyebrow: string;
@@ -15,26 +14,24 @@ export function LegalPageShell({
   children,
 }: LegalPageShellProps) {
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(25,150,122,0.2),_transparent_35%),linear-gradient(180deg,_#f5f7f2_0%,_#edf2ea_48%,_#dde7df_100%)] text-foreground dark:bg-[radial-gradient(circle_at_top,_rgba(75,255,205,0.14),_transparent_32%),linear-gradient(180deg,_#08111a_0%,_#09131f_50%,_#0d1724_100%)]">
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(15,23,42,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.05)_1px,transparent_1px)] bg-[size:72px_72px] opacity-30 dark:opacity-10" />
+    <main className="relative min-h-screen overflow-hidden bg-background text-foreground">
       <div className="relative mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-8">
         <div className="flex items-center justify-between">
           <Link href="/" className="group">
-            <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-4">
               Tráfego Academy
             </p>
-            <p className="mt-2 font-display text-2xl font-semibold transition group-hover:text-primary">
+            <p className="mt-2 text-lg tracking-[-0.02em] font-semibold transition group-hover:text-primary">
               Portal privado
             </p>
           </Link>
-          <ThemeToggle />
         </div>
 
-        <div className="mt-10 rounded-[2rem] border border-border/60 bg-card/80 p-6 shadow-[0_30px_80px_-35px_rgba(15,23,42,0.35)] backdrop-blur md:p-10">
-          <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">
+        <div className="mt-10 rounded-[18px] border border-border bg-card p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)] md:p-10">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-4">
             {eyebrow}
           </p>
-          <h1 className="mt-3 font-display text-4xl font-semibold tracking-[-0.04em] md:text-5xl">
+          <h1 className="mt-3 text-[26px] tracking-[-0.03em] font-semibold tracking-[-0.035em] md:text-4xl">
             {title}
           </h1>
           <p className="mt-4 max-w-3xl text-base leading-8 text-muted-foreground">

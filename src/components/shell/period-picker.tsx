@@ -77,7 +77,7 @@ export function PeriodPicker({ maxRangeDays, maxRangeLabel }: PeriodPickerProps)
         onClick={() => setIsOpen((open) => !open)}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
-        className="inline-flex h-9 max-w-[16rem] items-center gap-2 rounded-lg border border-border bg-background px-3 text-[0.8rem] text-foreground transition hover:border-primary/40"
+        className="inline-flex h-9 max-w-[16rem] items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-[0.8rem] text-foreground transition hover:bg-surface-2"
       >
         {scope.isApplying ? (
           <LoaderCircle className="size-[0.95rem] shrink-0 animate-spin text-primary" />
@@ -95,9 +95,9 @@ export function PeriodPicker({ maxRangeDays, maxRangeLabel }: PeriodPickerProps)
         <div
           role="dialog"
           aria-label="Selecionar período"
-          className="absolute right-0 top-[calc(100%+0.5rem)] z-40 grid w-[min(32rem,calc(100vw-2rem))] grid-cols-1 overflow-hidden rounded-2xl border border-border/70 bg-popover shadow-2xl dark:border-white/10 sm:grid-cols-[11rem_minmax(0,1fr)]"
+          className="absolute right-0 top-[calc(100%+0.5rem)] z-40 grid w-[min(32rem,calc(100vw-2rem))] grid-cols-1 overflow-hidden rounded-2xl border border-border/70 bg-popover shadow-[0_24px_48px_-12px_rgba(16,24,40,0.18)] sm:grid-cols-[11rem_minmax(0,1fr)]"
         >
-          <div className="flex flex-col gap-1 border-b border-border/70 bg-muted/40 p-2 dark:border-white/10 dark:bg-white/[0.03] sm:border-b-0 sm:border-r">
+          <div className="flex flex-col gap-1 border-b border-border/70 bg-muted/40 p-2 sm:border-b-0 sm:border-r">
             {periods.map((preset) => (
               <button
                 key={preset}
@@ -107,7 +107,7 @@ export function PeriodPicker({ maxRangeDays, maxRangeLabel }: PeriodPickerProps)
                   "rounded-lg px-3 py-2 text-left text-[0.8rem] transition",
                   scope.period === preset
                     ? "bg-primary/[0.14] font-medium text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground dark:hover:bg-white/[0.06]",
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
                 {preset}
@@ -130,7 +130,7 @@ export function PeriodPicker({ maxRangeDays, maxRangeLabel }: PeriodPickerProps)
                     onChange={(event) =>
                       setDraft((range) => ({ ...range, start: event.target.value }))
                     }
-                    className="h-10 w-full min-w-0 rounded-lg border border-border/70 bg-background/60 px-2 text-sm text-foreground outline-none focus:border-primary dark:border-white/10 dark:bg-black/30"
+                    className="h-10 w-full min-w-0 rounded-lg border border-border/70 bg-background/60 px-2 text-sm text-foreground outline-none focus:border-primary"
                   />
                 </label>
                 <label className="min-w-0 space-y-1">
@@ -142,7 +142,7 @@ export function PeriodPicker({ maxRangeDays, maxRangeLabel }: PeriodPickerProps)
                     onChange={(event) =>
                       setDraft((range) => ({ ...range, end: event.target.value }))
                     }
-                    className="h-10 w-full min-w-0 rounded-lg border border-border/70 bg-background/60 px-2 text-sm text-foreground outline-none focus:border-primary dark:border-white/10 dark:bg-black/30"
+                    className="h-10 w-full min-w-0 rounded-lg border border-border/70 bg-background/60 px-2 text-sm text-foreground outline-none focus:border-primary"
                   />
                 </label>
               </div>
@@ -178,7 +178,7 @@ export function PeriodPicker({ maxRangeDays, maxRangeLabel }: PeriodPickerProps)
                       "flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition",
                       scope.comparePrevious === option.value
                         ? "border-primary/40 bg-primary/[0.1]"
-                        : "border-border/70 hover:bg-muted/60 dark:border-white/10 dark:hover:bg-white/[0.05]",
+                        : "border-border/70 hover:bg-muted/60",
                     )}
                   >
                     <span
@@ -186,7 +186,7 @@ export function PeriodPicker({ maxRangeDays, maxRangeLabel }: PeriodPickerProps)
                         "size-2.5 shrink-0 rounded-full border",
                         scope.comparePrevious === option.value
                           ? "border-primary bg-primary"
-                          : "border-border dark:border-white/25",
+                          : "border-border",
                       )}
                     />
                     <span className="min-w-0">
@@ -202,11 +202,11 @@ export function PeriodPicker({ maxRangeDays, maxRangeLabel }: PeriodPickerProps)
               </div>
             </div>
 
-            <div className="flex gap-2 border-t border-border/70 pt-3 dark:border-white/10">
+            <div className="flex gap-2 border-t border-border/70 pt-3">
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="h-10 flex-1 rounded-lg border border-border/70 text-sm text-muted-foreground transition hover:text-foreground dark:border-white/10"
+                className="h-10 flex-1 rounded-lg border border-border/70 text-sm text-muted-foreground transition hover:text-foreground"
               >
                 Fechar
               </button>

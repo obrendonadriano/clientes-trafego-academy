@@ -5,7 +5,6 @@ import {
   Bot,
   FileText,
   LayoutDashboard,
-  Menu,
   Receipt,
   Settings,
   Sparkles,
@@ -24,7 +23,6 @@ const ICONS = {
   fechamento: Receipt,
   conversoes: Sparkles,
   "atendimento-ia": Bot,
-  mais: Menu,
 } as const satisfies Record<NavIconKey, unknown>;
 
 export function NavIcon({

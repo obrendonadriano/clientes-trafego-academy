@@ -80,7 +80,7 @@ export function AdminSyncPanel({
       >
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 font-display text-2xl">
+          <CardTitle className="flex items-center gap-2 text-lg tracking-[-0.02em]">
             {hasError ? (
               <CircleAlert className="size-5 text-destructive" />
             ) : (
@@ -107,7 +107,7 @@ export function AdminSyncPanel({
             <div
               className={
                 exchangeRate.source === "fallback"
-                  ? "rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-300"
+                  ? "rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600"
                   : "dashboard-row flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm"
               }
             >
@@ -190,7 +190,7 @@ export function AdminSyncPanel({
       {counters ? (
         <Card>
           <CardHeader>
-            <CardTitle className="font-display text-2xl">
+            <CardTitle className="text-lg tracking-[-0.02em]">
               Situação da operação
             </CardTitle>
           </CardHeader>

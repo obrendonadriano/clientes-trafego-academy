@@ -51,7 +51,7 @@ export function FormStepper({ steps, current, onStepClick }: FormStepperProps) {
                   status === "complete" &&
                     "border-primary/30 bg-primary/15 text-primary group-hover:bg-primary/20",
                   status === "upcoming" &&
-                    "border-border/70 bg-background/50 text-muted-foreground dark:border-white/10 dark:bg-white/[0.03]",
+                    "border-border/70 bg-background/50 text-muted-foreground",
                 )}
               >
                 {status === "complete" ? (
@@ -82,7 +82,7 @@ export function FormStepper({ steps, current, onStepClick }: FormStepperProps) {
                   "h-px flex-1 rounded-full transition",
                   index < current
                     ? "bg-primary/40"
-                    : "bg-border/70 dark:bg-white/10",
+                    : "bg-border/70",
                 )}
               />
             ) : null}

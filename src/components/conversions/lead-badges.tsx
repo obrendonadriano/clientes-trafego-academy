@@ -62,7 +62,7 @@ export function CapiErrorBadge({ lead }: { lead: ConversionLead }) {
       </button>
 
       {isOpen ? (
-        <span className="absolute right-0 top-[calc(100%+0.4rem)] z-30 w-[min(24rem,calc(100vw-3rem))] rounded-xl border border-border/70 bg-popover p-3 text-left shadow-2xl dark:border-white/10">
+        <span className="absolute right-0 top-[calc(100%+0.4rem)] z-30 w-[min(24rem,calc(100vw-3rem))] rounded-xl border border-border/70 bg-popover p-3 text-left shadow-2xl">
           <span className="block text-xs font-medium text-foreground">
             Resposta da Meta
           </span>

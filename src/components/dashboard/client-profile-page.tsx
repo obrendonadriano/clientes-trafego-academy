@@ -46,7 +46,7 @@ function FeedbackMessage({ state }: { state: ProfileActionState }) {
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-2.5 text-sm last:border-b-0 dark:border-white/10">
+    <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-2.5 text-sm last:border-b-0">
       <span className="text-muted-foreground">{label}</span>
       <span className="min-w-0 truncate text-foreground">{value}</span>
     </div>
@@ -72,7 +72,7 @@ export function ClientProfilePage({
     <div className="grid min-w-0 gap-6 xl:grid-cols-2 xl:items-start">
       <Card className="min-w-0">
         <CardHeader>
-          <CardTitle className="font-display text-2xl">Meus dados</CardTitle>
+          <CardTitle className="text-lg tracking-[-0.02em]">Meus dados</CardTitle>
           <p className="text-sm text-muted-foreground">
             Dados de identificação e contato da sua conta.
           </p>
@@ -131,7 +131,7 @@ export function ClientProfilePage({
       <div className="flex min-w-0 flex-col gap-6">
         <Card className="min-w-0">
           <CardHeader>
-            <CardTitle className="font-display text-2xl">Senha</CardTitle>
+            <CardTitle className="text-lg tracking-[-0.02em]">Senha</CardTitle>
             <p className="text-sm text-muted-foreground">
               Mínimo de 8 caracteres.
             </p>
@@ -173,10 +173,10 @@ export function ClientProfilePage({
 
         <Card className="min-w-0">
           <CardHeader>
-            <CardTitle className="font-display text-2xl">Acesso</CardTitle>
+            <CardTitle className="text-lg tracking-[-0.02em]">Acesso</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="overflow-hidden rounded-2xl border border-border/60 dark:border-white/10">
+            <div className="overflow-hidden rounded-2xl border border-border/60">
               <InfoRow label="Usuário" value={user.username} />
               <InfoRow label="Plano" value={CLIENT_PLAN_LABELS[planType]} />
               <InfoRow

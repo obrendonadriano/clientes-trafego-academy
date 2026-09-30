@@ -267,7 +267,7 @@ export function AiReportPanel({
                     "min-h-9 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition active:scale-[0.985]",
                     period === option
                       ? "border-primary bg-primary text-white"
-                      : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/30 hover:text-foreground dark:border-white/10 dark:bg-white/[0.035] dark:hover:bg-white/[0.06]",
+                      : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/30 hover:text-foreground",
                   )}
                 >
                   {option}
@@ -286,7 +286,7 @@ export function AiReportPanel({
                     onChange={(event) =>
                       setCustomRange((range) => ({ ...range, start: event.target.value }))
                     }
-                    className="flex h-12 w-full min-w-0 rounded-2xl border border-input bg-background/70 px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-4 focus:ring-ring dark:border-white/10 dark:bg-black/30 dark:text-white"
+                    className="flex h-12 w-full min-w-0 rounded-2xl border border-input bg-background/70 px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-4 focus:ring-ring"
                   />
                 </label>
                 <label className="space-y-1.5">
@@ -298,7 +298,7 @@ export function AiReportPanel({
                     onChange={(event) =>
                       setCustomRange((range) => ({ ...range, end: event.target.value }))
                     }
-                    className="flex h-12 w-full min-w-0 rounded-2xl border border-input bg-background/70 px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-4 focus:ring-ring dark:border-white/10 dark:bg-black/30 dark:text-white"
+                    className="flex h-12 w-full min-w-0 rounded-2xl border border-input bg-background/70 px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-4 focus:ring-ring"
                   />
                 </label>
               </div>
@@ -352,7 +352,7 @@ export function AiReportPanel({
                 </p>
               </div>
             </div>
-            <span className="shrink-0 rounded-full bg-muted/70 px-2.5 py-1 text-xs text-muted-foreground dark:bg-white/[0.05]">
+            <span className="shrink-0 rounded-full bg-muted/70 px-2.5 py-1 text-xs text-muted-foreground">
               {text.length} caracteres
             </span>
           </div>

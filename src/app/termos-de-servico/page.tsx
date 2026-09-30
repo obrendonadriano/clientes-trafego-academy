@@ -23,7 +23,7 @@ export default function TermsOfServicePage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">1. Objeto</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">1. Objeto</h2>
         <p className="mt-3">
           O portal é disponibilizado para acompanhamento de campanhas, métricas, permissões,
           relatórios, análises e demais recursos relacionados aos serviços prestados pela Tráfego Academy.
@@ -31,7 +31,7 @@ export default function TermsOfServicePage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">2. Condições de acesso</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">2. Condições de acesso</h2>
         <p className="mt-3">
           O acesso é privado. Não existe cadastro público. Contas são criadas exclusivamente
           pela administração da Tráfego Academy, e cada usuário deve utilizar suas credenciais
@@ -40,7 +40,7 @@ export default function TermsOfServicePage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">3. Uso permitido</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">3. Uso permitido</h2>
         <p className="mt-3">
           O usuário concorda em utilizar o portal apenas para finalidades legítimas relacionadas
           ao acompanhamento de campanhas e informações disponibilizadas para sua conta, respeitando
@@ -49,7 +49,7 @@ export default function TermsOfServicePage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">4. Obrigações do usuário</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">4. Obrigações do usuário</h2>
         <p className="mt-3">
           O usuário se compromete a manter a confidencialidade de suas credenciais, não compartilhar
           acessos indevidamente, não tentar acessar áreas não autorizadas e não utilizar o portal
@@ -58,7 +58,7 @@ export default function TermsOfServicePage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">5. Disponibilidade e limitações</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">5. Disponibilidade e limitações</h2>
         <p className="mt-3">
           A Tráfego Academy busca manter o portal disponível e atualizado, mas não garante
           disponibilidade ininterrupta, ausência total de falhas ou compatibilidade com
@@ -68,7 +68,7 @@ export default function TermsOfServicePage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">6. Propriedade intelectual</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">6. Propriedade intelectual</h2>
         <p className="mt-3">
           O software, a estrutura, o conteúdo institucional e os materiais disponibilizados no
           portal pertencem à Tráfego Academy ou a seus respectivos titulares, quando aplicável.
@@ -76,7 +76,7 @@ export default function TermsOfServicePage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">7. Suspensão ou encerramento de acesso</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">7. Suspensão ou encerramento de acesso</h2>
         <p className="mt-3">
           A Tráfego Academy poderá suspender ou encerrar acessos em caso de uso indevido,
           descumprimento destes termos, encerramento da relação contratual ou necessidade
@@ -85,7 +85,7 @@ export default function TermsOfServicePage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">8. Alterações destes termos</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">8. Alterações destes termos</h2>
         <p className="mt-3">
           Estes termos podem ser revistos e atualizados a qualquer momento para refletir mudanças
           legais, técnicas, operacionais ou comerciais, passando a vigorar a partir de sua publicação.

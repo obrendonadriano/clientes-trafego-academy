@@ -25,7 +25,7 @@ function Mark({ ok, label }: { ok: boolean; label: string }) {
     <span
       className={cn(
         "inline-flex items-center gap-1.5 text-sm",
-        ok ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground",
+        ok ? "text-emerald-600" : "text-muted-foreground",
       )}
     >
       {ok ? (
@@ -82,7 +82,7 @@ export function ConversionsDiagnostics({
             <p className="text-sm text-muted-foreground">
               Clientes com conversões ativas
             </p>
-            <p className="mt-2 font-display text-3xl font-semibold">
+            <p className="mt-2 text-[26px] tracking-[-0.03em] font-semibold">
               {active}
               <span className="text-base font-normal text-muted-foreground">
                 {" "}
@@ -96,7 +96,7 @@ export function ConversionsDiagnostics({
             <p className="text-sm text-muted-foreground">
               Migrados para a Meta oficial
             </p>
-            <p className="mt-2 font-display text-3xl font-semibold">
+            <p className="mt-2 text-[26px] tracking-[-0.03em] font-semibold">
               {migrated}
               <span className="text-base font-normal text-muted-foreground">
                 {" "}
@@ -113,7 +113,7 @@ export function ConversionsDiagnostics({
             <p className="text-sm text-muted-foreground">
               Eventos na fila de envio
             </p>
-            <p className="mt-2 font-display text-3xl font-semibold">{queued}</p>
+            <p className="mt-2 text-[26px] tracking-[-0.03em] font-semibold">{queued}</p>
           </CardContent>
         </Card>
         <Card>
@@ -121,7 +121,7 @@ export function ConversionsDiagnostics({
             <p className="text-sm text-muted-foreground">
               Eventos aguardando conciliação
             </p>
-            <p className="mt-2 font-display text-3xl font-semibold">
+            <p className="mt-2 text-[26px] tracking-[-0.03em] font-semibold">
               {failing}
             </p>
           </CardContent>
@@ -151,11 +151,11 @@ export function ConversionsDiagnostics({
                       className={cn(
                         "shrink-0 rounded-full px-2.5 py-1 text-xs font-medium",
                         status.tone === "ok" &&
-                          "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+                          "bg-emerald-500/10 text-emerald-700",
                         status.tone === "warn" &&
-                          "bg-red-500/10 text-red-700 dark:text-red-300",
+                          "bg-red-500/10 text-red-700",
                         status.tone === "progress" &&
-                          "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+                          "bg-amber-500/10 text-amber-700",
                         status.tone === "idle" && "bg-muted text-muted-foreground",
                       )}
                     >
@@ -249,7 +249,7 @@ export function ConversionsDiagnostics({
                   </div>
 
                   {client.eventosComErro > 0 ? (
-                    <p className="inline-flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+                    <p className="inline-flex items-start gap-1.5 text-xs text-amber-700">
                       <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
                       {client.eventosComErro} evento(s) aguardando conciliação no
                       Gerenciador de Eventos antes de qualquer reenvio.

@@ -27,7 +27,7 @@ export default function PrivacyPolicyPage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">1. Escopo desta política</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">1. Escopo desta política</h2>
         <p className="mt-3">
           Esta política se aplica ao uso do portal privado da Tráfego Academy, incluindo áreas
           administrativas, áreas de clientes, relatórios gerados com inteligência artificial,
@@ -36,7 +36,7 @@ export default function PrivacyPolicyPage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">2. Dados que podem ser tratados</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">2. Dados que podem ser tratados</h2>
         <p className="mt-3">
           Dependendo da utilização do portal, a Tráfego Academy poderá tratar dados cadastrais,
           informações de contato, identificadores de usuários, dados de autenticação,
@@ -46,7 +46,7 @@ export default function PrivacyPolicyPage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">3. Finalidades do tratamento</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">3. Finalidades do tratamento</h2>
         <p className="mt-3">
           Os dados tratados são utilizados para autenticação de usuários, controle de acesso,
           visualização de campanhas e métricas autorizadas, emissão de relatórios,
@@ -56,7 +56,7 @@ export default function PrivacyPolicyPage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">4. Compartilhamento com terceiros</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">4. Compartilhamento com terceiros</h2>
         <p className="mt-3">
           Para a prestação do serviço, determinados dados podem ser processados por fornecedores
           de infraestrutura, autenticação, banco de dados, hospedagem, inteligência artificial
@@ -66,7 +66,7 @@ export default function PrivacyPolicyPage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">5. Armazenamento e segurança</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">5. Armazenamento e segurança</h2>
         <p className="mt-3">
           A Tráfego Academy adota medidas técnicas e administrativas razoáveis para proteger
           os dados contra acesso não autorizado, perda, divulgação indevida, alteração ou destruição.
@@ -76,7 +76,7 @@ export default function PrivacyPolicyPage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">6. Direitos do titular</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">6. Direitos do titular</h2>
         <p className="mt-3">
           O titular dos dados poderá solicitar, conforme a legislação aplicável, confirmação
           do tratamento, acesso, correção, atualização ou exclusão de informações, sempre
@@ -85,7 +85,7 @@ export default function PrivacyPolicyPage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">7. Retenção de dados</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">7. Retenção de dados</h2>
         <p className="mt-3">
           Os dados poderão ser mantidos pelo tempo necessário para cumprimento das finalidades
           operacionais, obrigações legais, exercício regular de direitos e manutenção de
@@ -94,7 +94,7 @@ export default function PrivacyPolicyPage() {
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-semibold text-foreground">8. Contato e solicitações</h2>
+        <h2 className="text-lg tracking-[-0.02em] font-semibold text-foreground">8. Contato e solicitações</h2>
         <p className="mt-3">
           Dúvidas, solicitações relacionadas a privacidade ou pedidos formais podem ser enviados para
           <strong className="text-foreground"> contatobrendon@hotmail.com</strong>.
