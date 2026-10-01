@@ -183,22 +183,10 @@ export function PublicLanding() {
   return (
     <main className="min-h-app flex bg-background">
       <section className="min-h-app flex min-w-0 max-w-full flex-[1_0_45%] flex-col lg:px-14 lg:py-10">
-        {/* Celular: faixa escura de ponta a ponta, como a marca aparece nas redes. */}
-        <div className="relative overflow-hidden bg-sidebar px-5 py-3.5 lg:hidden">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(260px_120px_at_85%_0%,rgba(124,92,250,0.45),transparent_70%),radial-gradient(200px_120px_at_0%_100%,rgba(124,92,250,0.22),transparent_70%)]" />
-          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:28px_28px]" />
-          <div className="relative flex items-center gap-3">
-            <BrandTile size={44} />
-            <span className="text-[19px] font-bold tracking-[-0.02em] text-white">
-              Tráfego Academy
-            </span>
-          </div>
-        </div>
-
-        {/* Desktop: quadradinho + nome em escuro sobre o branco. */}
-        <div className="hidden items-center gap-3 lg:flex">
-          <BrandTile size={48} />
-          <span className="text-[21px] font-bold tracking-[-0.02em] text-foreground">
+        {/* Marca: quadradinho da logo + nome, sobre o fundo da página. */}
+        <div className="flex items-center gap-3 px-5 pt-5 sm:px-14 lg:px-0 lg:pt-0">
+          <BrandTile size={48} className="size-11 lg:size-12" />
+          <span className="text-[19px] font-bold tracking-[-0.02em] text-foreground lg:text-[21px]">
             Tráfego Academy
           </span>
         </div>
