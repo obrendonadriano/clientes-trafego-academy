@@ -8,10 +8,11 @@ const geist = Geist({
   subsets: ["latin"],
 });
 
+// Fonte variável: sem `weight` fixo. Pesos fixos geram um arquivo por peso e o
+// Turbopack da Vercel falhava ao resolvê-los ("queries have exactly one entry").
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
-  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
