@@ -1,7 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
 import { MessageCircle, Megaphone, TrendingUp } from "lucide-react";
 import { LoginForm } from "@/components/auth/login-form";
+import { BrandTile } from "@/components/shell/brand-tile";
 
 // Alturas das barras do mini-dashboard ilustrativo (últimas mais fortes).
 const MOCK_BARS = [34, 42, 38, 51, 46, 58, 49, 63, 57, 69, 64, 78, 72, 88];
@@ -165,27 +165,13 @@ function ShowcasePanel() {
   );
 }
 
-// Logo quadrada de fundo preto num quadradinho arredondado + nome ao lado.
-function BrandTile({ size, className }: { size: number; className?: string }) {
-  return (
-    <Image
-      src="/brand/logo-tile.webp"
-      alt=""
-      width={size}
-      height={size}
-      priority
-      className={`shrink-0 rounded-[12px] ring-1 ring-white/10 ${className ?? ""}`}
-    />
-  );
-}
-
 export function PublicLanding() {
   return (
     <main className="min-h-app flex bg-background">
       <section className="min-h-app flex min-w-0 max-w-full flex-[1_0_45%] flex-col lg:px-14 lg:py-10">
         {/* Marca: quadradinho da logo + nome, sobre o fundo da página. */}
         <div className="flex items-center gap-3 px-5 pt-5 sm:px-14 lg:px-0 lg:pt-0">
-          <BrandTile size={48} className="size-11 lg:size-12" />
+          <BrandTile size={48} priority className="size-11 lg:size-12" />
           <span className="text-[19px] font-bold tracking-[-0.02em] text-foreground lg:text-[21px]">
             Tráfego Academy
           </span>

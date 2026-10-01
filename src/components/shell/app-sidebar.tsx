@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { LogOut, X } from "lucide-react";
 import { logoutAction } from "@/app/login/actions";
+import { BrandTile } from "@/components/shell/brand-tile";
 import { IntentPrefetchLink } from "@/components/shell/intent-prefetch-link";
 import { NavIcon } from "@/components/shell/nav-icon";
 import { useScopedHref } from "@/components/shell/period-scope";
@@ -14,29 +14,6 @@ import { cn } from "@/lib/utils";
 export function initials(name: string) {
   const parts = name.trim().split(/\s+/).slice(0, 2);
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "?";
-}
-
-// Logo quadrada (seta + "Tráfego Academy") com fundo transparente, feita
-// para a sidebar escura.
-export function BrandLogo({
-  size = 88,
-  className,
-  priority,
-}: {
-  size?: number;
-  className?: string;
-  priority?: boolean;
-}) {
-  return (
-    <Image
-      src="/brand/logo-square.webp"
-      alt="Tráfego Academy"
-      width={size}
-      height={size}
-      priority={priority}
-      className={cn("shrink-0 object-contain", className)}
-    />
-  );
 }
 
 type AppSidebarProps = {
@@ -87,22 +64,25 @@ export function AppSidebar({
       >
         <div
           className={cn(
-            "flex shrink-0 items-start gap-2.5 px-5 pb-1 pt-5",
-            collapsed && "lg:justify-center lg:px-0 lg:pt-4",
+            "flex h-16 shrink-0 items-center gap-2.5 px-5",
+            collapsed && "lg:justify-center lg:px-0",
           )}
         >
           <IntentPrefetchLink
             href={user.role === "admin" ? "/admin" : "/dashboard"}
             aria-label="Tráfego Academy"
-            className="flex min-w-0 items-center"
+            className="flex min-w-0 items-center gap-2.5"
           >
-            <BrandLogo
-              priority
+            <BrandTile size={40} priority className="size-9" />
+            {/* Recolhida: só o quadradinho fica. */}
+            <span
               className={cn(
-                "size-[92px] transition-[width,height] duration-300",
-                collapsed && "lg:size-11",
+                "whitespace-nowrap text-base font-bold tracking-[-0.02em] text-white",
+                collapsed && "lg:hidden",
               )}
-            />
+            >
+              Tráfego Academy
+            </span>
           </IntentPrefetchLink>
           <button
             type="button"
