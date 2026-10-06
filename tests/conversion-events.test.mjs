@@ -17,6 +17,7 @@ const read = (name) => readFileSync(new URL(`../supabase/migrations/${name}`, im
 const outbox = read('20260924020710_conversion_event_outbox.sql');
 const official = read('20260924210000_official_whatsapp_conversions.sql');
 const goals = read('20260925000000_conversion_goal_types.sql');
+const businessAppSync = read('20261006120000_business_app_sync.sql');
 const previous = read('20260826181403_closed_lead_meta_pipeline.sql');
 const guard = previous.slice(
   previous.indexOf('create or replace function private.guard_conversion_lead_update()'),
@@ -82,6 +83,7 @@ test('Conversões oficiais: funil, idempotência, isolamento e entrega', async (
   await db.exec(outbox);
   await db.exec(official);
   await db.exec(goals);
+  await db.exec(businessAppSync);
 
   const sql = async (query, params = []) => (await db.query(query, params)).rows;
   async function service() {
@@ -695,6 +697,36 @@ test('Conversões oficiais: funil, idempotência, isolamento e entrega', async (
     await sql(`update clients set segmento='agencia_marketing' where id=$1`, [clientB]);
     const after = (await sql('select conversion_goal_type from clients where id=$1', [clientB]))[0];
     assert.equal(after.conversion_goal_type, before.conversion_goal_type);
+  });
+
+  await t.test('COEXISTENCE: a sincronização do app é registrada por conexão e só conclui com os dois pedidos', async () => {
+    await connect(clientA, { waba: '7770001', phoneId: '5550001', dataset: '880001' });
+    const state = async () => (await sql(
+      'select business_app_contacts_sync_at, business_app_history_sync_at, business_app_synced_at, status from client_whatsapp_connections where client_id=$1',
+      [clientA],
+    ))[0];
+
+    // Parcial: contatos pedidos, histórico recusado → ainda não concluído.
+    await sql('select meta_record_business_app_sync($1,true,false)', [clientA]);
+    let row = await state();
+    assert.ok(row.business_app_contacts_sync_at);
+    assert.equal(row.business_app_history_sync_at, null);
+    assert.equal(row.business_app_synced_at, null);
+
+    // Os dois pedidos aceitos → concluído, sem mexer no status da conexão.
+    await sql('select meta_record_business_app_sync($1,true,true)', [clientA]);
+    row = await state();
+    assert.ok(row.business_app_synced_at);
+    assert.equal(row.status, 'active');
+
+    // Só o servidor registra; o usuário do portal não consegue.
+    await user();
+    await assert.rejects(sql(`select meta_record_business_app_sync('${clientA}',true,true)`), /permission denied|Acesso negado/);
+    await service();
+
+    // Não afeta outro cliente.
+    const other = await sql('select business_app_synced_at from client_whatsapp_connections where client_id=$1', [clientB]);
+    assert.ok(other.length === 0 || other[0].business_app_synced_at === null);
   });
 
   await db.close();
