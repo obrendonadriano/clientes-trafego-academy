@@ -68,6 +68,21 @@ export function trackingHeadline(connection: ClientConnection): {
   return { label: "Inativo", tone: "idle" };
 }
 
+// Explicação curta para o cliente nos estados intermediários. O detalhe
+// técnico (etapa, código da Meta) fica só no painel do administrador.
+export function connectionNote(connection: ClientConnection): string | null {
+  switch (connection.status) {
+    case "dataset_pending":
+      return "O WhatsApp foi conectado, mas o rastreamento ainda está sendo configurado.";
+    case "attention_required":
+      return "Algo precisa de ajuste na conexão com a Meta. A equipe da Tráfego Academy já foi avisada; se preferir, conecte novamente.";
+    case "onboarding":
+      return "A conexão com a Meta está em andamento.";
+    default:
+      return null;
+  }
+}
+
 export function isConnected(status: ConnectionStatus) {
   return (
     status === "active" ||

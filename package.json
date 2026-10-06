@@ -8,7 +8,7 @@
     "postbuild": "node scripts/copy-standalone-assets.mjs",
     "start": "next start",
     "lint": "eslint",
-    "test:conversions": "node --test tests/conversion-events.test.mjs tests/conversion-payload.test.mjs tests/conversions-decoupling.test.mjs tests/onboarding-selection.test.mjs tests/legacy-n8n-payload.test.mjs",
+    "test:conversions": "node --test tests/conversion-events.test.mjs tests/conversion-payload.test.mjs tests/conversions-decoupling.test.mjs tests/onboarding-selection.test.mjs tests/legacy-n8n-payload.test.mjs tests/embedded-signup.test.mjs",
     "test:ai": "node --test tests/ai-attendance.test.mjs tests/ai-runtime.test.mjs",
     "test:sync": "node --test tests/meta-sync-scope.test.mjs tests/business-timezone.test.mjs",
     "test:meta-review": "node --test tests/meta-review.test.mjs"

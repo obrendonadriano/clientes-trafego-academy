@@ -27,9 +27,18 @@ test('o WABA aceito é o que a autorização da Meta realmente concede', () => {
 
   // Uma conta autorizada e nenhum id informado: não há o que escolher.
   assert.equal(resolveAuthorizedWaba({ claimed: null, authorized: ['333333'] }), '333333');
+});
 
-  // Sem granular_scopes só resta o que a sessão informou.
-  assert.equal(resolveAuthorizedWaba({ claimed: '444444', authorized: [] }), '444444');
+test('sem WABA granular no token, o id do navegador nunca é aceito sozinho', () => {
+  // Antes isto era aceito ("só resta o que a sessão informou"). Sem a
+  // confirmação do token, um payload adulterado apontaria para outro tenant.
+  try {
+    resolveAuthorizedWaba({ claimed: '444444', authorized: [] });
+    assert.fail('deveria recusar');
+  } catch (error) {
+    assert.ok(error instanceof OnboardingRejected);
+    assert.equal(error.reason, 'no_waba');
+  }
 });
 
 test('um WABA fora da autorização nunca conecta — nem por engano, nem por payload adulterado', () => {

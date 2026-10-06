@@ -8,7 +8,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { WhatsappLogo } from "@/components/whatsapp/whatsapp-logo";
 import {
+  describeLoginOutcome,
+  ensureFacebookSdk,
+  waitForSessionEvent,
+  type FacebookSdk,
+  type SdkHost,
+} from "@/lib/meta/fb-sdk";
+import {
+  parseSignupMessage,
+  type SignupSession,
+} from "@/lib/meta/onboarding-selection";
+import {
   connectionHeadline,
+  connectionNote,
   formatOfficialPhone,
   isConnected,
   trackingHeadline,
@@ -33,27 +45,9 @@ import { cn } from "@/lib/utils";
 
 declare global {
   interface Window {
-    FB?: {
-      init: (options: Record<string, unknown>) => void;
-      login: (
-        callback: (response: { authResponse?: { code?: string } }) => void,
-        options: Record<string, unknown>,
-      ) => void;
-    };
+    FB?: FacebookSdk;
   }
 }
-
-type SignupSessionInfo = {
-  type?: string;
-  // FINISH, FINISH_ONLY_WABA, FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING ou CANCEL.
-  event?: string;
-  data?: {
-    waba_id?: string;
-    phone_number_id?: string;
-    current_step?: string;
-    error_message?: string;
-  };
-};
 
 const TONE_DOT: Record<ConnectionTone, string> = {
   ok: "bg-emerald-500",
@@ -101,53 +95,32 @@ export function WhatsappOfficialConnection({
   const router = useRouter();
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
-  const [sdkReady, setSdkReady] = useState(false);
+  // Navegação dentro do app: o SDK pode já estar carregado de uma visita
+  // anterior, e aí o onLoad do <Script> não dispara de novo. Reconhecer isso
+  // já na montagem evita a tela presa em "Preparando a conexão segura…".
+  const [sdkReady, setSdkReady] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      ensureFacebookSdk(window as SdkHost, { appId, version: graphVersion }),
+  );
   const [notice, setNotice] = useState<string | null>(null);
   // O evento de sessão da Meta chega por postMessage, separado do callback do
   // login. Guardamos exatamente o que ela devolveu — nada é inferido aqui.
-  const signupInfo = useRef<{
-    wabaId?: string;
-    phoneNumberId?: string;
-    event?: string;
-    cancelledAt?: string;
-  }>({});
+  const signupInfo = useRef<SignupSession | null>(null);
+
+  const markSdkReady = useCallback(() => {
+    if (ensureFacebookSdk(window as SdkHost, { appId, version: graphVersion })) {
+      setSdkReady(true);
+    }
+  }, [appId, graphVersion]);
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
-      if (
-        event.origin !== "https://www.facebook.com" &&
-        event.origin !== "https://web.facebook.com"
-      ) {
-        return;
-      }
+      // Só aceita mensagens https de *.facebook.com e do tipo WA_EMBEDDED_SIGNUP.
+      const session = parseSignupMessage(event.origin, event.data);
 
-      try {
-        const parsed = (
-          typeof event.data === "string" ? JSON.parse(event.data) : event.data
-        ) as SignupSessionInfo;
-
-        if (parsed?.type !== "WA_EMBEDDED_SIGNUP") {
-          return;
-        }
-
-        signupInfo.current.event = parsed.event;
-
-        if (parsed.event === "CANCEL") {
-          // A Meta interrompeu o fluxo (inclusive quando o número não pode ser
-          // compartilhado). Guardamos onde parou para explicar sem tecnicidade.
-          signupInfo.current.cancelledAt = parsed.data?.current_step;
-          return;
-        }
-
-        if (parsed.data?.waba_id) {
-          signupInfo.current.wabaId = parsed.data.waba_id;
-        }
-
-        if (parsed.data?.phone_number_id) {
-          signupInfo.current.phoneNumberId = parsed.data.phone_number_id;
-        }
-      } catch {
-        // Mensagem de outro fluxo da Meta: ignorar em silêncio.
+      if (session) {
+        signupInfo.current = session;
       }
     }
 
@@ -166,13 +139,17 @@ export function WhatsappOfficialConnection({
           // Só o que a Meta devolveu e o servidor precisa conferir.
           body: JSON.stringify({
             code,
-            wabaId: signupInfo.current.wabaId,
-            phoneNumberId: signupInfo.current.phoneNumberId,
+            wabaId: signupInfo.current?.wabaId ?? null,
+            phoneNumberId: signupInfo.current?.phoneNumberId ?? null,
+            // Diz ao servidor se foi o onboarding do aplicativo WhatsApp
+            // Business (Coexistence), que traz só o WABA.
+            event: signupInfo.current?.event ?? null,
           }),
         });
         const payload = (await response.json().catch(() => ({}))) as {
           error?: string;
           trackingReady?: boolean;
+          needsAttention?: boolean;
           canRetry?: boolean;
         };
 
@@ -193,7 +170,9 @@ export function WhatsappOfficialConnection({
         showToast({
           message: payload.trackingReady
             ? "WhatsApp conectado. O rastreamento de conversões está ativo."
-            : "WhatsApp conectado. Estamos finalizando a configuração do rastreamento.",
+            : payload.needsAttention
+              ? "WhatsApp conectado, mas falta um ajuste do nosso lado. A equipe já foi avisada."
+              : "O WhatsApp foi conectado, mas o rastreamento ainda está sendo configurado.",
         });
         router.refresh();
       } catch {
@@ -203,35 +182,51 @@ export function WhatsappOfficialConnection({
         });
       } finally {
         setBusy(false);
-        signupInfo.current = {};
+        signupInfo.current = null;
       }
     },
     [router, showToast],
   );
 
-  function launch() {
-    if (!window.FB || !configId || busy) {
+  async function handleLogin(code: string | undefined) {
+    // O código vale 30 s; esperar até 1,5 s pelo evento de sessão (que traz o
+    // WABA e diz se é Coexistence) cabe com folga.
+    if (code) {
+      await waitForSessionEvent(() => Boolean(signupInfo.current?.event), {
+        timeoutMs: 1500,
+      });
+    }
+
+    const outcome = describeLoginOutcome(code, signupInfo.current);
+
+    if (outcome.kind === "code") {
+      void finish(outcome.code);
       return;
     }
 
-    signupInfo.current = {};
+    // Fechou a janela, cancelou ou a Meta interrompeu o fluxo. Nada muda no
+    // estado da conexão e o WhatsApp do cliente segue funcionando como sempre.
+    const message =
+      outcome.kind === "error"
+        ? "A Meta informou um problema na janela de conexão. Tente novamente em alguns minutos."
+        : outcome.kind === "cancelled"
+          ? "A conexão não foi concluída na janela da Meta. Você pode tentar novamente quando quiser."
+          : "Conexão cancelada.";
+    showToast({ message, tone: "erro" });
+    setNotice(outcome.kind === "closed" ? null : message);
+    signupInfo.current = null;
+  }
+
+  function launch() {
+    if (!configId || busy || !ensureFacebookSdk(window as SdkHost, { appId, version: graphVersion })) {
+      return;
+    }
+
+    signupInfo.current = null;
     setNotice(null);
-    window.FB.login(
+    window.FB?.login(
       (response) => {
-        const code = response.authResponse?.code;
-
-        if (!code) {
-          // Fechou a janela ou a Meta interrompeu o fluxo. Nada muda no estado
-          // da conexão e o WhatsApp do cliente segue funcionando como sempre.
-          const message = signupInfo.current.cancelledAt
-            ? "A conexão não foi concluída na janela da Meta. Você pode tentar novamente quando quiser."
-            : "Conexão cancelada.";
-          showToast({ message, tone: "erro" });
-          setNotice(signupInfo.current.cancelledAt ? message : null);
-          return;
-        }
-
-        void finish(code);
+        void handleLogin(response.authResponse?.code);
       },
       {
         config_id: configId,
@@ -252,6 +247,7 @@ export function WhatsappOfficialConnection({
   const status = connectionHeadline(connection.status);
   const tracking = trackingHeadline(connection);
   const phone = formatOfficialPhone(connection.phone);
+  const statusNote = connectionNote(connection);
   const canLaunch = Boolean(appId && configId) && sdkReady && !busy;
 
   return (
@@ -300,6 +296,12 @@ export function WhatsappOfficialConnection({
           </p>
         )}
 
+        {statusNote && !notice ? (
+          <p className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-sm leading-6 text-muted-foreground">
+            {statusNote}
+          </p>
+        ) : null}
+
         {notice ? (
           <p
             role="status"
@@ -321,15 +323,10 @@ export function WhatsappOfficialConnection({
             <Script
               src="https://connect.facebook.net/pt_BR/sdk.js"
               strategy="lazyOnload"
-              onLoad={() => {
-                window.FB?.init({
-                  appId,
-                  autoLogAppEvents: true,
-                  xfbml: false,
-                  version: graphVersion,
-                });
-                setSdkReady(true);
-              }}
+              // onReady roda após o carregamento E a cada montagem; onLoad fica
+              // como reforço. ensureFacebookSdk só inicializa uma vez.
+              onReady={markSdkReady}
+              onLoad={markSdkReady}
             />
             <div className="flex flex-wrap items-center gap-2">
               <button

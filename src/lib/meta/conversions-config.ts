@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getIntegrationSettingByProvider } from "@/lib/integrations";
+import { isSecretBoxConfigured } from "@/lib/meta/secret-box";
 
 // Configuração da integração oficial de Conversões (Embedded Signup, webhook e
 // Conversions API). O App ID/Secret já existiam em Configurações → Meta Ads;
@@ -27,6 +28,9 @@ export function graphUrl(path: string) {
 export type MetaConversionsConfig = {
   appId: string;
   appSecret: string;
+  // Configuration ID do Embedded Signup (Facebook Login for Business). Vem só
+  // da variável META_EMBEDDED_SIGNUP_CONFIG_ID: trocar de configuração no
+  // painel da Meta é só trocar a variável e fazer um novo deploy.
   configId: string;
   verifyToken: string;
   // Conta de anúncios da agência. Só diagnóstico: a atribuição da Meta é pelo
@@ -65,8 +69,12 @@ export async function getEmbeddedSignupReadiness(): Promise<EmbeddedSignupReadin
   if (!config.appSecret) missing.push("META_APP_SECRET");
   if (!config.configId) missing.push("META_EMBEDDED_SIGNUP_CONFIG_ID");
   if (!config.verifyToken) missing.push("META_WEBHOOK_VERIFY_TOKEN");
+  // Não basta existir: precisa ser 32 bytes em base64 (AES-256-GCM). Com um
+  // valor fora do formato o token do cliente não poderia ser guardado.
   if (!process.env.META_CREDENTIALS_KEY?.trim()) {
     missing.push("META_CREDENTIALS_KEY");
+  } else if (!isSecretBoxConfigured()) {
+    missing.push("META_CREDENTIALS_KEY (formato inválido: 32 bytes em base64)");
   }
 
   if (missing.length > 0) {

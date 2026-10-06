@@ -38,7 +38,10 @@ const CONVERSIONS = [
   'src/lib/data/conversions.ts',
   'src/lib/data/whatsapp-connection.ts',
   'src/lib/meta/whatsapp-onboarding.ts',
+  'src/lib/meta/onboarding-core.ts',
+  'src/lib/meta/onboarding-diagnostics.ts',
   'src/lib/meta/onboarding-selection.ts',
+  'src/lib/meta/fb-sdk.ts',
   'src/lib/meta/conversions-config.ts',
   'src/lib/meta/secret-box.ts',
   'src/app/conversoes/actions.ts',
@@ -190,9 +193,14 @@ test('nenhum segredo da Meta pode chegar ao navegador', () => {
 });
 
 test('a dashboard não constrói seletor de número nem contorna a elegibilidade', () => {
+  // A orquestração mora no núcleo puro; o wrapper só faz a chamada HTTP.
   const onboarding = stripComments(
+    read(join(root, 'src/lib/meta/onboarding-core.ts')),
+  );
+  const wrapper = stripComments(
     read(join(root, 'src/lib/meta/whatsapp-onboarding.ts')),
   );
+  assert.equal(wrapper.includes('runOnboardingCore'), true);
 
   // Nada de "se a Meta não indicou, escolhe o primeiro" — em nenhuma variação.
   assert.equal(/numbers\[0\]/.test(onboarding), false, 'voltou a escolher o primeiro número');
@@ -210,7 +218,7 @@ test('a dashboard não constrói seletor de número nem contorna a elegibilidade
   assert.equal(/phone_numbers|listPhoneNumbers|selecionar.{0,20}n[úu]mero/i.test(screen), false);
   // E abre o Embedded Signup oficial com Coexistence.
   assert.equal(screen.includes('whatsapp_business_app_onboarding'), true);
-  assert.equal(screen.includes('FB.login'), true);
+  assert.match(screen, /FB\??\.login\(/);
 });
 
 test('o envio à Meta nasce desligado, para validar em staging antes', () => {
