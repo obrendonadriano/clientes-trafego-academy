@@ -237,7 +237,10 @@ export function WhatsappOfficialConnection({
           // Faz a Meta mostrar a tela de conectar a conta já existente do
           // aplicativo WhatsApp Business, em vez de migrar o número.
           featureType: "whatsapp_business_app_onboarding",
-          sessionInfoVersion: 3,
+          sessionInfoVersion: "3",
+          // v2/v3 do Embedded Signup deixam de funcionar em 15/10/2026; o
+          // sample oficial da Meta usa v4 junto com este featureType.
+          version: "v4",
         },
       },
     );

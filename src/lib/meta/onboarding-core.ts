@@ -7,7 +7,9 @@
 // Referências oficiais seguidas aqui:
 //   - Embedded Signup > Implementation (FB.login, eventos de sessão, code de 30 s)
 //   - Onboarding business customers as a Tech Provider:
-//       GET /oauth/access_token?client_id&client_secret&code   (sem redirect_uri)
+//       GET /oauth/access_token?client_id&redirect_uri=&client_secret&code
+//       (redirect_uri presente e VAZIO, como no sample oficial da Meta
+//       fbsamples/business-messaging-sample-tech-provider-app)
 //       POST /{WABA_ID}/subscribed_apps
 //   - Onboard WhatsApp Business app users (Coexistence):
 //       evento FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING traz só o waba_id;
@@ -111,7 +113,11 @@ type SubscribedApps = {
 
 const DATASET_ID = /^\d{5,30}$/;
 
-/** 1. Troca do code por token de negócio. Sem redirect_uri, como na doc. */
+/**
+ * 1. Troca do code por token de negócio. O code do FB.login é trocado com
+ *    redirect_uri presente e vazio, igual ao sample oficial da Meta. Sem o
+ *    parâmetro a Meta recusava com 100/36008 ("redirect_uri is identical...").
+ */
 export async function exchangeCode(deps: OnboardingDeps, code: string) {
   const payload = await deps.graph<{ access_token?: string }>(
     'exchange_code',
@@ -120,6 +126,7 @@ export async function exchangeCode(deps: OnboardingDeps, code: string) {
       method: 'GET',
       searchParams: {
         client_id: deps.appId,
+        redirect_uri: '',
         client_secret: deps.appSecret,
         code,
       },

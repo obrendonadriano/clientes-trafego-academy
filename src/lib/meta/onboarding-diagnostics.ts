@@ -26,8 +26,8 @@ export type OnboardingStage =
   | 'save_connection';
 
 export type MetaFailureKind =
-  // A Meta recusou a troca por causa do redirect_uri. Pelo fluxo documentado do
-  // Embedded Signup (FB.login + code) a troca NÃO leva redirect_uri; quando a
+  // A Meta recusou a troca por causa do redirect_uri. A troca envia
+  // redirect_uri presente e vazio (sample oficial da Meta); se ainda assim a
   // Meta reclama dele, a causa é a configuração do Facebook Login for Business
   // no painel do app, não um parâmetro faltando no código.
   | 'redirect_uri_mismatch'
@@ -165,7 +165,7 @@ export function failureAdminHint(failure: MetaFailure): string {
 
   switch (failure.kind) {
     case 'redirect_uri_mismatch':
-      return `Meta recusou a troca do código por redirect_uri (${where}). O fluxo documentado não envia redirect_uri: revise Facebook Login for Business > Settings (Login with the JavaScript SDK, Allowed domains, Valid OAuth redirect URIs) e se a Configuration ID é de WhatsApp Embedded Signup.`;
+      return `Meta recusou a troca do código por redirect_uri (${where}). A troca já envia redirect_uri vazio, como o sample oficial da Meta: revise Facebook Login for Business > Settings (Login with the JavaScript SDK, Allowed domains, Valid OAuth redirect URIs) e se a Configuration ID é de WhatsApp Embedded Signup.`;
     case 'code_invalid':
       return `Código do Embedded Signup expirado, já usado ou inválido (${where}). Ele vale 30 s.`;
     case 'token_invalid':

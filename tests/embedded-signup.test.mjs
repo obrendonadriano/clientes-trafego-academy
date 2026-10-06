@@ -123,6 +123,26 @@ test('2. SDK carregando pela primeira vez: espera o script e inicializa uma vez'
   assert.equal(ensureFacebookSdk({ FB: host.FB }, { appId: '', version: 'v26.0' }), false);
 });
 
+test('FB.login usa Embedded Signup v4 com o onboarding do app WhatsApp Business', () => {
+  const screen = readFileSync(
+    new URL('../src/components/conversions/whatsapp-official-connection.tsx', import.meta.url),
+    'utf8',
+  );
+  const login = screen.slice(screen.indexOf('window.FB?.login('));
+  // O bloco extras inteiro cabe nos ~600 caracteres após "extras: {".
+  const start = login.indexOf('extras: {');
+  const extras = login.slice(start, start + 600);
+  assert.match(login, /config_id: configId/);
+  assert.match(login, /response_type: "code"/);
+  assert.match(login, /override_default_response_type: true/);
+  assert.match(extras, /setup: \{\}/);
+  assert.match(extras, /featureType: "whatsapp_business_app_onboarding"/);
+  assert.match(extras, /sessionInfoVersion: "3"/);
+  assert.match(extras, /version: "v4"/);
+  // Fora do escopo desta etapa: nada de app_only_install nem features.
+  assert.equal(/app_only_install|features:/.test(screen), false);
+});
+
 test('o componente usa onReady e reconhece o SDK já carregado na montagem', () => {
   const screen = readFileSync(
     new URL('../src/components/conversions/whatsapp-official-connection.tsx', import.meta.url),
@@ -178,9 +198,10 @@ test('4. FINISH normal: WABA e número devolvidos pela Meta conectam com tudo at
   assert.equal(result.status, 'active');
   assert.equal(result.isOnBizApp, true);
   assert.equal(result.platformType, 'CLOUD_API');
-  // A troca do code segue a doc oficial: sem redirect_uri.
+  // A troca do code segue o sample oficial da Meta: redirect_uri presente e vazio.
   const exchange = meta.calls.find((call) => call.stage === 'exchange_code');
-  assert.deepEqual(Object.keys(exchange.init.searchParams).sort(), ['client_id', 'client_secret', 'code']);
+  assert.deepEqual(Object.keys(exchange.init.searchParams).sort(), ['client_id', 'client_secret', 'code', 'redirect_uri']);
+  assert.equal(exchange.init.searchParams.redirect_uri, '');
   // Nenhum número foi registrado (/register): número do app não é registrado.
   assert.equal(meta.calls.some((call) => call.path.endsWith('/register')), false);
 });
@@ -308,7 +329,7 @@ test('12. erro de redirect_uri da Meta é diagnosticado como configuração, nã
   assert.equal(error.failure.retryable, false);
   const hint = diagnostics.failureAdminHint(error.failure);
   assert.match(hint, /Facebook Login for Business/);
-  assert.match(hint, /não envia redirect_uri/);
+  assert.match(hint, /já envia redirect_uri vazio/);
   // O log seguro tem etapa, status e códigos — e nada além disso.
   assert.deepEqual(diagnostics.failureLogPayload(error.failure), {
     stage: 'exchange_code',
