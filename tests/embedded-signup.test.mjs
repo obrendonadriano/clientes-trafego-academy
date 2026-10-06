@@ -522,3 +522,89 @@ test('classificação de erros da Meta cobre limites, instabilidade e permissão
   assert.equal(kind({ httpStatus: 400, metaCode: 190 }), 'token_invalid');
   assert.equal(kind({ httpStatus: 400, metaCode: 999 }), 'unknown');
 });
+
+// ---------------------------------------------------------------------------
+// whatsapp_business_manage_events ainda NÃO aprovada (App Review separado)
+// ---------------------------------------------------------------------------
+
+test('sem whatsapp_business_manage_events o cliente conecta WABA + número normalmente', async () => {
+  // O token do fixture tem só management + messaging, como hoje.
+  const meta = fakeMeta({
+    resolve_dataset: fail(403, 200, null, '(#200) Requires whatsapp_business_manage_events permission'),
+  });
+  const result = await run(meta);
+
+  assert.equal(result.phoneNumberId, PHONE);
+  assert.equal(result.wabaId, WABA);
+  assert.equal(result.webhookSubscribed, true);
+  // Não é falha do onboarding: fica dataset_pending, não attention_required.
+  assert.equal(result.status, 'dataset_pending');
+  assert.equal(result.datasetId, null);
+  assert.match(result.lastError, /whatsapp_business_manage_events/);
+  assert.match(result.lastError, /App Review separado/);
+  assert.match(result.lastError, /continuam conectados/);
+  // O código não pede a permissão: só lê o que o token concede.
+  const core = readFileSync(new URL('../src/lib/meta/onboarding-core.ts', import.meta.url), 'utf8');
+  assert.equal(stripComments(core).includes('whatsapp_business_manage_events'), false);
+});
+
+// ---------------------------------------------------------------------------
+// VehicleAcquired: nunca vira Purchase, nunca leva valor
+// ---------------------------------------------------------------------------
+
+test('VehicleAcquired segue fora de Business Messaging, sem valor e sem virar Purchase', async () => {
+  const payload = await import('../src/lib/conversions/capi-payload.ts');
+  const event = payload.buildServerEvent({
+    lead_id: 'l1',
+    dataset_id: '777777',
+    waba_id: WABA,
+    access_token: null,
+    event_name: 'VehicleAcquired',
+    event_id: 'e1',
+    event_time: 1791000000,
+    action_source: 'other',
+    user_data: { ph: ['a'.repeat(64)] },
+    custom_data: { value: 30000, currency: 'BRL' },
+  });
+
+  assert.equal(event.event_name, 'VehicleAcquired');
+  assert.equal(event.action_source, 'other');
+  assert.equal('custom_data' in event, false);
+  assert.equal('messaging_channel' in event, false);
+  // VehicleAcquired não é aceito no canal de mensagens, e nada o reescreve.
+  assert.throws(() =>
+    payload.buildServerEvent({
+      lead_id: 'l1', dataset_id: '777777', waba_id: WABA, access_token: null,
+      event_name: 'VehicleAcquired', event_id: 'e2', event_time: 1791000000,
+      action_source: 'business_messaging',
+      user_data: { ctwa_clid: 'clid', whatsapp_business_account_id: WABA },
+    }),
+  );
+  const source = readFileSync(new URL('../src/lib/conversions/capi-payload.ts', import.meta.url), 'utf8');
+  assert.equal(/VehicleAcquired['"]\s*\?\s*['"]Purchase|event_name\s*=\s*['"]Purchase/.test(source), false);
+});
+
+test('o teste controlado no Test Events só envia com código, confirmação e sem valor no VehicleAcquired', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const script = fileURLToPath(new URL('../scripts/capi-test-event.mjs', import.meta.url));
+  const runScript = (extra) => {
+    try {
+      return { code: 0, out: execFileSync(process.execPath, [script, ...extra], { encoding: 'utf8', stdio: 'pipe', env: { ...process.env, CAPI_TEST_ACCESS_TOKEN: '' } }) };
+    } catch (error) {
+      return { code: error.status, out: `${error.stdout}${error.stderr}` };
+    }
+  };
+  const base = ['--event', 'VehicleAcquired', '--dataset', '1234567', '--phone', '5514999990000'];
+
+  const dry = runScript(base);
+  assert.equal(dry.code, 0);
+  assert.match(dry.out, /SIMULAÇÃO: nada foi enviado/);
+  assert.match(dry.out, /"action_source": "other"/);
+  assert.equal(/custom_data|"value"/.test(dry.out), false);
+
+  assert.notEqual(runScript([...base, '--value', '30000', '--currency', 'BRL']).code, 0);
+  assert.notEqual(runScript([...base, '--send']).code, 0);
+  assert.notEqual(runScript([...base, '--send', '--test-event-code', 'T1']).code, 0);
+  assert.notEqual(runScript([...base, '--send', '--test-event-code', 'T1', '--confirm']).code, 0);
+});
