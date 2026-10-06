@@ -171,6 +171,12 @@ export function failureAdminHint(failure: MetaFailure): string {
     case 'token_invalid':
       return `Token recusado pela Meta (${where}).`;
     case 'missing_permission':
+      // O endpoint de Dataset exige whatsapp_business_manage_events, que ainda
+      // não foi aprovada. Isso NÃO é falha do Embedded Signup: WABA e número
+      // seguem conectados e a conexão fica em dataset_pending.
+      if (failure.stage === 'resolve_dataset') {
+        return `Dataset pendente: a Meta recusou por permissão (${where}). O endpoint de Dataset exige whatsapp_business_manage_events, que depende de um App Review separado para Conversões. WhatsApp e número continuam conectados.`;
+      }
       return `Permissão ausente (${where}). Confira as permissões da Configuration ID e o acesso avançado do app.`;
     case 'rate_limited':
       return `Limite de chamadas da Meta (${where}).`;
