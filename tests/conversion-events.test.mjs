@@ -26,7 +26,11 @@ const guard = previous.slice(
 
 let clickCounter = 0;
 
-test('Conversões oficiais: funil, idempotência, isolamento e entrega', async (t) => {
+const reconcile = read('20261007120000_conversions_pipeline_v4_reconciliation.sql');
+
+// Banco com o schema anterior às migrações de Conversões, mais outbox e
+// oficial aplicadas — o ponto comum entre o repositório e a produção.
+async function bootstrap() {
   const db = new PGlite();
   await db.exec(`
     create role anon; create role authenticated; create role service_role bypassrls;
@@ -82,8 +86,17 @@ test('Conversões oficiais: funil, idempotência, isolamento e entrega', async (
   await db.exec(`reset role; reset request.jwt.claims;`);
   await db.exec(outbox);
   await db.exec(official);
+  return db;
+}
+
+test('Conversões oficiais: funil, idempotência, isolamento e entrega', async (t) => {
+  const db = await bootstrap();
   await db.exec(goals);
   await db.exec(businessAppSync);
+  // Num banco onde a 20260925 entrou inteira, a reconciliação não muda nada:
+  // a suíte inteira roda depois dela, duas vezes aplicada.
+  await db.exec(reconcile);
+  await db.exec(reconcile);
 
   const sql = async (query, params = []) => (await db.query(query, params)).rows;
   async function service() {
@@ -727,6 +740,154 @@ test('Conversões oficiais: funil, idempotência, isolamento e entrega', async (
     // Não afeta outro cliente.
     const other = await sql('select business_app_synced_at from client_whatsapp_connections where client_id=$1', [clientB]);
     assert.ok(other.length === 0 || other[0].business_app_synced_at === null);
+  });
+
+  await db.close();
+});
+
+// Estado real da produção em 2026-10-07: a 20260925 entrou só em parte
+// (colunas e admin_set_conversion_goal_type), a versão do pipeline ficou em 3,
+// todo fechamento virava VehicleAcquired e a fila não entregava custom_data.
+test('RECONCILIAÇÃO v3 → v4: completa o que faltou sem perder nem reescrever dados', async (t) => {
+  const { buildServerEvent } = await import('../src/lib/conversions/capi-payload.ts');
+  const db = await bootstrap();
+  await db.exec(goals.slice(0, goals.indexOf('-- 3. Montagem do marco')));
+  await db.exec(goals.slice(
+    goals.indexOf('create or replace function public.admin_set_conversion_goal_type('),
+    goals.indexOf('-- 7. Diagnóstico'),
+  ));
+  await db.exec(businessAppSync);
+
+  const sql = async (query, params = []) => (await db.query(query, params)).rows;
+  const service = () => db.exec(`reset role; set request.jwt.claims = '{"role":"service_role"}'; set role service_role;`);
+  const lead = async (tenant, click) => {
+    await service();
+    return (await sql(
+      `insert into conversion_leads(client_id,telefone,ctwa_clid,origem) values($1,'+55 (11) 99999-0001',$2,'anuncio') returning id`,
+      [tenant, click],
+    ))[0].id;
+  };
+  const events = (id) => sql('select * from private.conversion_events where lead_id=$1 order by event_name', [id]);
+  const snapshot = async () => {
+    await service();
+    return {
+      events: await sql('select * from private.conversion_events order by event_id'),
+      leads: await sql('select * from public.conversion_leads order by id'),
+      clients: await sql('select id, conversion_goal_type, capi_ativo from public.clients order by id'),
+    };
+  };
+  const version = async () => { await service(); return (await sql('select conversion_pipeline_version() as v'))[0].v; };
+  const fetchColumns = async () => {
+    await db.exec('reset role;');
+    return (await sql(`select pg_get_function_result('public.capi_fetch_queue(integer)'::regprocedure) as r`))[0].r;
+  };
+
+  await service();
+  await sql(`update clients set conversion_goal_type='sale' where id=$1`, [clientB]);
+
+  // Histórico existente antes da reconciliação.
+  const legacyQualified = await lead(clientA, 'clid-pre-qualificado');
+  await sql(`update conversion_leads set qualificacao='qualificado' where id=$1`, [legacyQualified]);
+  const legacySale = await lead(clientB, 'clid-pre-venda');
+  await sql(`update conversion_leads set qualificacao='fechado', valor=300, moeda='BRL' where id=$1`, [legacySale]);
+
+  await t.test('o drift reproduz a produção: v3, venda virando VehicleAcquired, fila sem custom_data', async () => {
+    assert.equal(await version(), 3);
+    assert.equal((await fetchColumns()).includes('custom_data'), false);
+    await service();
+    assert.deepEqual((await events(legacySale)).map((e) => e.event_name), ['LeadSubmitted', 'VehicleAcquired']);
+
+    await db.exec('reset role; reset request.jwt.claims;');
+    const audit = readFileSync(new URL('../scripts/audit-conversions-pipeline.sql', import.meta.url), 'utf8');
+    const rows = Object.fromEntries((await sql(audit)).map((r) => [r.item, r.valor]));
+    assert.equal(rows.pipeline_version, '3');
+    assert.equal(rows['capture_conversion_events gera Purchase'], 'NÃO');
+    assert.equal(rows['capi_fetch_queue devolve custom_data'], 'NÃO');
+    assert.equal(rows['conversion_events.custom_data'], 'jsonb');
+  });
+
+  const before = await snapshot();
+  await db.exec('reset role; reset request.jwt.claims;');
+  await db.exec(reconcile);
+
+  await t.test('pipeline vai para a versão 4 e a fila passa a devolver custom_data', async () => {
+    assert.equal(await version(), 4);
+    assert.match(await fetchColumns(), /custom_data jsonb/);
+    await db.exec('reset role;');
+    const status = await sql(`select pg_get_function_result('public.admin_client_capi_status()'::regprocedure) as r`);
+    assert.match(status[0].r, /goal_type text/);
+  });
+
+  await t.test('nenhum dado existente muda: eventos, leads e clientes ficam idênticos', async () => {
+    assert.deepEqual(await snapshot(), before);
+    // O VehicleAcquired antigo do cliente de venda não é convertido em Purchase.
+    assert.deepEqual((await events(legacySale)).map((e) => e.event_name), ['LeadSubmitted', 'VehicleAcquired']);
+  });
+
+  await t.test('sale gera Purchase com currency/value; LeadSubmitted e QualifiedLead preservados', async () => {
+    const id = await lead(clientB, 'clid-pos-venda');
+    await sql(`update conversion_leads set qualificacao='qualificado' where id=$1`, [id]);
+    await sql(`update conversion_leads set qualificacao='fechado', valor=1234.5, moeda='usd' where id=$1`, [id]);
+    const all = await events(id);
+    assert.deepEqual(all.map((e) => e.event_name), ['LeadSubmitted', 'Purchase', 'QualifiedLead']);
+    const purchase = all.find((e) => e.event_name === 'Purchase');
+    assert.equal(purchase.action_source, 'business_messaging');
+    assert.deepEqual(purchase.custom_data, { currency: 'USD', value: 1234.5 });
+    assert.equal(all.find((e) => e.event_name === 'QualifiedLead').custom_data, null);
+    assert.equal(all.find((e) => e.event_name === 'LeadSubmitted').custom_data, null);
+  });
+
+  await t.test('vehicle_acquisition continua VehicleAcquired, sem nenhum valor', async () => {
+    const id = await lead(clientA, 'clid-pos-aquisicao');
+    await sql(`update conversion_leads set qualificacao='fechado', valor=42000, moeda='BRL' where id=$1`, [id]);
+    const acquired = (await events(id)).find((e) => e.event_name === 'VehicleAcquired');
+    assert.equal(acquired.action_source, 'other');
+    assert.equal(acquired.custom_data, null);
+    assert.deepEqual(Object.keys(acquired.user_data), ['ph']);
+    assert.equal(JSON.stringify(acquired).includes('42000'), false);
+    assert.equal((await events(id)).some((e) => e.event_name === 'Purchase'), false);
+  });
+
+  await t.test('capi_fetch_queue entrega custom_data e o payload final respeita cada modelo', async () => {
+    await service();
+    const rows = await sql('select * from capi_fetch_queue(50)');
+    const purchase = rows.find((r) => r.event_name === 'Purchase');
+    const acquired = rows.find((r) => r.event_name === 'VehicleAcquired' && r.lead_id !== legacySale);
+    assert.deepEqual(purchase.custom_data, { currency: 'USD', value: 1234.5 });
+    assert.equal(acquired.custom_data, null);
+
+    const purchaseEvent = buildServerEvent(purchase);
+    assert.deepEqual(purchaseEvent.custom_data, { currency: 'USD', value: 1234.5 });
+    const acquiredEvent = buildServerEvent(acquired);
+    assert.equal('custom_data' in acquiredEvent, false);
+    assert.equal(JSON.stringify(acquiredEvent).includes('value'), false);
+  });
+
+  await t.test('a fila continua restrita ao servidor', async () => {
+    for (const role of ['anon', 'authenticated']) {
+      await db.exec(`reset role; set role ${role};`);
+      await assert.rejects(sql('select * from capi_fetch_queue(1)'), /permission denied/);
+    }
+  });
+
+  await t.test('o script de auditoria read-only confirma o estado reconciliado', async () => {
+    await db.exec('reset role; reset request.jwt.claims;');
+    const audit = readFileSync(new URL('../scripts/audit-conversions-pipeline.sql', import.meta.url), 'utf8');
+    const rows = Object.fromEntries((await sql(audit)).map((r) => [r.item, r.valor]));
+    assert.equal(rows.pipeline_version, '4');
+    assert.equal(rows['capture_conversion_events gera Purchase'], 'sim');
+    assert.equal(rows['enqueue_conversion_event grava custom_data'], 'sim');
+    assert.equal(rows['capi_fetch_queue devolve custom_data'], 'sim');
+    assert.equal(rows['admin_client_capi_status devolve goal_type'], 'sim');
+    assert.equal(rows['capi_fetch_queue executável por anon/authenticated'], 'não');
+  });
+
+  await t.test('aplicar de novo é inofensivo', async () => {
+    const again = await snapshot();
+    await db.exec('reset role; reset request.jwt.claims;');
+    await db.exec(reconcile);
+    assert.equal(await version(), 4);
+    assert.deepEqual(await snapshot(), again);
   });
 
   await db.close();
