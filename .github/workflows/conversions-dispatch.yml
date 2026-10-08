@@ -1,0 +1,75 @@
+# Drena a fila de conversões a cada 5 minutos.
+#
+# O plano Hobby da Vercel não aceita cron de 5 minutos, então o agendamento
+# fica aqui. Este workflow só CHAMA a rota: a fila, a reserva atômica, a
+# idempotência e o reenvio de eventos são responsabilidade da API/dispatcher.
+#
+# Segredo necessário (Settings > Secrets and variables > Actions):
+#   CONVERSIONS_DISPATCH_SECRET  mesmo valor que a aplicação aceita na rota
+#                                (CRON_SECRET ou SYNC_SECRET_KEY da Vercel).
+#
+# Enquanto CONVERSIONS_DISPATCHER_ENABLED não for "true" na Vercel, a rota
+# responde sem tocar na fila.
+#
+# Observação: o GitHub só executa agendamentos a partir da branch padrão, e
+# pode atrasar execuções em horários de pico.
+
+name: Conversions dispatch
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+# Nunca duas chamadas ao mesmo tempo; a próxima espera a anterior terminar.
+concurrency:
+  group: conversions-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Chamar /api/conversions/dispatch
+        env:
+          DISPATCH_URL: https://cliente.trafegoacademy.online/api/conversions/dispatch
+          DISPATCH_SECRET: ${{ secrets.CONVERSIONS_DISPATCH_SECRET }}
+        run: |
+          if [ -z "$DISPATCH_SECRET" ]; then
+            echo "::error::Secret CONVERSIONS_DISPATCH_SECRET não configurado."
+            exit 1
+          fi
+
+          # Repete SOMENTE quando a conexão nem foi estabelecida (DNS, recusa,
+          # handshake TLS): nesses casos a requisição não chegou à aplicação.
+          # Resposta HTTP de erro ou timeout depois de conectar NÃO são
+          # repetidos — o próximo agendamento cuida disso.
+          #   6 = DNS, 7 = conexão recusada, 35 = falha no handshake TLS
+          for attempt in 1 2 3; do
+            status=0
+            curl --silent --show-error --fail-with-body \
+              --proto '=https' --tlsv1.2 \
+              --connect-timeout 10 --max-time 90 \
+              --request POST \
+              --header "Authorization: Bearer ${DISPATCH_SECRET}" \
+              "$DISPATCH_URL" || status=$?
+
+            case "$status" in
+              0) echo; exit 0 ;;
+              6|7|35)
+                echo "::warning::Falha de conexão (curl $status), tentativa $attempt de 3."
+                sleep $((attempt * 10))
+                ;;
+              *)
+                echo
+                echo "::error::Chamada falhou (curl $status)."
+                exit "$status"
+                ;;
+            esac
+          done
+
+          echo "::error::Sem conexão com a aplicação após 3 tentativas."
+          exit 1

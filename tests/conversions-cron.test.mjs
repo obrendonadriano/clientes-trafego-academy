@@ -57,9 +57,26 @@ test('a rota usa a autorização compartilhada e responde 401 sem ela', () => {
   assert.equal(/console\.|CRON_SECRET\s*[},]/.test(route.replace(/\/\/.*$/gm, '')), false);
 });
 
-test('vercel.json agenda a fila a cada 5 minutos', () => {
+test('vercel.json não registra cron: o plano Hobby recusaria o deploy', () => {
   const config = JSON.parse(read('vercel.json'));
-  assert.deepEqual(config.crons, [{ path: '/api/conversions/dispatch', schedule: '*/5 * * * *' }]);
+  assert.equal('crons' in config, false);
+});
+
+test('o GitHub Actions agenda a fila a cada 5 minutos, só chamando a rota', () => {
+  const workflow = read('.github/workflows/conversions-dispatch.yml');
+  assert.match(workflow, /cron: "\*\/5 \* \* \* \*"/);
+  assert.match(workflow, /^\s*workflow_dispatch:/m);
+  assert.match(workflow, /https:\/\/cliente\.trafegoacademy\.online\/api\/conversions\/dispatch/);
+  assert.match(workflow, /\$\{\{ secrets\.CONVERSIONS_DISPATCH_SECRET \}\}/);
+  assert.match(workflow, /Authorization: Bearer \$\{DISPATCH_SECRET\}/);
+  assert.match(workflow, /--fail-with-body/);
+  // Repetição só para falha de conexão (DNS, recusa, TLS); nunca o --retry do
+  // curl, que também repetiria respostas 5xx e timeouts.
+  assert.equal(/--retry/.test(workflow), false);
+  assert.match(workflow, /6\|7\|35\)/);
+  // Nenhum segredo literal: só a referência ao secret do repositório.
+  assert.equal(/Bearer\s+[A-Za-z0-9_-]{16,}/.test(workflow), false);
+  assert.match(workflow, /^permissions: \{\}$/m);
 });
 
 test('o dispatcher continua desligado por padrão e o cron não toca na fila assim', () => {

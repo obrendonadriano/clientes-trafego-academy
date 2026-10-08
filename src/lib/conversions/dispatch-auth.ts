@@ -2,8 +2,9 @@ import { timingSafeEqual } from "node:crypto";
 
 // Quem pode drenar a fila de conversões.
 //
-//   CRON_SECRET      a Vercel Cron envia `Authorization: Bearer <CRON_SECRET>`
-//                    em toda execução agendada (vercel.json).
+//   CRON_SECRET      `Authorization: Bearer <CRON_SECRET>`, o formato da
+//                    Vercel Cron (não usada no plano Hobby) e do workflow
+//                    .github/workflows/conversions-dispatch.yml.
 //   SYNC_SECRET_KEY  chamadas manuais e agendadores antigos, por `x-sync-key`
 //                    ou pelo mesmo cabeçalho Bearer.
 //
