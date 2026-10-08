@@ -33,7 +33,6 @@ const rel = (file) => relative(root, file).replace(/\\/g, '/');
 const CONVERSIONS = [
   'src/lib/conversions/capi-payload.ts',
   'src/lib/conversions/dispatcher.ts',
-  'src/lib/conversions/dispatch-auth.ts',
   'src/lib/conversions/connection-shared.ts',
   'src/lib/conversions/shared.ts',
   'src/lib/data/conversions.ts',

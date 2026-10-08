@@ -1,24 +1,33 @@
 import { dispatchConversionEvents } from "@/lib/conversions/dispatcher";
-import { authorizeDispatch } from "@/lib/conversions/dispatch-auth";
+import { safeEqualHex } from "@/lib/meta/secret-box";
 
 // Drenagem periódica da fila de conversões. Substitui o agendamento do n8n.
 //
-// Agendada a cada 5 minutos pelo GitHub Actions
-// (.github/workflows/conversions-dispatch.yml), já que o plano Hobby da Vercel
-// não aceita esse intervalo. Aceita `Authorization: Bearer <CRON_SECRET>` —
-// pronto para a Vercel Cron se o plano mudar — e a SYNC_SECRET_KEY de sempre.
-// A reserva atômica no banco garante que execuções sobrepostas não enviem o
-// mesmo evento duas vezes.
-//
-// Com CONVERSIONS_DISPATCHER_ENABLED diferente de "true", a execução volta
-// sem tocar na fila: o cron roda, mas nada é reservado nem enviado.
+// Protegida pela mesma chave já usada por /api/sync-meta, para não inventar um
+// segredo novo. Agende em qualquer cron (Vercel Cron, GitHub Actions, cron do
+// servidor) — a reserva atômica no banco garante que execuções sobrepostas não
+// enviem o mesmo evento duas vezes.
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+function authorized(request: Request) {
+  const expected = process.env.SYNC_SECRET_KEY?.trim();
+
+  if (!expected) {
+    return false;
+  }
+
+  const header =
+    request.headers.get("x-sync-key") ??
+    (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+
+  return safeEqualHex(header, expected);
+}
+
 async function run(request: Request) {
-  if (!authorizeDispatch(request.headers)) {
+  if (!authorized(request)) {
     return Response.json({ error: "não autorizado" }, { status: 401 });
   }
 
@@ -30,7 +39,7 @@ export async function POST(request: Request) {
   return run(request);
 }
 
-// A Vercel Cron (se um dia for usada) chama com GET.
+// Alguns agendadores só fazem GET.
 export async function GET(request: Request) {
   return run(request);
 }
