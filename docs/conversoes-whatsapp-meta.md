@@ -188,6 +188,18 @@ diagnóstico.
   registra que a integração está viva.
 - Idempotência por `wa_message_id` e por `ctwa_clid`, ambos com índice único.
   Telefone sozinho nunca é chave de deduplicação.
+- Falha ao gravar não é engolida. Se `meta_ingest_ad_lead` falhar em qualquer
+  mensagem, as demais mensagens do mesmo payload continuam sendo processadas e,
+  no fim, o webhook responde **500** — a Meta então reentrega o payload. O que
+  já tinha entrado não duplica (idempotência acima). Só responde **200** quando
+  todas as mensagens foram gravadas. Um lead novo gravado no mesmo payload
+  ainda dispara o envio imediato. O erro vai para o log
+  (`[conversoes/webhook] ingestão recusada`) só com a mensagem do banco, o
+  `wa_message_id` e o `phone_number_id` — sem telefone do lead, token ou
+  corpo do webhook.
+- Falha **permanente** de uma mensagem não é tratada automaticamente: a Meta
+  vai reentregar o payload várias vezes. A idempotência impede duplicação ou
+  corrupção, mas o caso exige diagnóstico pelo log acima.
 
 ## Fila de envio
 
@@ -205,12 +217,21 @@ resumida e próxima tentativa.
   Business Messaging é responsabilidade da integração. Esses casos vão para
   conciliação manual no Gerenciador de Eventos.
 
-O worker roda em três momentos: depois de um lead novo chegar pelo webhook,
-depois de mover um cartão (via `after()`, sem segurar a resposta) e pelo cron
-`POST /api/conversions/dispatch`, protegido pela `SYNC_SECRET_KEY`.
+O envio é tentado **imediatamente**, via `after()` (sem segurar a resposta):
 
-Agende o cron a cada 5 minutos. Ele é a rede de segurança — sem ele nada se
-perde, só atrasa.
+1. depois que um lead novo é criado pelo webhook oficial;
+2. depois que um cartão é movido no Kanban.
+
+Nos dois casos ele só sai se `CONVERSIONS_DISPATCHER_ENABLED=true`; com o
+interruptor desligado, a fila acumula com as datas originais.
+
+**Não há cron configurado nesta entrega.** O projeto da Vercel está no plano
+Hobby, que não aceita agendamento de 5 minutos, e nenhum agendador externo foi
+configurado. Um worker recorrente é **opcional**, como rede de segurança para
+eventos que falharam com erro retentável ou que entraram na fila sem um
+gatilho imediato: sem ele nada se perde, mas um evento assim só sai na próxima
+movimentação de cartão ou lead novo. Se um dia for adotado, ele chama
+`POST /api/conversions/dispatch` com a `SYNC_SECRET_KEY` (veja a seção 8).
 
 ## O que ficou pendente com você
 
@@ -358,14 +379,16 @@ reconectar.
 
 ### 7. Migração do banco
 
-**Já aplicada:** `20260924210000_official_whatsapp_conversions.sql`.
-
-**A aplicar:** `supabase/migrations/20260925000000_conversion_goal_types.sql`.
-Também aditiva: acrescenta `clients.conversion_goal_type` (padrão
-`vehicle_acquisition`), `private.conversion_events.custom_data`, e atualiza os
-gatilhos e RPCs. Não toca em `waha_ingest_lead`, em `leads_webhook_url` nem em
-nenhum evento já enfileirado. Depois dela,
-`select conversion_pipeline_version()` retorna **4**.
+**Já aplicadas em produção:** `20260924210000_official_whatsapp_conversions.sql`,
+`20260925000000_conversion_goal_types.sql` (entrou só em parte) e
+`20261007120000_conversions_pipeline_v4_reconciliation.sql`, que completou o
+que faltava da anterior sem alterar dados. Resultado:
+`select conversion_pipeline_version()` retorna **4**, com
+`clients.conversion_goal_type` (padrão `vehicle_acquisition`),
+`private.conversion_events.custom_data` e Purchase para clientes `sale`.
+Nenhuma delas toca em `waha_ingest_lead`, em `leads_webhook_url` nem em evento
+já enfileirado. Para conferir o estado, rode a auditoria somente leitura
+`scripts/audit-conversions-pipeline.sql` no SQL Editor.
 
 Referência da migração anterior — aplique
 `supabase/migrations/20260924210000_official_whatsapp_conversions.sql`
@@ -374,21 +397,32 @@ no projeto correto, depois das anteriores, numa transação. Ela:
 - cria `client_whatsapp_connections` e `private.client_whatsapp_credentials`;
 - acrescenta a procedência oficial em `conversion_leads`;
 - troca as assinaturas de `capi_fetch_queue` e `admin_client_capi_status`;
-- **remove `waha_ingest_lead`** e apaga `leads_webhook_url` da config do WAHA;
+- **mantém `waha_ingest_lead`** (recriada para respeitar
+  `conversion_ingest_mode`) e o `leads_webhook_url` do WAHA — o caminho
+  legado segue ativo para quem ainda não migrou;
 - avisa (sem falhar) se houver `ctwa_clid` duplicado no histórico.
 
 Publique a dashboard junto. Antes de aplicar, **pause o workflow antigo de CAPI
 no n8n** e aguarde as execuções em andamento; o de Atendimento IA continua
 ativo.
 
-### 8. Cron
+### 8. Worker recorrente (opcional, não configurado)
 
-Agende a cada 5 minutos:
+Hoje **nenhum** cron chama o dispatcher: não há `crons` no `vercel.json` nem
+workflow agendado. O envio depende dos gatilhos imediatos (lead novo e
+movimentação de cartão).
+
+Se quiser uma rede de segurança no futuro, qualquer agendador pode chamar:
 
 ```bash
-curl -fsS -X POST https://dashboard.trafegoacademy.online/api/conversions/dispatch \
+curl -fsS -X POST https://cliente.trafegoacademy.online/api/conversions/dispatch \
   -H "x-sync-key: $SYNC_SECRET_KEY"
 ```
+
+A rota aceita a `SYNC_SECRET_KEY` por `x-sync-key` ou `Authorization: Bearer`.
+A reserva atômica no banco impede que execuções sobrepostas enviem o mesmo
+evento duas vezes. No plano Hobby da Vercel, `vercel.json` não aceita
+intervalo de 5 minutos.
 
 ### 9. Ordem de implantação (progressiva, sem downtime)
 
@@ -409,7 +443,7 @@ Nenhum passo interrompe a captação. O fluxo antigo continua funcionando até o
 | 10 | Teste real: clicar no anúncio e mandar a 1ª mensagem | Anúncio real | Cartão em **Novos leads**; o piloto vira `official_meta` sozinho no painel |
 | 11 | Conferir que o WAHA parou de captar **só** para o piloto | Admin | Piloto = "Meta oficial"; os demais = "WAHA (legado)" |
 | 12 | Test Events da Meta: conferir os 3 payloads | Gerenciador de Eventos | Sem valor, sem dívida, sem placa, sem observação |
-| 13 | **Ligar o envio**: `CONVERSIONS_DISPATCHER_ENABLED=true` + cron | Vercel | `LeadSubmitted` chega no Dataset **daquele** cliente |
+| 13 | **Ligar o envio**: `CONVERSIONS_DISPATCHER_ENABLED=true` (worker recorrente opcional, seção 8) | Vercel | `LeadSubmitted` chega no Dataset **daquele** cliente |
 | 14 | Conferir isolamento entre Datasets | Gerenciador de Eventos | Zero eventos cruzados |
 | 15 | **Migrar os demais clientes, aos poucos** | Dashboard | Cada um conecta e é promovido sozinho |
 | 16 | Só quando **todos** estiverem em `official_meta`: segunda migração de cleanup | Supabase | Remove `waha_ingest_lead` e o `leads_webhook_url` |

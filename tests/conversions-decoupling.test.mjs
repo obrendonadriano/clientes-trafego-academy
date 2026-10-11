@@ -47,6 +47,7 @@ const CONVERSIONS = [
   'src/app/conversoes/actions.ts',
   'src/app/api/whatsapp/embedded-signup/route.ts',
   'src/app/api/whatsapp/meta-webhook/route.ts',
+  'src/lib/conversions/webhook-ingest.ts',
   'src/app/api/conversions/dispatch/route.ts',
   'src/app/dashboard/conversoes/page.tsx',
   'src/app/admin/conversoes/page.tsx',
