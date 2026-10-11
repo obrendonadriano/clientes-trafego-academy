@@ -892,3 +892,206 @@ test('RECONCILIAÇÃO v3 → v4: completa o que faltou sem perder nem reescrever
 
   await db.close();
 });
+
+// Webhook oficial: uma falha de gravação não pode virar 200. A Meta só
+// reentrega o que não recebeu 200, então o lead se perderia em silêncio.
+// Tudo aqui roda contra a RPC real (meta_ingest_ad_lead) no PGlite.
+test('WEBHOOK: falha de ingestão responde 500 sem abandonar o resto do payload', async (t) => {
+  const { ingestWebhookMessages, planWebhookResponse } =
+    await import('../src/lib/conversions/webhook-ingest.ts');
+  const db = await bootstrap();
+  await db.exec(goals);
+  await db.exec(businessAppSync);
+  await db.exec(reconcile);
+
+  const sql = async (query, params = []) => (await db.query(query, params)).rows;
+  await db.exec(`reset role; set request.jwt.claims = '{"role":"service_role"}'; set role service_role;`);
+  await sql('select meta_save_whatsapp_connection($1,$2,$3,null,null,null,$4,true,$5,true,$6,$7,null,null)',
+    [clientA, '7770900', '5550900', '880900', 'CLOUD_API', 'active', 'sealed-token']);
+
+  // A RPC de verdade, com o mesmo formato de retorno do supabase-js.
+  const realRpc = async (args) => {
+    try {
+      const data = await sql(
+        'select * from meta_ingest_ad_lead($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+        [args.p_phone_number_id, args.p_waba_id, args.p_wa_message_id, args.p_telefone, args.p_ctwa_clid,
+         args.p_nome, args.p_ad_source_id, args.p_ad_source_url, args.p_ad_source_type, args.p_event_time],
+      );
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: { message: error.message } };
+    }
+  };
+  // Simula o banco recusando (ou a rede derrubando) mensagens específicas.
+  const failingOn = (messageIds, mode = 'error') => async (args) => {
+    if (messageIds.includes(args.p_wa_message_id)) {
+      if (mode === 'throw') throw new Error('fetch failed');
+      return { data: null, error: { message: 'canceling statement due to statement timeout' } };
+    }
+    return realRpc(args);
+  };
+
+  const message = (id, click, from = '5511977770001') => ({
+    id, from, timestamp: '1790000000',
+    ...(click ? { referral: { ctwa_clid: click, source_id: 'ad-1', source_type: 'ad' } } : {}),
+  });
+  const payload = (...messages) => ({
+    object: 'whatsapp_business_account',
+    entry: [{ id: '7770900', changes: [{ field: 'messages', value: {
+      metadata: { phone_number_id: '5550900' },
+      contacts: [{ wa_id: '5511977770001', profile: { name: 'Fulano' } }],
+      messages,
+    } }] }],
+  });
+  const leadsFor = (click) => sql('select id, criado_em from conversion_leads where ctwa_clid=$1', [click]);
+  const totalLeads = async () => (await sql('select count(*)::int as n from conversion_leads'))[0].n;
+  let logs = [];
+  const log = (label, detail) => logs.push({ label, detail });
+
+  await t.test('1. RPC falha em uma mensagem → o lote continua e a resposta é 500', async () => {
+    logs = [];
+    const body = payload(message('wamid-falha-1', 'clid-falha-1'), message('wamid-organica-0', null));
+    const outcome = await ingestWebhookMessages(body, failingOn(['wamid-falha-1']), log);
+
+    assert.equal(outcome.failed, 1);
+    // A mensagem depois da que falhou também foi enviada à RPC.
+    assert.equal(outcome.processed, 1);
+    assert.equal(planWebhookResponse(outcome).status, 500);
+    assert.equal((await leadsFor('clid-falha-1')).length, 0);
+
+    // Log sanitizado com contexto seguro para achar o item.
+    assert.equal(logs.length, 1);
+    assert.equal(logs[0].label, '[conversoes/webhook] ingestão recusada');
+    assert.deepEqual(logs[0].detail, {
+      message: 'canceling statement due to statement timeout',
+      wa_message_id: 'wamid-falha-1',
+      phone_number_id: '5550900',
+    });
+    // Nunca telefone do lead, clique, nome ou token.
+    const logged = JSON.stringify(logs);
+    for (const secret of ['5511977770001', 'clid-falha-1', 'Fulano', 'sealed-token']) {
+      assert.equal(logged.includes(secret), false, secret);
+    }
+  });
+
+  await t.test('2. uma falha e um lead novo no mesmo payload → lead gravado, dispatch pedido, 500', async () => {
+    const before = await totalLeads();
+    const body = payload(message('wamid-falha-2', 'clid-falha-2'), message('wamid-ok-2', 'clid-ok-2'));
+    const outcome = await ingestWebhookMessages(body, failingOn(['wamid-falha-2']), log);
+
+    assert.equal(outcome.failed, 1);
+    assert.equal(outcome.processed, 1);
+    assert.equal(outcome.createdLead, true);
+    assert.equal((await leadsFor('clid-ok-2')).length, 1);
+    assert.equal(await totalLeads(), before + 1);
+    assert.deepEqual(planWebhookResponse(outcome), { status: 500, dispatch: true });
+  });
+
+  await t.test('exceção de rede no meio do lote não abandona as mensagens seguintes', async () => {
+    const body = payload(
+      message('wamid-meio-1', 'clid-meio-1'),
+      message('wamid-meio-2', 'clid-meio-2'),
+      message('wamid-meio-3', 'clid-meio-3'),
+    );
+    const outcome = await ingestWebhookMessages(body, failingOn(['wamid-meio-2'], 'throw'), log);
+    assert.deepEqual(planWebhookResponse(outcome), { status: 500, dispatch: true });
+    assert.equal((await leadsFor('clid-meio-1')).length, 1);
+    assert.equal((await leadsFor('clid-meio-2')).length, 0);
+    assert.equal((await leadsFor('clid-meio-3')).length, 1);
+  });
+
+  await t.test('3. todas as mensagens gravadas → 200', async () => {
+    const outcome = await ingestWebhookMessages(
+      payload(message('wamid-total-1', 'clid-total-1'), message('wamid-total-2', 'clid-total-2')),
+      realRpc, log,
+    );
+    assert.deepEqual(outcome, { createdLead: true, processed: 2, failed: 0 });
+    assert.deepEqual(planWebhookResponse(outcome), { status: 200, dispatch: true });
+  });
+
+  await t.test('4. mensagem orgânica sem ctwa_clid continua sem criar lead (200, sem dispatch)', async () => {
+    const before = await totalLeads();
+    const outcome = await ingestWebhookMessages(payload(message('wamid-organica-1', null)), realRpc, log);
+    assert.deepEqual(outcome, { createdLead: false, processed: 1, failed: 0 });
+    assert.deepEqual(planWebhookResponse(outcome), { status: 200, dispatch: false });
+    assert.equal(await totalLeads(), before);
+  });
+
+  await t.test('5. reentrega da Meta (SQL real): grava o que faltou e não duplica o que já entrou', async () => {
+    // Mesmo payload do teste 2, agora com o banco respondendo.
+    const body = payload(message('wamid-falha-2', 'clid-falha-2'), message('wamid-ok-2', 'clid-ok-2'));
+    const original = (await leadsFor('clid-ok-2'))[0];
+    const before = await totalLeads();
+
+    const retry = await ingestWebhookMessages(body, realRpc, log);
+    assert.equal(retry.failed, 0);
+    assert.equal(planWebhookResponse(retry).status, 200);
+    // Só o que faltou foi criado; o lead já gravado é o mesmo, com a data original.
+    assert.equal(await totalLeads(), before + 1);
+    const okLeads = await leadsFor('clid-ok-2');
+    assert.equal(okLeads.length, 1);
+    assert.equal(okLeads[0].id, original.id);
+    assert.equal(okLeads[0].criado_em.getTime(), original.criado_em.getTime());
+    assert.equal((await leadsFor('clid-falha-2')).length, 1);
+
+    // Uma terceira entrega idêntica não cria nada nem pede dispatch.
+    const again = await ingestWebhookMessages(body, realRpc, log);
+    assert.deepEqual(planWebhookResponse(again), { status: 200, dispatch: false });
+    assert.equal(await totalLeads(), before + 1);
+
+    // O mesmo ctwa_clid chegando com outro wa_message_id também não duplica.
+    const otherId = await ingestWebhookMessages(payload(message('wamid-outro-id', 'clid-ok-2')), realRpc, log);
+    assert.equal(otherId.createdLead, false);
+    assert.equal((await leadsFor('clid-ok-2')).length, 1);
+  });
+
+  await t.test('falha permanente: reentregas repetidas respondem 500, sem duplicar nem corromper nada', async () => {
+    // Não resolvido nesta entrega, de propósito: a Meta vai insistir no
+    // payload, e o log identifica o item para diagnóstico operacional.
+    const body = payload(message('wamid-quebrada', 'clid-quebrada'), message('wamid-vizinha', 'clid-vizinha'));
+    const broken = failingOn(['wamid-quebrada']);
+    const first = await ingestWebhookMessages(body, broken, log);
+    const after = await totalLeads();
+    for (let i = 0; i < 3; i += 1) {
+      const outcome = await ingestWebhookMessages(body, broken, log);
+      assert.deepEqual(planWebhookResponse(outcome), { status: 500, dispatch: false });
+    }
+    assert.equal(first.createdLead, true);
+    assert.equal(await totalLeads(), after);
+    assert.equal((await leadsFor('clid-vizinha')).length, 1);
+    assert.equal((await leadsFor('clid-quebrada')).length, 0);
+  });
+
+  await t.test('eventos que não são mensagens, ou sem remetente, não chamam a RPC', async () => {
+    let calls = 0;
+    const counting = async (args) => { calls += 1; return realRpc(args); };
+    const body = {
+      entry: [{ id: '7770900', changes: [
+        { field: 'smb_app_state_sync', value: {} },
+        { field: 'messages', value: { metadata: { phone_number_id: '5550900' }, messages: [{ id: 'sem-remetente' }] } },
+      ] }],
+    };
+    const outcome = await ingestWebhookMessages(body, counting, log);
+    assert.equal(calls, 0);
+    assert.deepEqual(planWebhookResponse(outcome), { status: 200, dispatch: false });
+  });
+
+  await t.test('a rota agenda o dispatch e responde conforme o plano, depois de processar o lote', () => {
+    const route = readFileSync(new URL('../src/app/api/whatsapp/meta-webhook/route.ts', import.meta.url), 'utf8');
+    assert.match(route, /from "@\/lib\/conversions\/webhook-ingest"/);
+    assert.match(route, /admin\.rpc\("meta_ingest_ad_lead", args\)/);
+    const tail = route.slice(route.indexOf('await ingestWebhookMessages(body'));
+    // after() é agendado antes da resposta, e só depende do lead criado.
+    assert.match(tail, /if \(plan\.dispatch\) \{\s*after\(\(\) => dispatchQuietly\(\)\);/);
+    assert.ok(tail.indexOf('after(') < tail.indexOf('return new Response'));
+    assert.match(tail, /return new Response\(null, \{ status: plan\.status \}\);/);
+    assert.equal(/status: 200/.test(tail), false);
+    // O que vem antes continua igual: assinatura, 400 de JSON e 503 sem Supabase.
+    assert.match(route, /hasValidSignature\(/);
+    assert.match(route, /status: 401/);
+    assert.match(route, /status: 400/);
+    assert.match(route, /if \(!admin\) \{[\s\S]*?status: 503/);
+  });
+
+  await db.close();
+});

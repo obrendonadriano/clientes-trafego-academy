@@ -4,6 +4,11 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getMetaConversionsConfig } from "@/lib/meta/conversions-config";
 import { safeEqualHex } from "@/lib/meta/secret-box";
 import { dispatchQuietly } from "@/lib/conversions/dispatcher";
+import {
+  ingestWebhookMessages,
+  planWebhookResponse,
+  type WebhookBody,
+} from "@/lib/conversions/webhook-ingest";
 
 // Webhook oficial da Cloud API.
 //
@@ -14,35 +19,12 @@ import { dispatchQuietly } from "@/lib/conversions/dispatcher";
 //   3. só vira lead a mensagem com referral de Click-to-WhatsApp. Uma mensagem
 //      orgânica atualiza o "último webhook" e nada mais — ninguém que escreve
 //      espontaneamente é contado como conversão de anúncio;
-//   4. a mesma entrega repetida não cria um segundo lead (o message id é único).
+//   4. a mesma entrega repetida não cria um segundo lead (o message id é único);
+//   5. se a gravação de qualquer mensagem falhar, a resposta é 500 — depois de
+//      tentar todas as outras do mesmo payload — para a Meta reentregar.
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-type Referral = {
-  source_url?: string;
-  source_id?: string;
-  source_type?: string;
-  ctwa_clid?: string;
-};
-
-type WebhookMessage = {
-  id?: string;
-  from?: string;
-  timestamp?: string;
-  referral?: Referral;
-};
-
-type WebhookValue = {
-  metadata?: { phone_number_id?: string; display_phone_number?: string };
-  contacts?: { wa_id?: string; profile?: { name?: string } }[];
-  messages?: WebhookMessage[];
-};
-
-type WebhookBody = {
-  object?: string;
-  entry?: { id?: string; changes?: { field?: string; value?: WebhookValue }[] }[];
-};
 
 // Verificação de posse do endpoint, exigida pela Meta ao cadastrar a URL.
 export async function GET(request: Request) {
@@ -112,75 +94,21 @@ export async function POST(request: Request) {
     return new Response(null, { status: 503 });
   }
 
-  let createdLead = false;
+  // Todas as mensagens do payload são tentadas, mesmo que uma falhe.
+  const outcome = await ingestWebhookMessages(body, (args) =>
+    admin.rpc("meta_ingest_ad_lead", args),
+  );
+  const plan = planWebhookResponse(outcome);
 
-  for (const entry of body.entry ?? []) {
-    const wabaId = entry.id ?? null;
-
-    for (const change of entry.changes ?? []) {
-      if (change.field !== "messages") {
-        continue;
-      }
-
-      const value = change.value ?? {};
-      const phoneNumberId = value.metadata?.phone_number_id ?? null;
-
-      for (const message of value.messages ?? []) {
-        const referral = message.referral;
-        const phone = message.from ?? null;
-
-        if (!phone) {
-          continue;
-        }
-
-        const contact = (value.contacts ?? []).find(
-          (item) => item.wa_id === phone,
-        );
-        // O horário original do evento vem da Meta. Ele é preservado no banco
-        // e enviado como event_time; nunca é substituído por "agora".
-        const seconds = Number(message.timestamp);
-        const eventTime = Number.isFinite(seconds) && seconds > 0
-          ? new Date(seconds * 1000).toISOString()
-          : null;
-
-        const { data, error } = await admin.rpc("meta_ingest_ad_lead", {
-          p_phone_number_id: phoneNumberId,
-          p_waba_id: wabaId,
-          p_wa_message_id: message.id ?? null,
-          p_telefone: phone,
-          // Sem ctwa_clid a RPC apenas registra o webhook e não cria lead.
-          p_ctwa_clid: referral?.ctwa_clid ?? null,
-          p_nome: contact?.profile?.name ?? null,
-          p_ad_source_id: referral?.source_id ?? null,
-          p_ad_source_url: referral?.source_url ?? null,
-          p_ad_source_type: referral?.source_type ?? null,
-          p_event_time: eventTime,
-        });
-
-        if (error) {
-          console.error("[conversoes/webhook] ingestão recusada", {
-            message: error.message,
-          });
-          continue;
-        }
-
-        const row = Array.isArray(data) ? data[0] : data;
-
-        if (row?.novo) {
-          createdLead = true;
-        }
-      }
-    }
-  }
-
-  // LeadSubmitted entra na fila pelo gatilho do banco; drenar aqui evita
-  // esperar o próximo ciclo do cron.
-  if (createdLead) {
+  // LeadSubmitted entra na fila pelo gatilho do banco; o envio é tentado já,
+  // sem segurar a resposta. Vale mesmo com outra mensagem do lote falhando:
+  // o lead novo já está gravado.
+  if (plan.dispatch) {
     after(() => dispatchQuietly());
   }
 
-  // A Meta reentrega enquanto não receber 200. Responder 200 depois de gravar
-  // é o que torna a entrega confiável sem duplicar: a idempotência é por
-  // message id no banco.
-  return new Response(null, { status: 200 });
+  // A Meta reentrega enquanto não receber 200. Se alguma gravação falhou, 500
+  // pede a reentrega do payload; o que já entrou não duplica, porque a RPC é
+  // idempotente por wa_message_id e ctwa_clid.
+  return new Response(null, { status: plan.status });
 }
