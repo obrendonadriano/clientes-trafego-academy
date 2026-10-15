@@ -12,32 +12,10 @@ import {
   WahaRequestError,
   type WahaSession,
 } from "@/lib/waha";
-
-function getWebhookUrl(request: Request) {
-  const requestOrigin = new URL(request.url).origin;
-  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
-
-  if (!configured) {
-    return new URL("/whatsapp/webhook", requestOrigin).toString();
-  }
-
-  try {
-    const configuredUrl = new URL(configured);
-    const isLoopback =
-      configuredUrl.hostname === "localhost" ||
-      configuredUrl.hostname === "127.0.0.1";
-    const insecureInProduction =
-      process.env.NODE_ENV === "production" && configuredUrl.protocol !== "https:";
-
-    if (!isLoopback && !insecureInProduction) {
-      return new URL("/whatsapp/webhook", configuredUrl.origin).toString();
-    }
-  } catch {
-    // Configuração inválida: usa a origem real e validada pelo próprio request.
-  }
-
-  return new URL("/whatsapp/webhook", requestOrigin).toString();
-}
+import { AI_WEBHOOK_PATH, appUrl } from "@/lib/app-url";
+import { buildWahaSessionPayload } from "@/lib/waha-session-config";
+import { getClientSegment } from "@/lib/ai-agent/store";
+import { hasAiAttendanceSegment } from "@/lib/segments";
 
 export async function POST(request: Request) {
   let clientId: string | null = null;
@@ -48,69 +26,23 @@ export async function POST(request: Request) {
     const config = await getWahaConfig();
     const existing = await getWhatsappSessionRecord(clientId);
     let remoteExists = false;
-    const webhookUrl = getWebhookUrl(request);
+    const webhookUrl = appUrl(request, "/whatsapp/webhook");
+    // Atendimento IA direto no site (sem n8n), só para o nicho de veículos.
+    const aiWebhookUrl = hasAiAttendanceSegment(await getClientSegment(clientId))
+      ? appUrl(request, AI_WEBHOOK_PATH)
+      : null;
 
-    function sessionPayload(sessionName: string) {
-      const webhooks = [
-        {
-          url: webhookUrl,
-          events: ["session.status"],
-          hmac: { key: config.webhookSecret },
-          retries: {
-            policy: "exponential",
-            delaySeconds: 2,
-            attempts: 10,
-          },
-        },
-      ];
-
-      type LeadWebhook = (typeof webhooks)[number] & {
-        customHeaders: { name: string; value: string }[];
-      };
-
-      function messageWebhook(
-        url: string,
-        event: "message" | "message.any" = "message",
-      ): LeadWebhook {
-        return {
-          url,
-          events: [event],
-          hmac: { key: config.webhookSecret },
-          customHeaders: [
-            {
-              name: "X-TrafegoAcademy-Secret",
-              value: config.webhookSecret,
-            },
-          ],
-          retries: {
-            policy: "exponential",
-            delaySeconds: 2,
-            attempts: 10,
-          },
-        };
-      }
-
-      // LEGADO / TRANSITÓRIO: captação de Conversões pelo WAHA. O banco
-      // ignora quem já migrou, então manter isto registrado não duplica lead
-      // e é o que evita apagão de captação durante a transição.
-      if (config.leadsWebhookUrl) {
-        webhooks.push(messageWebhook(config.leadsWebhookUrl));
-      }
-
-      // A IA precisa também das respostas manuais (fromMe) para pausar o robô.
-      // Cada sessão usa o mesmo workflow; o backend resolve o cliente pela sessão.
-      if (config.aiWebhookUrl && config.aiWebhookUrl !== config.leadsWebhookUrl) {
-        webhooks.push(messageWebhook(config.aiWebhookUrl, "message.any"));
-      }
-
-      return {
-        name: sessionName,
-        config: {
-          metadata: { source: "trafegoacademy" },
-          webhooks,
-        },
-      };
-    }
+    // LEGADO / TRANSITÓRIO: config.leadsWebhookUrl mantém a captação de
+    // Conversões pelo WAHA para quem ainda não migrou; o banco ignora quem já
+    // migrou, então manter isto registrado não duplica lead.
+    const sessionPayload = (sessionName: string) =>
+      buildWahaSessionPayload({
+        sessionName,
+        webhookSecret: config.webhookSecret,
+        statusWebhookUrl: webhookUrl,
+        leadsWebhookUrl: config.leadsWebhookUrl,
+        aiWebhookUrl,
+      });
 
     if (existing?.session_name) {
       try {

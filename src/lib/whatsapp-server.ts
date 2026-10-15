@@ -169,3 +169,18 @@ export function whatsappErrorResponse(error: unknown) {
     : "Não foi possível concluir esta operação.";
   return Response.json({ error: message }, { status });
 }
+
+/** Todas as sessões cadastradas, para a atualização em massa de webhooks. */
+export async function listWhatsappSessionRecords() {
+  const adminClient = adminClientOrThrow();
+  const { data, error } = await adminClient
+    .from("whatsapp_sessions")
+    .select(SESSION_RECORD_COLUMNS)
+    .not("session_name", "is", null);
+
+  if (error) {
+    throw new WhatsappApiError("Não foi possível listar as sessões do WhatsApp.");
+  }
+
+  return (data as WhatsappSessionRecord[] | null) ?? [];
+}

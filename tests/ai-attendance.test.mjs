@@ -13,7 +13,10 @@ import {
 import {
   EMPTY_KNOWLEDGE,
   DEFAULT_SCHEDULE,
+  DEFAULT_SCRIPT,
   businessHours,
+  checkScriptInput,
+  knowledgeSchema,
 } from "../src/lib/ai-agent/config.ts";
 import { parseIncomingEvent } from "../src/lib/ai-agent/event.ts";
 import { withTransientRetry } from "../src/lib/ai-agent/retry.ts";
@@ -800,4 +803,82 @@ test("Banco real: concorrência, cancelamento, takeover, eco e isolamento", asyn
     },
   );
   await db.close();
+});
+
+// ---------------------------------------------------------------------------
+// Roteiro configurável: a IA interpreta, o texto vem do cliente
+// ---------------------------------------------------------------------------
+
+const customScript = {
+  greeting: "Bom dia, aqui é da Loja X!",
+  acknowledge: "Anotado.",
+  questions: {
+    ...DEFAULT_SCRIPT.questions,
+    financed: "Seu carro ainda tem financiamento ativo?",
+    vehicle: "Me conta o modelo do carro?",
+  },
+  replies: { ...DEFAULT_SCRIPT.replies, price: "Valor só depois da vistoria." },
+};
+const customKb = { ...EMPTY_KNOWLEDGE, script: customScript };
+
+test("roteiro: pergunta e respostas saem do texto configurado pelo cliente", () => {
+  const first = policy({ intent: "greeting" }, { knowledge: customKb });
+  assert.deepEqual(first.candidates, [
+    ["Bom dia, aqui é da Loja X! Seu carro ainda tem financiamento ativo?"],
+  ]);
+  const next = policy(
+    { facts: [fact("financed", true, "sim, financiado")] },
+    { knowledge: customKb, firstTurn: false, incoming: "sim, financiado" },
+  );
+  assert.deepEqual(next.candidates, [["Anotado. Me conta o modelo do carro?"]]);
+  const price = policy({ intent: "price" }, { knowledge: customKb });
+  assert.deepEqual(price.candidates, [["Valor só depois da vistoria."]]);
+  assert.equal(price.human, true);
+  assert.deepEqual(
+    validateReply(price.candidates[0], price, customKb),
+    price.candidates[0],
+  );
+});
+
+test("roteiro: contas antigas e campos inválidos no banco caem no padrão", () => {
+  assert.deepEqual(knowledgeSchema.parse({}).script, DEFAULT_SCRIPT);
+  const parsed = knowledgeSchema.parse({
+    script: {
+      greeting: "Oi? Tudo bem?",
+      questions: { vehicle: "" },
+      replies: "quebrado",
+    },
+  }).script;
+  assert.equal(parsed.greeting, DEFAULT_SCRIPT.greeting);
+  assert.equal(parsed.acknowledge, DEFAULT_SCRIPT.acknowledge);
+  assert.equal(parsed.questions.vehicle, DEFAULT_SCRIPT.questions.vehicle);
+  assert.deepEqual(parsed.replies, DEFAULT_SCRIPT.replies);
+});
+
+test("roteiro: salvar recusa duas perguntas, prefixo com pergunta e promessas", () => {
+  assert.equal(checkScriptInput(DEFAULT_SCRIPT), null);
+  assert.equal(checkScriptInput(customScript), null);
+  const withQuestions = (questions) => ({
+    ...DEFAULT_SCRIPT,
+    questions: { ...DEFAULT_SCRIPT.questions, ...questions },
+  });
+  assert.match(
+    checkScriptInput(withQuestions({ vehicle: "Qual o modelo? E o ano?" })),
+    /uma pergunta/,
+  );
+  assert.match(
+    checkScriptInput({ ...DEFAULT_SCRIPT, greeting: "Oi, tudo bem?" }),
+    /sem ponto de interrogação/,
+  );
+  assert.match(
+    checkScriptInput({
+      ...DEFAULT_SCRIPT,
+      replies: { ...DEFAULT_SCRIPT.replies, qualified: "Crédito aprovado!" },
+    }),
+    /não permitida/,
+  );
+  assert.match(
+    checkScriptInput(withQuestions({ bank: "  " })),
+    /Preencha todas/,
+  );
 });

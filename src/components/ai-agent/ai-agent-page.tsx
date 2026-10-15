@@ -14,9 +14,9 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import {
-  restoreAiPromptAction,
+  restoreAiScriptAction,
   saveAiAdvancedSettingsAction,
-  saveAiPromptAction,
+  saveAiScriptAction,
   saveNotificationNumberAction,
   testNotificationNumberAction,
   toggleAiAgentAction,
@@ -36,6 +36,12 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { formatBrazilianWhatsapp } from "@/lib/ai-agent/shared";
+import {
+  SCRIPT_QUESTIONS,
+  SCRIPT_REPLIES,
+  type ScriptQuestion,
+  type ScriptReply,
+} from "@/lib/ai-agent/config";
 import type { AiAgentPageData } from "@/lib/data/ai-agent";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +75,7 @@ export function AiAgentPage({
     <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
       <div className="min-w-0 space-y-5">
         <StatusCard data={data} interactive={interactive} />
-        <PromptCard data={data} />
+        <ScriptCard data={data} />
         <AiKnowledgeSettings settings={data.settings} />
         <AiLeadsPanel
           conversations={data.conversations}
@@ -312,26 +318,25 @@ function NotificationCard({ data }: { data: AiAgentPageData }) {
 }
 
 // ---------------------------------------------------------------------------
-// Card 3 — Prompt
+// Card 3 — Mensagens do atendimento (roteiro)
 // ---------------------------------------------------------------------------
 
-function PromptCard({ data }: { data: AiAgentPageData }) {
+function ScriptCard({ data }: { data: AiAgentPageData }) {
   const [saveState, saveAction] = useActionState(
-    saveAiPromptAction,
+    saveAiScriptAction,
     initialState,
   );
   const [restoreState, restoreAction] = useActionState(
-    restoreAiPromptAction,
+    restoreAiScriptAction,
     initialState,
   );
 
   useActionToast(saveState);
   useActionToast(restoreState);
 
-  // `key` faz o textarea recarregar o valor do servidor quando o prompt muda
-  // (salvar ou restaurar), sem precisar espelhar o texto em estado.
-  const promptKey =
-    data.settings.prompt.length + data.settings.prompt.slice(0, 32);
+  const script = data.settings.knowledge.script;
+  // `key` recarrega os campos com o valor do servidor depois de salvar/restaurar.
+  const scriptKey = JSON.stringify(script).length + script.greeting;
 
   return (
     <Card className="min-w-0">
@@ -340,49 +345,109 @@ function PromptCard({ data }: { data: AiAgentPageData }) {
           <MessageSquareText className="size-5" strokeWidth={1.75} />
         </div>
         <div>
-          <CardTitle className="font-display text-xl">Prompt da IA</CardTitle>
+          <CardTitle className="font-display text-xl">
+            Mensagens do atendimento
+          </CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">
-            Personalize o tom da conversa. Dados da empresa ficam na base de
-            conhecimento; este texto não altera as regras de qualificação.
+            A IA só entende o que o lead escreveu e escolhe qual destas
+            mensagens enviar. O texto que sai no WhatsApp é sempre o seu.
           </p>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-3">
-        <form action={saveAction} className="space-y-3">
-          <Textarea
-            key={promptKey}
-            id="prompt"
-            name="prompt"
-            defaultValue={data.settings.prompt}
-            className="min-h-[22rem] font-mono text-[0.8125rem] leading-6"
-            spellCheck={false}
-          />
-
-          {saveState.fieldErrors?.prompt ? (
-            <p className="text-xs text-destructive">
-              {saveState.fieldErrors.prompt}
+      <CardContent className="space-y-4">
+        <form key={scriptKey} action={saveAction} className="space-y-5">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="script-greeting">Saudação (1ª mensagem)</Label>
+              <Input
+                id="script-greeting"
+                name="greeting"
+                defaultValue={script.greeting}
+                maxLength={80}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="script-acknowledge">
+                Confirmação ao receber um dado
+              </Label>
+              <Input
+                id="script-acknowledge"
+                name="acknowledge"
+                defaultValue={script.acknowledge}
+                maxLength={80}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              Vão antes da pergunta, na mesma mensagem. Sem ponto de
+              interrogação.
             </p>
-          ) : null}
-
-          <div className="flex flex-wrap gap-2">
-            <FormPendingButton
-              type="submit"
-              idleLabel="Salvar alterações"
-              pendingLabel="Salvando..."
-            />
           </div>
+
+          <fieldset className="space-y-3">
+            <legend className="text-sm font-medium">
+              Perguntas de qualificação, na ordem em que são feitas
+            </legend>
+            {Object.entries(SCRIPT_QUESTIONS).map(([key, label], index) => (
+              <div className="space-y-1.5" key={key}>
+                <Label htmlFor={`script-q-${key}`} className="text-xs">
+                  {index + 1}. {label}
+                </Label>
+                <Input
+                  id={`script-q-${key}`}
+                  name={`q_${key}`}
+                  defaultValue={script.questions[key as ScriptQuestion]}
+                  maxLength={500}
+                  required
+                />
+              </div>
+            ))}
+          </fieldset>
+
+          <details className="rounded-xl border p-4">
+            <summary className="cursor-pointer text-sm font-medium">
+              Respostas para cada situação
+            </summary>
+            <div className="mt-4 space-y-3">
+              {Object.entries(SCRIPT_REPLIES).map(([key, label]) => (
+                <div className="space-y-1.5" key={key}>
+                  <Label htmlFor={`script-r-${key}`} className="text-xs">
+                    {label}
+                  </Label>
+                  <Textarea
+                    id={`script-r-${key}`}
+                    name={`r_${key}`}
+                    defaultValue={script.replies[key as ScriptReply]}
+                    maxLength={500}
+                    required
+                    className="min-h-16"
+                  />
+                </div>
+              ))}
+            </div>
+          </details>
+
+          <p className="text-xs text-muted-foreground">
+            Uma pergunta por mensagem. Promessas como aprovação ou quitação
+            garantida são recusadas ao salvar.
+          </p>
+
+          <FormPendingButton
+            type="submit"
+            idleLabel="Salvar mensagens"
+            pendingLabel="Salvando..."
+          />
         </form>
 
         <form action={restoreAction}>
           <FormPendingButton
             type="submit"
             variant="outline"
-            idleLabel="Restaurar prompt padrão"
+            idleLabel="Restaurar mensagens padrão"
             pendingLabel="Restaurando..."
           >
             <RotateCcw className="mr-2 size-4" />
-            Restaurar prompt padrão
+            Restaurar mensagens padrão
           </FormPendingButton>
         </form>
       </CardContent>

@@ -170,16 +170,6 @@ function validValue(
   });
   return amounts.includes(value);
 }
-const QUESTIONS: Record<Field, string> = {
-  name: "Como você prefere ser chamado?",
-  vehicle: "Qual é o modelo do veículo?",
-  vehicle_year: "Qual é o ano dele?",
-  financed: "O veículo ainda está financiado?",
-  bank: "Qual é o banco do financiamento?",
-  debt_amount: "Você sabe o valor aproximado que ainda falta pagar?",
-  has_overdue_installments: "As parcelas estão em dia ou há alguma atrasada?",
-  overdue_installments_count: "Quantas parcelas estão atrasadas?",
-};
 export function decidePolicy(input: {
   facts: Facts;
   unknown: string[];
@@ -191,6 +181,8 @@ export function decidePolicy(input: {
   media?: string;
 }): PolicyDecision {
   const { extraction: e, incoming, knowledge: kb } = input;
+  const script = kb.script;
+  const says = script.replies;
   const facts = { ...input.facts },
     unknown = new Set(
       input.unknown.filter((x): x is Field => FIELDS.includes(x as Field)),
@@ -277,24 +269,17 @@ export function decidePolicy(input: {
     status === "qualifying" ? (missing[0] ?? null) : null;
   let reply = "";
   if (human)
-    reply = "Vou deixar a conversa com a equipe para continuar com você.";
+    reply = says.human;
   else if (input.media && input.media !== "text") {
-    reply =
-      input.media === "audio"
-        ? "Recebi seu áudio, mas ainda não consigo ouvi-lo por aqui. Pode me contar por texto?"
-        : "Recebi o arquivo. Vou deixar a análise com a equipe, pois não consigo confirmar o conteúdo por aqui.";
+    reply = input.media === "audio" ? says.audio : says.media;
     human = input.media !== "audio";
     reason = "media_fallback";
     nextField = null;
   } else if (e.intent === "bot") {
-    reply =
-      "Sou o assistente virtual da equipe. Se preferir, posso deixar a conversa com uma pessoa.";
+    reply = says.bot;
     nextField = null;
   } else if (e.intent === "price" || e.intent === "approval") {
-    reply =
-      e.intent === "price"
-        ? "Não tenho uma proposta ou valor confirmado para o seu veículo. A equipe precisa avaliar antes."
-        : "Ainda não há aprovação confirmada. Essa avaliação precisa ser feita pela equipe.";
+    reply = e.intent === "price" ? says.price : says.approval;
     human = true;
     reason = "requires_evaluation";
     nextField = null;
@@ -324,7 +309,7 @@ export function decidePolicy(input: {
     // Only exact tenant-authorized facts may enter the reply vocabulary.
     reply = allowed.length
       ? allowed.slice(0, 2).join(" ")
-      : "Não tenho essa informação confirmada aqui. Vou deixar a equipe conferir para você.";
+      : says.knowledgeMissing;
     human = !allowed.length;
     reason = human ? "knowledge_missing" : "knowledge_answer";
     nextField = null;
@@ -337,37 +322,38 @@ export function decidePolicy(input: {
     reason = "knowledge_answer";
     nextField = null;
   } else if (status === "disqualified") {
-    reply =
-      "Neste atendimento, buscamos veículos que ainda estão financiados. Como o seu está quitado, ele não se encaixa nesse perfil.";
+    reply = says.disqualified;
     reason = "not_financed";
   } else if (status === "qualified") {
-    reply =
-      "Já tenho os dados para a equipe avaliar seu caso. A próxima etapa é a análise deles.";
+    reply = says.qualified;
     reason = "policy_qualified";
   } else if (e.intent === "off_topic") {
-    reply = "Por aqui, posso ajudar com a avaliação do seu veículo financiado.";
+    reply = says.offTopic;
     nextField = null;
   } else if (nextField && unknown.has(nextField)) {
     human = true;
-    reply =
-      "Esse dado é necessário para avaliar o caso. Vou deixar a equipe continuar com você.";
+    reply = says.requiredUnknown;
     reason = "required_unknown";
     nextField = null;
   } else if (nextField) {
-    const q = QUESTIONS[nextField];
     if (input.lastQuestion === nextField && changedFields.length === 0) {
-      reply = "Tudo bem, fico aguardando essa informação para continuar.";
+      reply = says.waiting;
       nextField = null;
-    } else
-      reply = `${input.firstTurn ? "Olá! " : changedFields.length ? "Entendi. " : ""}${q}`;
+    } else {
+      const prefix = input.firstTurn
+        ? script.greeting
+        : changedFields.length
+          ? script.acknowledge
+          : "";
+      reply = [prefix, script.questions[nextField as keyof typeof script.questions]]
+        .filter(Boolean)
+        .join(" ");
+    }
   }
+  // Uma única opção: o texto sai do roteiro do cliente, nunca escrito pelo modelo.
   const candidates = [
     [reply || "Recebi sua mensagem. Vou deixar a equipe conferir seu caso."],
   ];
-  if (nextField && !human)
-    candidates.push([
-      `${input.firstTurn ? "Oi! " : "Certo. "}${QUESTIONS[nextField]}`,
-    ]);
   return {
     facts,
     unknownFields: [...unknown],

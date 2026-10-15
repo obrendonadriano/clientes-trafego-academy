@@ -30,3 +30,11 @@ export function getSegmentLabel(segment?: string | null): string | null {
 
   return CLIENT_SEGMENTS.find((item) => item.value === segment)?.label ?? null;
 }
+
+// O Atendimento IA é nichado (qualificação de veículo financiado para compra)
+// e só existe para clientes de compra e aquisição de veículos.
+export const AI_ATTENDANCE_SEGMENTS: ClientSegmentValue[] = ["veiculo_atrasado"];
+
+export function hasAiAttendanceSegment(segment?: string | null): boolean {
+  return AI_ATTENDANCE_SEGMENTS.some((item) => item === segment);
+}

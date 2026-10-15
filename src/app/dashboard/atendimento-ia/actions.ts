@@ -4,10 +4,6 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getOptionalCurrentUser } from "@/lib/auth/session";
 import {
-  DEFAULT_AI_PROMPT,
-  DEFAULT_AI_PROMPT_MAX_LENGTH,
-} from "@/lib/ai-agent/prompt";
-import {
   AI_AGENT_LIMITS,
   normalizeBrazilianWhatsapp,
   toWahaChatId,
@@ -18,13 +14,23 @@ import {
   ensureAiAgentSettings,
   findConversationById,
   getClientPlan,
+  getClientSegment,
   getSessionForClient,
   listConversationMessages,
   updateAiAgentSettings,
 } from "@/lib/ai-agent/store";
 import { getWahaConfig, sendWahaText, setWahaTyping } from "@/lib/waha";
 import { transition } from "@/lib/ai-agent/transitions";
-import { knowledgeSchema, scheduleSchema } from "@/lib/ai-agent/config";
+import {
+  DEFAULT_SCRIPT,
+  SCRIPT_QUESTIONS,
+  SCRIPT_REPLIES,
+  checkScriptInput,
+  knowledgeSchema,
+  scheduleSchema,
+  type AiScript,
+} from "@/lib/ai-agent/config";
+import { hasAiAttendanceSegment } from "@/lib/segments";
 
 export type AiAgentActionState = {
   success?: string;
@@ -55,6 +61,13 @@ async function requireCompletePlanClient() {
   if (plan !== "complete") {
     throw new AiAgentError(
       "O atendimento por IA é exclusivo do Plano Completo.",
+      403,
+    );
+  }
+
+  if (!hasAiAttendanceSegment(await getClientSegment(user.clientId))) {
+    throw new AiAgentError(
+      "O atendimento por IA está disponível apenas para compra e aquisição de veículos.",
       403,
     );
   }
@@ -114,60 +127,6 @@ export async function toggleAiAgentAction(
         ? "Atendimento por IA ativado."
         : "Atendimento por IA desativado.",
     };
-  } catch (error) {
-    return toState(error);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Prompt
-// ---------------------------------------------------------------------------
-
-const promptSchema = z.object({
-  prompt: z
-    .string()
-    .trim()
-    .min(40, "O prompt precisa de pelo menos 40 caracteres.")
-    .max(
-      DEFAULT_AI_PROMPT_MAX_LENGTH,
-      `O prompt pode ter no máximo ${DEFAULT_AI_PROMPT_MAX_LENGTH} caracteres.`,
-    ),
-});
-
-export async function saveAiPromptAction(
-  _prevState: AiAgentActionState,
-  formData: FormData,
-): Promise<AiAgentActionState> {
-  try {
-    const { clientId } = await requireCompletePlanClient();
-    const parsed = promptSchema.safeParse({ prompt: formData.get("prompt") });
-
-    if (!parsed.success) {
-      return {
-        error: parsed.error.issues[0]?.message,
-        fieldErrors: { prompt: parsed.error.issues[0]?.message ?? "" },
-      };
-    }
-
-    await ensureAiAgentSettings(clientId);
-    await updateAiAgentSettings(clientId, { prompt: parsed.data.prompt });
-
-    refresh();
-    return { success: "Prompt salvo." };
-  } catch (error) {
-    return toState(error);
-  }
-}
-
-export async function restoreAiPromptAction(): Promise<AiAgentActionState> {
-  try {
-    const { clientId } = await requireCompletePlanClient();
-
-    await ensureAiAgentSettings(clientId);
-    await updateAiAgentSettings(clientId, { prompt: DEFAULT_AI_PROMPT });
-
-    refresh();
-    return { success: "Prompt padrão restaurado." };
   } catch (error) {
     return toState(error);
   }
@@ -470,6 +429,8 @@ export async function saveAiKnowledgeAction(
 ): Promise<AiAgentActionState> {
   try {
     const { clientId } = await requireCompletePlanClient();
+    // O roteiro de mensagens é salvo em outro formulário: preserva o atual.
+    const current = await ensureAiAgentSettings(clientId);
     const getLines = (key: string) =>
       String(formData.get(key) ?? "")
         .split(/\r?\n/)
@@ -498,13 +459,13 @@ export async function saveAiKnowledgeAction(
         question: line.slice(0, line.indexOf("|")).trim(),
         answer: line.slice(line.indexOf("|") + 1).trim(),
       })),
+      script: current.knowledge.script,
     });
     if (!parsed.success)
       return {
         error:
           "Revise os campos da base: use até 30 itens, com até 500 caracteres por item.",
       };
-    await ensureAiAgentSettings(clientId);
     await updateAiAgentSettings(clientId, { knowledge: parsed.data });
     refresh();
     return { success: "Base de conhecimento salva." };
@@ -540,6 +501,54 @@ export async function saveAiScheduleAction(
       success:
         "Horários salvos. Desative o atendimento 24 horas para usar esta agenda.",
     };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Roteiro de mensagens (a IA só escolhe qual delas enviar)
+// ---------------------------------------------------------------------------
+
+export async function saveAiScriptAction(
+  _previous: AiAgentActionState,
+  formData: FormData,
+): Promise<AiAgentActionState> {
+  try {
+    const { clientId } = await requireCompletePlanClient();
+    const read = (key: string) => String(formData.get(key) ?? "").trim();
+    const script: AiScript = {
+      greeting: read("greeting"),
+      acknowledge: read("acknowledge"),
+      questions: Object.fromEntries(
+        Object.keys(SCRIPT_QUESTIONS).map((key) => [key, read(`q_${key}`)]),
+      ) as AiScript["questions"],
+      replies: Object.fromEntries(
+        Object.keys(SCRIPT_REPLIES).map((key) => [key, read(`r_${key}`)]),
+      ) as AiScript["replies"],
+    };
+    const problem = checkScriptInput(script);
+    if (problem) return { error: problem };
+    const current = await ensureAiAgentSettings(clientId);
+    await updateAiAgentSettings(clientId, {
+      knowledge: { ...current.knowledge, script },
+    });
+    refresh();
+    return { success: "Mensagens do atendimento salvas." };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+export async function restoreAiScriptAction(): Promise<AiAgentActionState> {
+  try {
+    const { clientId } = await requireCompletePlanClient();
+    const current = await ensureAiAgentSettings(clientId);
+    await updateAiAgentSettings(clientId, {
+      knowledge: { ...current.knowledge, script: DEFAULT_SCRIPT },
+    });
+    refresh();
+    return { success: "Mensagens padrão restauradas." };
   } catch (error) {
     return toState(error);
   }

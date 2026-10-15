@@ -20,6 +20,16 @@ async function AiAgentSection() {
     );
   }
 
+  if (data.segmentEligible === false) {
+    return (
+      <p className="rounded-2xl border border-border/60 bg-card px-4 py-6 text-sm text-muted-foreground">
+        O atendimento por IA é específico para compra e aquisição de veículos
+        financiados e não está disponível para o segmento desta conta. Fale com
+        a Tráfego Academy.
+      </p>
+    );
+  }
+
   // Plano Essencial não vê a tela de conexão: conectar o WhatsApp só faz
   // sentido para quem vai usar a IA. Ele enxerga a área inteira desfocada,
   // sem clique e com o convite de upgrade. O bloqueio real está nas server

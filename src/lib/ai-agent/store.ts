@@ -171,6 +171,22 @@ export async function getClientPlan(clientId: string): Promise<ClientPlanType> {
   return toClientPlanType((data as { plan_type?: unknown } | null)?.plan_type);
 }
 
+/** Segmento do cliente: o Atendimento IA só vale para compra de veículos. */
+export async function getClientSegment(clientId: string): Promise<string | null> {
+  const { data, error } = await aiAdminClient()
+    .from("clients")
+    .select("segmento")
+    .eq("id", clientId)
+    .maybeSingle();
+
+  if (error) {
+    throw new AiAgentError("Não foi possível verificar o segmento do cliente.");
+  }
+
+  const segment = (data as { segmento?: unknown } | null)?.segmento;
+  return typeof segment === "string" ? segment : null;
+}
+
 export async function getClientCompanyName(clientId: string) {
   const { data } = await aiAdminClient()
     .from("clients")

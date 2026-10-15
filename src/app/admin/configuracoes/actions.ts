@@ -2,6 +2,7 @@
 
 import { randomBytes } from "node:crypto";
 import { revalidatePath, updateTag } from "next/cache";
+import { headers } from "next/headers";
 import { z } from "zod";
 import { getOptionalCurrentUser } from "@/lib/auth/session";
 import {
@@ -16,6 +17,7 @@ import {
   normalizeWahaWebhookUrl,
   testWahaCredentials,
 } from "@/lib/waha";
+import { refreshAllWahaWebhooks } from "@/lib/waha-webhooks-refresh";
 
 export type SettingsActionState = {
   success?: string;
@@ -215,9 +217,8 @@ export async function saveIntegrationSettingsAction(
       config.leads_webhook_url = normalizeWahaWebhookUrl(
         config.leads_webhook_url ?? "",
       );
-      config.ai_webhook_url = normalizeWahaWebhookUrl(
-        config.ai_webhook_url ?? "",
-      );
+      // O Atendimento IA não passa mais pelo n8n: o WAHA chama o site direto.
+      delete config.ai_webhook_url;
     } catch (error) {
       return { error: error instanceof Error ? error.message : "URL do WAHA inválida." };
     }
@@ -298,4 +299,40 @@ export async function saveIntegrationSettingsAction(
           : "Credenciais salvas e integração ativada com sucesso."
       : "Credenciais salvas com sucesso. A integração permanece desativada até você ativar.",
   };
+}
+
+// Aponta o Atendimento IA de todas as sessões para o site (fim do n8n), sem
+// depender de cada cliente clicar em conectar.
+export async function refreshWahaWebhooksAction(): Promise<SettingsActionState> {
+  const authError = await requireAdminMessage();
+  if (authError) {
+    return { error: authError };
+  }
+
+  try {
+    const requestHeaders = await headers();
+    const host =
+      requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+    if (!host) {
+      return { error: "Não foi possível identificar o endereço do site." };
+    }
+    const proto = requestHeaders.get("x-forwarded-proto") ?? "https";
+    const { updated, missing, failed } = await refreshAllWahaWebhooks(
+      `${proto}://${host}`,
+    );
+
+    const parts = [`${updated} sessão(ões) atualizada(s)`];
+    if (missing) parts.push(`${missing} sem sessão no WAHA`);
+    if (failed) parts.push(`${failed} com falha — tente de novo`);
+    return failed
+      ? { error: `${parts.join(", ")}.` }
+      : { success: `${parts.join(", ")}.` };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar as sessões do WAHA.",
+    };
+  }
 }

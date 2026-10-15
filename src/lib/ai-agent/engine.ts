@@ -87,33 +87,9 @@ buys/does_not_buy indicam perguntas sobre o que a empresa compra; rules são con
     lastQuestion: conversation.last_question,
     media,
   });
-  // The writer composes from grounded candidates. Arbitrary model prose is never queued.
-  let proposed: unknown = decision.candidates[0];
-  if (media === "text" && !isInjection(incoming)) {
-    const raw = await generateDeepseekJson(
-      [
-        {
-          role: "system",
-          content: `${CORE} Você é o REDATOR. Escolha a resposta mais natural entre as opções autorizadas. Copie as frases escolhidas exatamente; nunca adicione fatos ou perguntas. JSON: {"messages":["frase"]}. Máximo duas mensagens e uma pergunta.`,
-        },
-        {
-          role: "user",
-          content: JSON.stringify({
-            tone_only: settings.prompt.slice(0, 12000),
-            authorized_options: decision.candidates,
-            latest_message: incoming,
-          }),
-        },
-      ],
-      {
-        temperature: 0.4,
-        maxTokens: 450,
-        timeoutMs: 10000,
-        config: config ?? undefined,
-      },
-    );
-    proposed = (JSON.parse(raw) as { messages?: unknown }).messages;
-  }
+  // A IA só interpreta (extração acima). O texto enviado é o do roteiro que a
+  // política escolheu; não há segunda chamada ao modelo para redigir.
+  const proposed = decision.candidates[0];
   const messages = validateReply(proposed, decision, settings.knowledge);
   if (
     !decision.candidates.some(

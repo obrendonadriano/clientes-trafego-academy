@@ -15,6 +15,7 @@ import {
   ensureAiAgentSettings,
   getAiAgentSettings,
   getClientPlan,
+  getClientSegment,
   getSessionForClient,
   listConversationMessages,
   listConversations,
@@ -22,6 +23,7 @@ import {
   mapConversation,
 } from "@/lib/ai-agent/store";
 import { isSupabaseAdminConfigured } from "@/lib/env";
+import { hasAiAttendanceSegment } from "@/lib/segments";
 import type { User } from "@/lib/types";
 
 export type AiAgentPageData = {
@@ -34,6 +36,8 @@ export type AiAgentPageData = {
   totals: { total: number; qualified: number };
   // Quando true, o banco ainda não tem a estrutura da IA (migração pendente).
   unavailable?: boolean;
+  // Atendimento nichado: false para clientes fora de compra de veículos.
+  segmentEligible?: boolean;
 };
 
 function fallbackSettings(clientId: string): AiAgentSettings {
@@ -74,7 +78,23 @@ export async function getAiAgentPageData(user: User): Promise<AiAgentPageData> {
   }
 
   try {
-    const plan = await getClientPlan(clientId);
+    const [plan, segment] = await Promise.all([
+      getClientPlan(clientId),
+      getClientSegment(clientId),
+    ]);
+
+    if (!hasAiAttendanceSegment(segment)) {
+      return {
+        plan,
+        settings: fallbackSettings(clientId),
+        whatsappConnected: false,
+        whatsappStatus: null,
+        whatsappPhone: null,
+        conversations: [],
+        totals: { total: 0, qualified: 0 },
+        segmentEligible: false,
+      };
+    }
 
     // O prompt padrão nasce junto com o acesso ao Plano Completo. Cliente
     // Essencial não ganha linha de configuração até fazer o upgrade.

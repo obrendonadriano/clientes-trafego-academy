@@ -14,11 +14,13 @@ import { buildDelaysForMessages } from "./humanize";
 import { transition } from "./transitions";
 import { prepareTurnInput } from "./media";
 import { offHoursReply } from "./policy";
+import { hasAiAttendanceSegment } from "@/lib/segments";
 import {
   AiAgentError,
   findSessionOwner,
   getAiAgentSettings,
   getClientPlan,
+  getClientSegment,
   findConversation,
   findConversationById,
   getNextOutboundMessage,
@@ -40,9 +42,9 @@ function safeCompare(received: string, expected: string) {
 }
 
 /**
- * O n8n repassa o mesmo segredo que o WAHA já usa nos webhooks (o valor que o
- * admin salva em Configurações → WhatsApp). Assim não há credencial nova para
- * administrar e nenhum segredo trafega no corpo da requisição.
+ * O WAHA envia no header o segredo dos webhooks (o valor que o admin salva em
+ * Configurações → WhatsApp); a continuação do laço usa o mesmo. Assim não há
+ * credencial nova para administrar e nenhum segredo trafega no corpo.
  */
 export async function authenticateAiWebhook(request: Request) {
   const config = await getWahaConfig();
@@ -91,6 +93,9 @@ export async function ingestInboundEvent(
   const settings = await getAiAgentSettings(owner.clientId);
   if (!settings || number === settings.notificationWhatsapp)
     return { acao: "ignorar" };
+  // Atendimento nichado: só clientes de compra e aquisição de veículos.
+  if (!hasAiAttendanceSegment(await getClientSegment(owner.clientId)))
+    return { acao: "ignorar" };
   // Even during human takeover/disabled automation, preserve the conversation history.
   const result = await transition(owner.clientId, "ingest", {
     number,
@@ -129,7 +134,8 @@ export async function advanceConversation(input: {
   if (
     !settings?.enabled ||
     owner.status !== "WORKING" ||
-    (await getClientPlan(owner.clientId)) !== "complete"
+    (await getClientPlan(owner.clientId)) !== "complete" ||
+    !hasAiAttendanceSegment(await getClientSegment(owner.clientId))
   ) {
     await typing(sessionName, chatId, false);
     return end();

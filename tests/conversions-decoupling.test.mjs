@@ -94,9 +94,10 @@ test('TESTE 14: o Atendimento por IA continua usando o WAHA', () => {
   const aiPipeline = read(join(root, 'src/lib/ai-agent/pipeline.ts'));
   assert.equal(/waha/i.test(aiPipeline), true, 'o pipeline da IA perdeu o WAHA');
 
-  // A sessão WAHA continua sendo criada e o webhook da IA continua registrado.
+  // A sessão WAHA continua sendo criada e o webhook da IA continua registrado,
+  // agora apontando direto para o site (sem n8n).
   const connect = read(join(root, 'src/app/whatsapp/conectar/route.ts'));
-  assert.equal(connect.includes('config.aiWebhookUrl'), true);
+  assert.equal(connect.includes('AI_WEBHOOK_PATH'), true);
 
   // Durante a fase híbrida o webhook de leads também continua registrado, para
   // quem ainda não migrou. Quem o remover antes da hora derruba a captação —
@@ -111,8 +112,7 @@ test('TESTE 14: o Atendimento por IA continua usando o WAHA', () => {
     'src/app/whatsapp/qr/route.ts',
     'src/app/whatsapp/desconectar/route.ts',
     'src/app/whatsapp/webhook/route.ts',
-    'src/app/whatsapp/ia/evento/route.ts',
-    'src/app/whatsapp/ia/passo/route.ts',
+    'src/app/whatsapp/ia/waha/route.ts',
     'src/components/whatsapp/whatsapp-connection-experience.tsx',
   ]) {
     assert.ok(existsSync(join(root, file)), `${file} não pode ter sido removido`);
@@ -132,9 +132,8 @@ test('FASE HÍBRIDA: os workflows antigos continuam disponíveis, marcados como 
   }
 
   assert.ok(existsSync(join(root, 'scripts/sync-capi-workflow.mjs')));
-  // O workflow do Atendimento IA permanece, e NÃO é legado.
-  const ai = JSON.parse(read(join(root, 'n8n/n8n_waha_atendimento_ia.json')));
-  assert.equal(/^\[LEGADO\]/.test(ai.name), false);
+  // O Atendimento IA não usa mais o n8n: o WAHA chama o site direto.
+  assert.equal(existsSync(join(root, 'n8n/n8n_waha_atendimento_ia.json')), false);
 });
 
 test('FASE HÍBRIDA: a migração é aditiva e não derruba a captação antiga', () => {

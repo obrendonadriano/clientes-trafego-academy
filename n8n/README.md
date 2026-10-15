@@ -1,6 +1,6 @@
 # Workflows n8n
 
-Três arquivos, em dois estados diferentes.
+Dois arquivos, ambos legados de Conversões.
 
 ## Em transição (LEGADO)
 
@@ -30,52 +30,15 @@ divergem.
 Quando **todos** os clientes estiverem em `official_meta`, a segunda migração
 remove tudo isto do repositório.
 
-## Permanente
+## Atendimento IA — fora do n8n (2026-10)
 
-`n8n_waha_atendimento_ia.json` é do Atendimento por IA e **não** é legado. Ele
-não tem relação com Conversões e continua ativo o tempo todo.
+O Atendimento por IA **não usa mais o n8n**; o workflow e as rotas
+`/whatsapp/ia/evento` e `/whatsapp/ia/passo` foram removidos. O WAHA chama o
+site direto em `/whatsapp/ia/waha` (evento `message.any`) e a espera
+(agrupamento, "digitando", intervalos) roda na própria função com `after()`
+— ver `src/lib/ai-agent/runner.ts`. Só clientes do segmento
+`veiculo_atrasado` recebem esse webhook.
 
-## Atendimento IA
-
-`n8n_waha_atendimento_ia.json` é o fluxo que dá **tempo** ao atendimento por IA.
-Ele não conhece prompt, plano nem lead: toda a regra de negócio fica no
-dashboard. O n8n só espera e chama de volta — que é justamente o que a app,
-rodando em serverless, não consegue fazer sozinha.
-
-```text
-WAHA (evento message)
-  -> Webhook Atendimento IA           (responde 200 na hora)
-  -> Preparar evento                  (reduz o payload ao mínimo)
-  -> Mensagem do lead?                (descarta fromMe, grupo e mensagem vazia)
-  -> POST /whatsapp/ia/evento         (grava a mensagem, idempotente)
-  -> Agrupar mensagens (debounce)     (espera o tempo que a app mandou)
-  -> POST /whatsapp/ia/passo          (gera a resposta / liga "digitando" / envia)
-  -> Tem próximo passo?               (volta ao passo enquanto houver fila)
-```
-
-Cada chamada de `/whatsapp/ia/passo` avança **um** passo e devolve
-`{ "acao": "aguardar", "esperarMs": 2840, "sessionName": "...", "chatId": "..." }`
-ou `{ "acao": "fim" }`. O laço tem corte em 40 iterações por segurança.
-
-Para instalar:
-
-1. Importe o arquivo e selecione, nos dois nós HTTP, uma credencial
-   **Header Auth** com Name `x-trafegoacademy-secret` e Value igual ao segredo
-   salvo em Admin → Configurações → WhatsApp (WAHA).
-2. Troque `https://dashboard.trafegoacademy.online` pela URL real do dashboard
-   nos nós `Registrar mensagem no dashboard` e `Avancar conversa`, se for
-   diferente.
-3. Ative o workflow e copie a URL de produção do webhook `waha-atendimento-ia`.
-4. Cole em Admin → Configurações → WhatsApp (WAHA) → **Webhook de produção do
-   n8n para o Atendimento IA** e salve.
-5. Peça ao cliente para clicar em conectar novamente. A rota `/whatsapp/conectar`
-   atualiza os webhooks da sessão existente sem exigir um novo QR.
-
-Mantenha `N8N_BLOCK_ENV_ACCESS_IN_NODE=true`; este workflow não precisa de
-acesso a `$env`. Ele desativa a persistência de dados de execução para não
-gravar conversas de WhatsApp no histórico do n8n. Mantenha o n8n em HTTPS e
-nunca coloque a `service_role` em nós, URLs, credenciais compartilhadas ou no
-navegador.
-
-Em Admin → Configurações, o card **DeepSeek** guarda o modelo e a API Key usados
-nas conversas. A chave fica no banco e só é lida pelo servidor.
+Para migrar as sessões existentes: Admin → Configurações → WAHA →
+**Atualizar webhooks de todas as sessões** (ou o cliente clica em conectar).
+Depois, apague o workflow de Atendimento IA no painel do n8n.

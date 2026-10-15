@@ -3,7 +3,11 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { Bot, Database, MessageCircle, PlugZap } from "lucide-react";
-import { saveIntegrationSettingsAction, type SettingsActionState } from "@/app/admin/configuracoes/actions";
+import {
+  refreshWahaWebhooksAction,
+  saveIntegrationSettingsAction,
+  type SettingsActionState,
+} from "@/app/admin/configuracoes/actions";
 import { MetaAccountsManager } from "@/components/admin/meta-accounts-manager";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { DEEPSEEK_MODELS } from "@/lib/services/deepseek-models";
-import { DEFAULT_AI_WEBHOOK_URL } from "@/lib/waha-defaults";
 import type { IntegrationSetting, MetaAdAccount } from "@/lib/types";
 
 export type SettingsView = "integracoes" | "contas";
@@ -38,6 +41,42 @@ function SaveButton({ testConnection = false }: { testConnection?: boolean }) {
           ? "Salvar e testar conexão"
           : "Salvar credenciais"}
     </Button>
+  );
+}
+
+function RefreshButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <Button type="submit" variant="outline" className="w-full" disabled={pending}>
+      {pending ? "Atualizando sessões..." : "Atualizar webhooks de todas as sessões"}
+    </Button>
+  );
+}
+
+// Migra todas as sessões para o webhook atual (Atendimento IA direto no site)
+// sem depender de cada cliente clicar em conectar.
+function WahaWebhooksRefresh() {
+  const [state, action] = useActionState(refreshWahaWebhooksAction, initialState);
+
+  return (
+    <form action={action} className="mt-4 space-y-3 border-t border-border/60 pt-4">
+      <p className="text-xs leading-5 text-muted-foreground">
+        Reaplica os webhooks em todas as sessões conectadas. As sessões
+        reiniciam por alguns segundos, sem pedir QR de novo.
+      </p>
+      <RefreshButton />
+      {state.error ? (
+        <p className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {state.error}
+        </p>
+      ) : null}
+      {state.success ? (
+        <p className="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary">
+          {state.success}
+        </p>
+      ) : null}
+    </form>
   );
 }
 
@@ -234,22 +273,15 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
                     e é ignorado aqui. Não tem relação com o Atendimento por IA.
                   </p>
                 </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="waha_ai_webhook_url">
-                    Webhook de produção do n8n para o Atendimento IA
-                  </Label>
-                  <Input
-                    id="waha_ai_webhook_url"
-                    name="config_ai_webhook_url"
-                    type="url"
-                    placeholder={DEFAULT_AI_WEBHOOK_URL}
-                    defaultValue={integration.config.ai_webhook_url?.trim() || DEFAULT_AI_WEBHOOK_URL}
-                  />
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    Uma URL para todos os clientes, configurada automaticamente
-                    ao conectar ou reconectar o WhatsApp. Em branco, usa a URL
-                    padrão da TrafegoAcademy. Sessões já conectadas recebem a
-                    atualização ao clicar em conectar novamente.
+                <div className="space-y-1 rounded-2xl border border-border/60 bg-card px-4 py-3 text-xs leading-5 text-muted-foreground md:col-span-2">
+                  <p className="text-sm font-medium text-foreground">
+                    Atendimento IA
+                  </p>
+                  <p>
+                    O WAHA chama o próprio site em /whatsapp/ia/waha, sem n8n,
+                    somente para clientes do segmento de compra de veículos.
+                    Registrado ao conectar o WhatsApp ou pelo botão de
+                    atualizar webhooks abaixo.
                   </p>
                 </div>
                 <div className="space-y-2 md:col-span-2">
@@ -334,6 +366,9 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
           ) : null}
         </form>
 
+        {integration.provider === "waha" && integration.enabled ? (
+          <WahaWebhooksRefresh />
+        ) : null}
       </CardContent>
     </Card>
   );

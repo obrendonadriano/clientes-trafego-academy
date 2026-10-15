@@ -9,6 +9,7 @@ import { withTransientRetry } from "../src/lib/ai-agent/retry.ts";
 import {
   EMPTY_KNOWLEDGE,
   DEFAULT_SCHEDULE,
+  DEFAULT_SCRIPT,
 } from "../src/lib/ai-agent/config.ts";
 
 // Execute the actual TS pipeline, engine and HTTP client. Only external IO is
@@ -50,13 +51,15 @@ function loader(overrides, fetchImpl) {
   return load;
 }
 const A = "10000000-0000-4000-8000-000000000001";
-test("WAHA usa webhook global padrão e respeita uma URL personalizada", async () => {
+test("WAHA não depende mais do n8n para o Atendimento IA", async () => {
   const integration = {
     enabled: true,
     config: {
       base_url: "https://waha.example.com",
       api_key: "test-key",
       webhook_secret: "test-secret",
+      // Valor antigo salvo no banco é ignorado.
+      ai_webhook_url: "https://n8n.example.com/webhook/ia",
     },
   };
   const load = loader({
@@ -65,24 +68,25 @@ test("WAHA usa webhook global padrão e respeita uma URL personalizada", async (
     },
   });
   const { getWahaConfig } = load("src/lib/waha.ts");
-  const expected = "https://automacaoowpp-n8n.xtto29.easypanel.host/webhook/waha-atendimento-ia";
-  assert.equal((await getWahaConfig()).aiWebhookUrl, expected);
-  integration.config.ai_webhook_url = "  ";
-  assert.equal((await getWahaConfig()).aiWebhookUrl, expected);
-  integration.config.ai_webhook_url = "https://n8n.example.com/webhook/ia";
-  assert.equal((await getWahaConfig()).aiWebhookUrl, integration.config.ai_webhook_url);
+  const config = await getWahaConfig();
+  assert.equal("aiWebhookUrl" in config, false);
+  assert.ok(!JSON.stringify(config).includes("n8n.example.com/webhook/ia"));
 });
 
-test("conectar registra IA para clientes diferentes e mantém message.any na reconexão", async () => {
+test("conectar registra a IA no próprio site, só para o segmento de veículos, e mantém message.any na reconexão", async () => {
   const calls = [];
   const records = new Map();
   const remoteSessions = new Set();
   const config = {
     webhookSecret: "test-secret",
     leadsWebhookUrl: "https://n8n.example.com/webhook/leads",
-    aiWebhookUrl: "https://automacaoowpp-n8n.xtto29.easypanel.host/webhook/waha-atendimento-ia",
   };
+  const aiUrl = "https://dashboard.example.com/whatsapp/ia/waha";
+  const segments = { one: "veiculo_atrasado", two: "veiculo_atrasado", three: "eventos" };
   const load = loader({
+    [resolve("src/lib/ai-agent/store.ts")]: {
+      getClientSegment: async (id) => segments[id],
+    },
     [resolve("src/lib/whatsapp-server.ts")]: {
       authenticateWhatsappRequest: async (req) => ({ clientId: req.headers.get("test-client") }),
       getWhatsappSessionRecord: async (id) => records.get(id),
@@ -111,22 +115,26 @@ test("conectar registra IA para clientes diferentes e mantém message.any na rec
     },
   });
   const { POST } = load("src/app/whatsapp/conectar/route.ts");
-  for (const client of ["one", "two", "one"]) {
+  for (const client of ["one", "two", "one", "three"]) {
     const response = await POST(new Request("https://dashboard.example.com/whatsapp/conectar", {
       method: "POST", headers: { "test-client": client },
     }));
     assert.equal(response.status, 200);
   }
   const writes = calls.filter((call) => call.body);
-  assert.deepEqual(writes.map((call) => call.method), ["POST", "POST", "PUT"]);
-  assert.deepEqual(writes.map((call) => JSON.parse(call.body).name), ["client-one", "client-two", "client-one"]);
+  assert.deepEqual(writes.map((call) => call.method), ["POST", "POST", "PUT", "POST"]);
+  assert.deepEqual(writes.map((call) => JSON.parse(call.body).name), ["client-one", "client-two", "client-one", "client-three"]);
+  // Fora do nicho de veículos não há webhook de IA.
+  const other = JSON.parse(writes.pop().body).config.webhooks;
+  assert.equal(other.length, 2);
+  assert.ok(!other.some((hook) => hook.url === aiUrl));
   for (const call of writes) {
     const hooks = JSON.parse(call.body).config.webhooks;
     assert.equal(hooks.length, 3);
     assert.deepEqual(hooks[0].events, ["session.status"]);
     const legacy = hooks.find((hook) => hook.url === config.leadsWebhookUrl);
     assert.deepEqual(legacy.events, ["message"]);
-    const ai = hooks.find((hook) => hook.url === config.aiWebhookUrl);
+    const ai = hooks.find((hook) => hook.url === aiUrl);
     assert.deepEqual(ai.events, ["message.any"]);
     assert.deepEqual(ai.customHeaders, [{ name: "X-TrafegoAcademy-Secret", value: config.webhookSecret }]);
   }
@@ -195,6 +203,7 @@ async function runtime() {
     }),
     getAiAgentSettings: async () => settings,
     getClientPlan: async () => "complete",
+    getClientSegment: async () => state.segment ?? "veiculo_atrasado",
     findConversation: (client, number) =>
       one(
         "select * from ai_conversations where client_id=$1 and whatsapp_number=$2",
@@ -349,15 +358,30 @@ async function runtime() {
 
 test("Pipeline real com WAHA/DeepSeek simulados", async (t) => {
   await t.test(
-    "rajada produz uma extração, uma redação e um envio; prompt do cliente não define política",
+    "cliente fora do segmento de veículos não grava nem responde",
+    async () => {
+      const r = await runtime();
+      try {
+        r.state.segment = "eventos";
+        assert.deepEqual(await r.ingest("x", "Oi"), { acao: "ignorar" });
+        assert.equal((await r.messages()).length, 0);
+        assert.equal(r.state.requests.length, 0);
+        assert.equal(r.state.sent.length, 0);
+      } finally {
+        await r.db.close();
+      }
+    },
+  );
+  await t.test(
+    "rajada produz uma única interpretação e um envio do roteiro; o modelo não redige",
     async () => {
       const r = await runtime();
       try {
         await Promise.all([1, 2, 3, 4].map((i) => r.ingest(`burst-${i}`)));
         await r.step();
-        assert.equal(r.state.requests.length, 2);
+        // A IA só interpreta: uma chamada de extração, nenhuma de redação.
+        assert.equal(r.state.requests.length, 1);
         assert.equal(r.state.requests[0].temperature, 0.1);
-        assert.equal(r.state.requests[1].temperature, 0.4);
         assert.match(
           r.state.requests[0].messages[0].content,
           /Regras imutáveis/,
@@ -371,6 +395,11 @@ test("Pipeline real com WAHA/DeepSeek simulados", async (t) => {
         await r.step();
         await r.step();
         assert.equal(r.state.sent.length, 1);
+        // O texto enviado é exatamente o do roteiro (saudação + 1ª pergunta).
+        assert.equal(
+          r.state.sent[0].text,
+          `${DEFAULT_SCRIPT.greeting} ${DEFAULT_SCRIPT.questions.financed}`,
+        );
         assert.equal(
           (await r.messages()).filter((m) => m.status === "processed").length,
           4,
@@ -448,7 +477,7 @@ test("Pipeline real com WAHA/DeepSeek simulados", async (t) => {
         assert.equal(r.state.requests.length, before);
         await r.ingest("c");
         await r.step();
-        assert.equal(r.state.requests.length, before + 2);
+        assert.equal(r.state.requests.length, before + 1);
       } finally {
         await r.db.close();
       }
@@ -514,7 +543,7 @@ test("Pipeline real com WAHA/DeepSeek simulados", async (t) => {
         await r.ingest("a");
         r.state.responses = [429];
         await r.step();
-        assert.equal(r.state.requests.length, 3);
+        assert.equal(r.state.requests.length, 2);
         assert.equal(
           (await r.messages()).filter((m) => m.status === "queued").length,
           1,
@@ -564,37 +593,97 @@ test("Pipeline real com WAHA/DeepSeek simulados", async (t) => {
   );
 });
 
-test("workflow entrega mídia e fromMe ao backend, sem modelo/segredos e sem histórico salvo", () => {
-  const workflow = JSON.parse(
-    readFileSync("n8n/n8n_waha_atendimento_ia.json", "utf8"),
-  );
-  const prepare = workflow.nodes.find((n) => n.name === "Preparar evento")
-    .parameters.jsCode;
-  const normalized = new Function("$json", prepare)({
-    body: {
-      session: "test",
-      event: "message.any",
-      payload: {
-        id: "id",
-        fromMe: true,
-        to: "5511999999999@c.us",
-        hasMedia: true,
-        media: { mimetype: "audio/ogg" },
+test("laço no site substitui o n8n: espera, avança e continua em nova função", async () => {
+  const steps = [];
+  const wait = (ms) => ({ acao: "aguardar", sessionName: "s", chatId: "5511999999999@c.us", esperarMs: ms });
+  const script = [wait(1000), wait(500), { acao: "fim" }];
+  const load = loader({
+    [resolve("src/lib/ai-agent/pipeline.ts")]: {
+      advanceConversation: async (input) => {
+        steps.push(input);
+        return script.shift();
       },
     },
-  })[0].json;
-  assert.equal(normalized.fromMe, true);
-  assert.equal(normalized.chatId, "5511999999999@c.us");
-  assert.equal(normalized.mediaKind, "audio");
-  assert.equal(workflow.settings.saveDataSuccessExecution, "none");
-  assert.equal(workflow.settings.saveDataErrorExecution, "none");
-  assert.ok(!JSON.stringify(workflow).includes("service_role"));
-  assert.ok(!workflow.nodes.some((n) => n.type.includes("deepseek")));
-  assert.ok(
-    workflow.nodes
-      .find((n) => n.name === "Tem proximo passo?")
-      .parameters.conditions.conditions.some(
-        (c) => c.leftValue === "={{ $runIndex }}",
-      ),
+  });
+  const { runConversationLoop, LOOP_BUDGET_MS, MAX_HOPS } = load("src/lib/ai-agent/runner.ts");
+  let clock = 0;
+  const slept = [];
+  const continued = [];
+  const options = {
+    hop: 0,
+    now: () => clock,
+    sleep: async (ms) => { slept.push(ms); clock += ms; },
+    continueAt: async (step, hop) => { continued.push({ step, hop }); },
+  };
+  await runConversationLoop(wait(3000), options);
+  assert.deepEqual(slept, [3000, 1000, 500]);
+  assert.equal(steps.length, 3);
+  assert.deepEqual(continued, []);
+
+  // Passou do orçamento: não dorme, entrega a espera para outra invocação.
+  slept.length = 0;
+  clock = 0;
+  const longWait = wait(5000);
+  const startAt = LOOP_BUDGET_MS - 1000;
+  options.now = (() => { let first = true; return () => (first ? ((first = false), 0) : startAt); })();
+  await runConversationLoop(longWait, options);
+  assert.deepEqual(slept, []);
+  assert.deepEqual(continued, [{ step: longWait, hop: 1 }]);
+
+  // Limite de saltos: nunca vira cadeia infinita de funções.
+  continued.length = 0;
+  options.now = (() => { let first = true; return () => (first ? ((first = false), 0) : startAt); })();
+  await runConversationLoop(longWait, { ...options, hop: MAX_HOPS });
+  assert.deepEqual(continued, []);
+
+  // Erro num passo não derruba a função (roda dentro de after()).
+  const failing = loader({
+    [resolve("src/lib/ai-agent/pipeline.ts")]: {
+      advanceConversation: async () => { throw new Error("boom"); },
+    },
+  })("src/lib/ai-agent/runner.ts");
+  await failing.runConversationLoop(wait(1), { ...options, hop: 0, now: () => 0 });
+});
+
+test("atualização em massa aponta a IA para o site só no segmento de veículos", async () => {
+  const calls = [];
+  class WahaRequestError extends Error {
+    constructor(message, status) { super(message); this.status = status; }
+  }
+  const load = loader({
+    [resolve("src/lib/waha.ts")]: {
+      WahaRequestError,
+      getWahaConfig: async () => ({ webhookSecret: "s", leadsWebhookUrl: null }),
+      wahaFetchJson: async (_config, path, init) => {
+        calls.push({ path, ...init });
+        if (path.includes("gone")) throw new WahaRequestError("not found", 404);
+        if (path.includes("down") && init.method === "GET") throw new WahaRequestError("x", 500);
+        return {};
+      },
+    },
+    [resolve("src/lib/whatsapp-server.ts")]: {
+      listWhatsappSessionRecords: async () => [
+        { client_id: "car", session_name: "car" },
+        { client_id: "party", session_name: "party" },
+        { client_id: "gone", session_name: "gone" },
+        { client_id: "down", session_name: "down" },
+      ],
+    },
+    [resolve("src/lib/ai-agent/store.ts")]: {
+      getClientSegment: async (id) => (id === "car" ? "veiculo_atrasado" : "eventos"),
+    },
+  });
+  const { refreshAllWahaWebhooks } = load("src/lib/waha-webhooks-refresh.ts");
+  const result = await refreshAllWahaWebhooks("https://site.example.com");
+  assert.deepEqual(result, { updated: 2, missing: 1, failed: 1 });
+  const hooks = (name) =>
+    JSON.parse(calls.find((c) => c.method === "PUT" && c.path.endsWith(name)).body).config.webhooks;
+  assert.deepEqual(
+    hooks("car").map((h) => [h.url, h.events[0]]),
+    [
+      ["https://site.example.com/whatsapp/webhook", "session.status"],
+      ["https://site.example.com/whatsapp/ia/waha", "message.any"],
+    ],
   );
+  assert.equal(hooks("party").length, 1);
 });

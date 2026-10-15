@@ -1,6 +1,134 @@
 import { z } from "zod";
 
 const lines = z.array(z.string().trim().min(1).max(500)).max(30).default([]);
+
+// Roteiro: a IA só classifica a mensagem; o texto enviado é sempre um destes,
+// escrito pelo cliente. A ordem das perguntas segue a política de qualificação.
+export const SCRIPT_QUESTIONS = {
+  financed: "Veículo ainda financiado?",
+  vehicle: "Modelo do veículo",
+  vehicle_year: "Ano do veículo",
+  bank: "Banco do financiamento",
+  debt_amount: "Valor que falta pagar",
+  has_overdue_installments: "Parcelas em dia ou atrasadas",
+  overdue_installments_count: "Quantidade de parcelas atrasadas",
+} as const;
+export type ScriptQuestion = keyof typeof SCRIPT_QUESTIONS;
+export const SCRIPT_REPLIES = {
+  qualified: "Lead qualificado (todos os dados coletados)",
+  disqualified: "Veículo quitado (fora do perfil)",
+  price: "Pergunta sobre preço ou valor",
+  approval: "Pergunta sobre aprovação",
+  human: "Pedido para falar com a equipe",
+  bot: "Pergunta se é robô",
+  offTopic: "Assunto fora do atendimento",
+  audio: "Áudio recebido",
+  media: "Imagem ou documento recebido",
+  knowledgeMissing: "Dúvida sem resposta cadastrada",
+  requiredUnknown: "Lead não sabe um dado obrigatório",
+  waiting: "Lead não respondeu a pergunta",
+} as const;
+export type ScriptReply = keyof typeof SCRIPT_REPLIES;
+export const DEFAULT_SCRIPT = {
+  greeting: "Olá!",
+  acknowledge: "Entendi.",
+  questions: {
+    financed: "O veículo ainda está financiado?",
+    vehicle: "Qual é o modelo do veículo?",
+    vehicle_year: "Qual é o ano dele?",
+    bank: "Qual é o banco do financiamento?",
+    debt_amount: "Você sabe o valor aproximado que ainda falta pagar?",
+    has_overdue_installments:
+      "As parcelas estão em dia ou há alguma atrasada?",
+    overdue_installments_count: "Quantas parcelas estão atrasadas?",
+  } satisfies Record<ScriptQuestion, string>,
+  replies: {
+    qualified:
+      "Já tenho os dados para a equipe avaliar seu caso. A próxima etapa é a análise deles.",
+    disqualified:
+      "Neste atendimento, buscamos veículos que ainda estão financiados. Como o seu está quitado, ele não se encaixa nesse perfil.",
+    price:
+      "Não tenho uma proposta ou valor confirmado para o seu veículo. A equipe precisa avaliar antes.",
+    approval:
+      "Ainda não há aprovação confirmada. Essa avaliação precisa ser feita pela equipe.",
+    human: "Vou deixar a conversa com a equipe para continuar com você.",
+    bot: "Sou o assistente virtual da equipe. Se preferir, posso deixar a conversa com uma pessoa.",
+    offTopic:
+      "Por aqui, posso ajudar com a avaliação do seu veículo financiado.",
+    audio:
+      "Recebi seu áudio, mas ainda não consigo ouvi-lo por aqui. Pode me contar por texto?",
+    media:
+      "Recebi o arquivo. Vou deixar a análise com a equipe, pois não consigo confirmar o conteúdo por aqui.",
+    knowledgeMissing:
+      "Não tenho essa informação confirmada aqui. Vou deixar a equipe conferir para você.",
+    requiredUnknown:
+      "Esse dado é necessário para avaliar o caso. Vou deixar a equipe continuar com você.",
+    waiting: "Tudo bem, fico aguardando essa informação para continuar.",
+  } satisfies Record<ScriptReply, string>,
+};
+export type AiScript = typeof DEFAULT_SCRIPT;
+
+const scriptText = (fallback: string) =>
+  z.string().trim().min(1).max(500).catch(fallback);
+// Saudação e "entendi" vão antes da pergunta: não podem ter pergunta própria,
+// senão a resposta teria duas perguntas e seria barrada pelo validador.
+const prefixText = (fallback: string) =>
+  z
+    .string()
+    .trim()
+    .max(80)
+    .refine((s) => !s.includes("?"))
+    .catch(fallback);
+const textGroup = <T extends Record<string, string>>(defaults: T) =>
+  (
+    z.object(
+      Object.fromEntries(
+        Object.entries(defaults).map(([key, value]) => [key, scriptText(value)]),
+      ),
+    ) as unknown as z.ZodType<T>
+  )
+    .catch(() => defaults);
+// `.catch` mantém o roteiro sempre utilizável: um campo ausente (contas
+// antigas) ou inválido no banco volta ao padrão em vez de desligar a IA.
+export const scriptSchema = z
+  .object({
+    greeting: prefixText(DEFAULT_SCRIPT.greeting),
+    acknowledge: prefixText(DEFAULT_SCRIPT.acknowledge),
+    questions: textGroup(DEFAULT_SCRIPT.questions),
+    replies: textGroup(DEFAULT_SCRIPT.replies),
+  })
+  .catch(() => DEFAULT_SCRIPT);
+
+// Mesmas travas do validador de resposta (policy.validateReply), aplicadas na
+// hora de salvar: o cliente vê o erro no painel em vez de a mensagem ser
+// trocada silenciosamente pelo texto de segurança durante o atendimento.
+const FORBIDDEN_CLAIM =
+  /garantimos|garantid[oa]|aprovado|aprovacao garantida|quitamos sua divida|impedimos.{0,20}apreensao|sou (?:um )?humano/;
+export function checkScriptInput(script: AiScript): string | null {
+  const fold = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase();
+  for (const prefix of [script.greeting, script.acknowledge]) {
+    if (prefix.length > 80 || prefix.includes("?"))
+      return "Saudação e confirmação: até 80 caracteres e sem ponto de interrogação.";
+  }
+  const texts = [
+    ...Object.values(script.questions),
+    ...Object.values(script.replies),
+  ];
+  for (const text of texts) {
+    if (!text.trim() || text.length > 500)
+      return "Preencha todas as mensagens, com até 500 caracteres cada.";
+    if ((text.match(/\?/g)?.length ?? 0) > 1)
+      return `Use no máximo uma pergunta por mensagem: "${text.slice(0, 60)}".`;
+    if (FORBIDDEN_CLAIM.test(fold(text)))
+      return `Mensagem com promessa ou afirmação não permitida: "${text.slice(0, 60)}".`;
+  }
+  return null;
+}
+
 export const knowledgeSchema = z
   .object({
     company: z.string().trim().max(200).default(""),
@@ -25,6 +153,7 @@ export const knowledgeSchema = z
       )
       .max(30)
       .default([]),
+    script: scriptSchema,
   })
   .strict();
 export type AiKnowledge = z.infer<typeof knowledgeSchema>;
