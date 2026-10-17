@@ -43,7 +43,7 @@ export const DEFAULT_SCRIPT = {
   } satisfies Record<ScriptQuestion, string>,
   replies: {
     qualified:
-      "Já tenho os dados para a equipe avaliar seu caso. A próxima etapa é a análise deles.",
+      "Maravilha! Vou passar para a nossa equipe terminar a negociação aqui com você. Aguarde um instante, por gentileza.",
     price:
       "Não tenho uma proposta ou valor confirmado para o seu veículo. A equipe precisa avaliar antes.",
     approval:
@@ -86,13 +86,36 @@ const textGroup = <T extends Record<string, string>>(defaults: T) =>
     .catch(() => defaults);
 // `.catch` mantém o roteiro sempre utilizável: um campo ausente (contas
 // antigas) ou inválido no banco volta ao padrão em vez de desligar a IA.
+// Padrões antigos que ficaram gravados quando o cliente salvou o roteiro sem
+// mudar estes campos. São trocados pelo padrão atual na leitura; um texto
+// escrito pelo próprio cliente nunca é alterado.
+const LEGACY_REPLIES: Partial<Record<ScriptReply, string[]>> = {
+  qualified: [
+    "Já tenho os dados para a equipe avaliar seu caso. A próxima etapa é a análise deles.",
+  ],
+  waiting: ["Tudo bem, fico aguardando essa informação para continuar."],
+  media: [
+    "Recebi o arquivo. Vou deixar a análise com a equipe, pois não consigo confirmar o conteúdo por aqui.",
+  ],
+};
+function dropLegacyReplies(value: unknown) {
+  if (!value || typeof value !== "object") return value;
+  const script = value as { replies?: unknown };
+  if (!script.replies || typeof script.replies !== "object") return value;
+  const replies = { ...(script.replies as Record<string, unknown>) };
+  for (const [key, legacy] of Object.entries(LEGACY_REPLIES)) {
+    if (legacy?.includes(String(replies[key] ?? "").trim())) delete replies[key];
+  }
+  return { ...script, replies };
+}
+
 export const scriptSchema = z
-  .object({
+  .preprocess(dropLegacyReplies, z.object({
     greeting: prefixText(DEFAULT_SCRIPT.greeting),
     acknowledge: prefixText(DEFAULT_SCRIPT.acknowledge),
     questions: textGroup(DEFAULT_SCRIPT.questions),
     replies: textGroup(DEFAULT_SCRIPT.replies),
-  })
+  }))
   .catch(() => DEFAULT_SCRIPT);
 
 // Mesmas travas do validador de resposta (policy.validateReply), aplicadas na

@@ -1196,3 +1196,64 @@ test("resposta não entendida repete a pergunta em vez de só aguardar", () => {
   ]);
   assert.equal(text(p).match(/\?/g).length, 1);
 });
+
+// ---------------------------------------------------------------------------
+// Conversa real de 17/10, 19:58: "Oi" no meio, "100k", mensagem final
+// ---------------------------------------------------------------------------
+
+test("'Oi' no meio da conversa cumprimenta e repete a pergunta", () => {
+  const p = policy(
+    { intent: "greeting" },
+    { incoming: "Oi", firstTurn: false, lastQuestion: "financed" },
+  );
+  assert.deepEqual(p.candidates, [
+    [`${DEFAULT_SCRIPT.greeting} ${DEFAULT_SCRIPT.questions.financed}`],
+  ]);
+  assert.doesNotMatch(text(p), /aguardando|não consegui/);
+});
+
+test("valor da dívida: 100k, 100 mil, R$ 100.000 e o que o modelo extrair", () => {
+  const known = { ...EMPTY_FACTS, financed: true, vehicle: "Nivus", vehicle_year: 2024, bank: "BV" };
+  for (const incoming of ["100k", "100 K", "100mil", "uns 100 mil", "R$ 100.000", "100.000,00"]) {
+    const p = policy(
+      { facts: [] },
+      { incoming, firstTurn: false, lastQuestion: "debt_amount", facts: known },
+    );
+    assert.equal(p.facts.debt_amount, 100000, incoming);
+    assert.equal(p.nextField, "has_overdue_installments", incoming);
+  }
+  // O modelo devolve 100000 citando "100k".
+  const m = policy(
+    { facts: [fact("debt_amount", 100000, "100k")] },
+    { incoming: "100k", firstTurn: false, lastQuestion: "debt_amount", facts: known },
+  );
+  assert.equal(m.facts.debt_amount, 100000);
+  // Ano e quantidade também têm a rede de segurança.
+  assert.equal(
+    policy({ facts: [] }, { incoming: "é 2024", firstTurn: false, lastQuestion: "vehicle_year" }).facts.vehicle_year,
+    2024,
+  );
+  assert.equal(
+    policy({ facts: [] }, { incoming: "três", firstTurn: false, lastQuestion: "overdue_installments_count" }).facts.overdue_installments_count,
+    3,
+  );
+});
+
+test("mensagem final padrão passa para a equipe; textos antigos salvos viram o padrão novo", () => {
+  assert.match(DEFAULT_SCRIPT.replies.qualified, /^Maravilha! Vou passar para a nossa equipe/);
+  const saved = knowledgeSchema.parse({
+    script: {
+      ...DEFAULT_SCRIPT,
+      replies: {
+        ...DEFAULT_SCRIPT.replies,
+        qualified: "Já tenho os dados para a equipe avaliar seu caso. A próxima etapa é a análise deles.",
+        waiting: "Tudo bem, fico aguardando essa informação para continuar.",
+        price: "Texto do cliente.",
+      },
+    },
+  }).script;
+  assert.equal(saved.replies.qualified, DEFAULT_SCRIPT.replies.qualified);
+  assert.equal(saved.replies.waiting, DEFAULT_SCRIPT.replies.waiting);
+  // O que o cliente escreveu nunca é trocado.
+  assert.equal(saved.replies.price, "Texto do cliente.");
+});

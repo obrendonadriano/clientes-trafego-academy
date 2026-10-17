@@ -292,13 +292,43 @@ function validValue(
           )))
     );
   if (value > 100_000_000) return false;
-  const amounts = [...source.matchAll(/\d[\d.,]*/g)].flatMap((m) => {
-    const n = Number(
-      m[0].replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", "."),
-    );
-    return [n, /mil/.test(source) ? n * 1000 : n];
+  return parseAmounts(source).includes(value);
+}
+
+/**
+ * Valores em reais do jeito que o lead escreve: "100k", "100 mil",
+ * "R$ 100.000", "85,5 mil". Cada número vale como está e, se vier com
+ * k/mil, multiplicado por mil.
+ */
+function parseAmounts(text: string) {
+  const source = fold(text);
+  return [...source.matchAll(/(\d[\d.,]*)\s*(k|mil)?\b/g)].flatMap((m) => {
+    const n = Number(m[1].replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", "."));
+    if (!Number.isFinite(n)) return [];
+    return m[2] || /mil/.test(source) ? [n, Math.round(n * 1000)] : [n];
   });
-  return amounts.includes(value);
+}
+
+/** Resposta direta a uma pergunta numérica, sem depender do modelo. */
+function numberAnswer(field: Field, text: string): number | null {
+  const source = fold(text);
+  if (field === "vehicle_year") {
+    const year = /\b(19[5-9]\d|20\d\d)\b/.exec(source);
+    return year ? Number(year[1]) : null;
+  }
+  if (field === "overdue_installments_count") {
+    const count = /\b(\d{1,3})\b/.exec(source);
+    if (count) return Number(count[1]);
+    const words = ["zero", "uma", "duas", "tres", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez"];
+    const index = words.findIndex((word) => new RegExp(`\\b${word}\\b`).test(source));
+    return index >= 0 ? index : null;
+  }
+  if (field === "debt_amount") {
+    const amounts = parseAmounts(source);
+    // Com k/mil, o valor multiplicado é o que o lead quis dizer.
+    return amounts.length ? Math.max(...amounts) : null;
+  }
+  return null;
 }
 export function decidePolicy(input: {
   facts: Facts;
@@ -373,6 +403,22 @@ export function decidePolicy(input: {
       facts.financed = answer;
       unknown.delete("financed");
       changedFields.push("financed");
+    }
+  }
+  // Mesma rede para ano, valor e quantidade ("2024", "100k", "3").
+  const pending = input.lastQuestion as Field | null | undefined;
+  if (
+    !injected &&
+    pending &&
+    NUMBER_FIELDS.includes(pending) &&
+    facts[pending] === null &&
+    !changedFields.includes(pending)
+  ) {
+    const value = numberAnswer(pending, incoming);
+    if (value !== null && validValue(pending, value, incoming, pending)) {
+      facts[pending] = value;
+      unknown.delete(pending);
+      changedFields.push(pending);
     }
   }
   if (facts.has_overdue_installments === false) {
@@ -509,8 +555,10 @@ export function decidePolicy(input: {
   } else if (nextField) {
     if (input.lastQuestion === nextField && changedFields.length === 0) {
       // Não entendeu a resposta: avisa e repete a pergunta, em vez de
-      // ficar "aguardando" sem dizer o que falta.
-      reply = [says.waiting, script.questions[nextField as keyof typeof script.questions]]
+      // ficar "aguardando" sem dizer o que falta. Um "oi" no meio da
+      // conversa é só cumprimento: cumprimenta de volta e repete.
+      const prefix = e.intent === "greeting" ? script.greeting : says.waiting;
+      reply = [prefix, script.questions[nextField as keyof typeof script.questions]]
         .filter(Boolean)
         .join(" ");
     } else {
