@@ -6,6 +6,7 @@ import {
   ingestInboundEvent,
   parseIncomingEvent,
 } from "@/lib/ai-agent/pipeline";
+import { resolveLidPayload } from "@/lib/ai-agent/lid";
 import { runConversationLoop } from "@/lib/ai-agent/runner";
 import { AiAgentError } from "@/lib/ai-agent/store";
 
@@ -92,7 +93,8 @@ export async function POST(request: Request) {
       return Response.json({ ok: true }, { status: 202 });
     }
 
-    const event = parseIncomingEvent(body);
+    // Contato identificado por @lid vira o telefone real antes da leitura.
+    const event = parseIncomingEvent(await resolveLidPayload(body, config));
 
     if (!event) {
       console.info("[ia/waha] ignorado", describeUnparsed(body));

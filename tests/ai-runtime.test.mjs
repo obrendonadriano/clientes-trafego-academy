@@ -877,3 +877,43 @@ test("notificação acha o contato real com ou sem o 9 e explica quando não exi
     "5511912345678@c.us",
   );
 });
+
+test("contato @lid vira o telefone real antes da leitura", async () => {
+  const calls = [];
+  const load = loader({
+    [resolve("src/lib/waha.ts")]: {
+      wahaFetchJson: async (_c, path) => {
+        calls.push(path);
+        return path.includes("999%40lid") ? { pn: "553195248845@c.us" } : { pn: null };
+      },
+    },
+  });
+  const { resolveLidPayload } = load("src/lib/ai-agent/lid.ts");
+  const { parseIncomingEvent } = load("src/lib/ai-agent/event.ts");
+  const credentials = { baseUrl: "https://waha.example.com", apiKey: "k" };
+  const body = (from, extra = {}) => ({
+    event: "message.any",
+    session: "s",
+    payload: { id: "m1", from, fromMe: false, body: "Olá", ...extra },
+  });
+
+  // Pela API de lids do WAHA.
+  const viaApi = parseIncomingEvent(await resolveLidPayload(body("999@lid"), credentials));
+  assert.equal(viaApi.chatId, "553195248845@c.us");
+  assert.deepEqual(calls, ["/api/s/lids/999%40lid"]);
+
+  // Telefone já presente no payload: nem consulta a API.
+  const viaPayload = parseIncomingEvent(
+    await resolveLidPayload(
+      body("777@lid", { _data: { Info: { SenderAlt: "5511912345678@s.whatsapp.net" } } }),
+      credentials,
+    ),
+  );
+  assert.equal(viaPayload.chatId, "5511912345678@c.us");
+  assert.equal(calls.length, 1);
+
+  // Sem mapeamento: segue ignorado, como antes; @c.us passa intacto.
+  assert.equal(parseIncomingEvent(await resolveLidPayload(body("123@lid"), credentials)), null);
+  const plain = body("5511912345678@c.us");
+  assert.equal(await resolveLidPayload(plain, credentials), plain);
+});
