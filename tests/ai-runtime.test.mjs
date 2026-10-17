@@ -376,10 +376,10 @@ test("Pipeline real com WAHA/DeepSeek simulados", async (t) => {
       const r = await runtime();
       try {
         r.settings.knowledge.activation.enabled = true;
-        assert.deepEqual(await r.ingest("x1", "Oi, tudo bem?"), { acao: "ignorar" });
+        assert.deepEqual(await r.ingest("x1", "Oi, tudo bem?"), { acao: "ignorar", motivo: "sem_frase_de_ativacao" });
         assert.deepEqual(
           await r.ingest("x2", "", { fromMe: true, body: "mensagem pessoal" }),
-          { acao: "ignorar" },
+          { acao: "ignorar", motivo: "enviada_pelo_proprio_whatsapp" },
         );
         assert.ok(!(await r.conversation()));
         const opened = await r.ingest(
@@ -401,7 +401,7 @@ test("Pipeline real com WAHA/DeepSeek simulados", async (t) => {
       const r = await runtime();
       try {
         r.state.blocked = true;
-        assert.deepEqual(await r.ingest("b1", "Oi"), { acao: "ignorar" });
+        assert.deepEqual(await r.ingest("b1", "Oi"), { acao: "ignorar", motivo: "numero_bloqueado" });
         assert.ok(!(await r.conversation()));
         r.state.blocked = false;
         await r.ingest("b2", "Oi");
@@ -515,7 +515,7 @@ test("Pipeline real com WAHA/DeepSeek simulados", async (t) => {
       const r = await runtime();
       try {
         r.state.segment = "eventos";
-        assert.deepEqual(await r.ingest("x", "Oi"), { acao: "ignorar" });
+        assert.deepEqual(await r.ingest("x", "Oi"), { acao: "ignorar", motivo: "segmento" });
         assert.equal((await r.messages()).length, 0);
         assert.equal(r.state.requests.length, 0);
         assert.equal(r.state.sent.length, 0);
@@ -838,4 +838,42 @@ test("atualização em massa aponta a IA para o site só no segmento de veículo
     ],
   );
   assert.equal(hooks("party").length, 1);
+});
+
+test("notificação acha o contato real com ou sem o 9 e explica quando não existe", async () => {
+  const registered = new Set(["553195248845"]);
+  const asked = [];
+  let supported = true;
+  const load = loader(
+    {
+      [resolve("src/lib/integrations.ts")]: { getIntegrationSettingByProvider: async () => null },
+    },
+    async (url) => {
+      const phone = new URL(url).searchParams.get("phone");
+      asked.push(phone);
+      if (!supported) return new Response("{}", { status: 404 });
+      return Response.json({
+        numberExists: registered.has(phone),
+        chatId: registered.has(phone) ? `${phone}@c.us` : undefined,
+      });
+    },
+  );
+  const { resolveWahaChatId, WahaRequestError } = load("src/lib/waha.ts");
+  const credentials = { baseUrl: "https://waha.example.com", apiKey: "k" };
+  // Salvo com o 9, registrado no WhatsApp sem ele (DDD 31).
+  assert.equal(
+    await resolveWahaChatId(credentials, "s", "5531995248845"),
+    "553195248845@c.us",
+  );
+  assert.deepEqual(asked, ["5531995248845", "553195248845"]);
+  await assert.rejects(
+    resolveWahaChatId(credentials, "s", "5511912345678"),
+    (error) => error instanceof WahaRequestError && /não tem WhatsApp/.test(error.message),
+  );
+  // WAHA sem o endpoint: usa o formato padrão, como antes.
+  supported = false;
+  assert.equal(
+    await resolveWahaChatId(credentials, "s", "5511912345678"),
+    "5511912345678@c.us",
+  );
 });

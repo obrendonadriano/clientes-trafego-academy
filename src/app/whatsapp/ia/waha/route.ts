@@ -21,6 +21,24 @@ const continuationSchema = z.object({
   hop: z.number().int().min(1).max(10),
 });
 
+/**
+ * Por que o payload não virou evento, sem expor número nem texto: tipo do
+ * evento e o sufixo do chat (@c.us, @lid, @g.us...).
+ */
+function describeUnparsed(body: unknown) {
+  const root = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  const payload = (root.payload && typeof root.payload === "object"
+    ? root.payload
+    : {}) as Record<string, unknown>;
+  const chat = String(payload.fromMe ? payload.to ?? "" : payload.from ?? "");
+  return {
+    motivo: "evento_nao_reconhecido",
+    evento: typeof root.event === "string" ? root.event : null,
+    sufixoChat: chat.includes("@") ? chat.slice(chat.indexOf("@")) : null,
+    temSessao: typeof root.session === "string",
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const config = await authenticateAiWebhook(request);
@@ -77,6 +95,7 @@ export async function POST(request: Request) {
     const event = parseIncomingEvent(body);
 
     if (!event) {
+      console.info("[ia/waha] ignorado", describeUnparsed(body));
       return Response.json({ ok: true, ignorado: true });
     }
 
@@ -86,12 +105,20 @@ export async function POST(request: Request) {
 
     if (result.acao === "aguardar") {
       startLoop(result, 0);
+    } else if (result.acao === "ignorar") {
+      console.info("[ia/waha] ignorado", {
+        motivo: result.motivo,
+        fromMe: event.fromMe,
+      });
     }
 
     return Response.json({ ok: true });
   } catch (error) {
     const status = error instanceof AiAgentError ? error.status : 500;
-    console.error("[ia/waha] falha", { status });
+    console.error("[ia/waha] falha", {
+      status,
+      message: error instanceof Error ? error.message : "erro desconhecido",
+    });
     return Response.json({ ok: false }, { status });
   }
 }

@@ -6,7 +6,6 @@ import { getOptionalCurrentUser } from "@/lib/auth/session";
 import {
   AI_AGENT_LIMITS,
   normalizeBrazilianWhatsapp,
-  toWahaChatId,
   type AiConversationMessage,
 } from "@/lib/ai-agent/shared";
 import {
@@ -19,7 +18,13 @@ import {
   listConversationMessages,
   updateAiAgentSettings,
 } from "@/lib/ai-agent/store";
-import { getWahaConfig, sendWahaText, setWahaTyping } from "@/lib/waha";
+import {
+  getWahaConfig,
+  resolveWahaChatId,
+  sendWahaText,
+  setWahaTyping,
+  WahaRequestError,
+} from "@/lib/waha";
 import { transition } from "@/lib/ai-agent/transitions";
 import {
   addBlockedNumber,
@@ -218,7 +223,7 @@ export async function testNotificationNumberAction(
 
     await sendWahaText(waha, {
       session: session.sessionName,
-      chatId: toWahaChatId(target.value),
+      chatId: await resolveWahaChatId(waha, session.sessionName, target.value),
       text: "✅ Teste realizado com sucesso. Este número está configurado para receber novos leads qualificados.",
     });
 
@@ -226,6 +231,15 @@ export async function testNotificationNumberAction(
   } catch (error) {
     if (error instanceof AiAgentError) {
       return { error: error.message };
+    }
+
+    // Mensagens do WAHA já são escritas para o usuário e não têm segredos.
+    if (error instanceof WahaRequestError) {
+      console.error("[ia/teste-notificacao] falha", {
+        status: error.status,
+        message: error.message,
+      });
+      return { error: `Não foi possível enviar: ${error.message}` };
     }
 
     console.error("[ia/teste-notificacao] falha", {

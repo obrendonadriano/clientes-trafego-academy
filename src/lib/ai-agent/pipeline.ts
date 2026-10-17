@@ -2,12 +2,13 @@ import "server-only";
 import { timingSafeEqual, randomUUID } from "node:crypto";
 import {
   getWahaConfig,
+  resolveWahaChatId,
   sendWahaText,
   setWahaTyping,
   wahaMessageId,
 } from "@/lib/waha";
 import { buildQualifiedLeadNotification, runConversationTurn } from "./engine";
-import { fromWahaChatId, toWahaChatId } from "./shared";
+import { fromWahaChatId } from "./shared";
 import { businessHours, matchesActivationPhrase } from "./config";
 import { isNumberBlocked } from "./blocked";
 import { MEDIA_LABELS, type IncomingEvent } from "./event";
@@ -111,30 +112,38 @@ async function typing(session: string, chatId: string, enabled: boolean) {
 export async function ingestInboundEvent(
   event: IncomingEvent,
 ): Promise<PipelineResponse> {
+  // `motivo` vai para o log (sem telefone/conteúdo) para diagnosticar por que
+  // uma mensagem não virou atendimento.
+  const ignore = (motivo: string): PipelineResponse => ({
+    acao: "ignorar",
+    motivo,
+  });
   const number = fromWahaChatId(event.chatId);
+  if (!number) return ignore("chat_invalido");
   const owner = await findSessionOwner(event.sessionName);
-  if (!number || !owner || number === owner.phoneNumber)
-    return { acao: "ignorar" };
+  if (!owner) return ignore("sessao_desconhecida");
+  if (number === owner.phoneNumber) return ignore("proprio_numero");
   const settings = await getAiAgentSettings(owner.clientId);
-  if (!settings || number === settings.notificationWhatsapp)
-    return { acao: "ignorar" };
+  if (!settings) return ignore("ia_sem_configuracao");
+  if (number === settings.notificationWhatsapp)
+    return ignore("numero_de_notificacao");
   // Atendimento nichado: só clientes de compra e aquisição de veículos.
   if (!hasAiAttendanceSegment(await getClientSegment(owner.clientId)))
-    return { acao: "ignorar" };
+    return ignore("segmento");
   // Número bloqueado pelo cliente: nem grava, nem responde.
-  if (await isNumberBlocked(owner.clientId, number)) return { acao: "ignorar" };
+  if (await isNumberBlocked(owner.clientId, number))
+    return ignore("numero_bloqueado");
   // Frase de ativação: só abre conversa nova quem chega com ela. Mensagens
   // do próprio número para quem não é lead também não viram conversa.
   const activation = settings.knowledge.activation;
   if (activation.enabled) {
     const existing = await findConversation(owner.clientId, number);
-    if (
-      !existing &&
-      (event.fromMe ||
-        event.mediaKind !== "text" ||
-        !matchesActivationPhrase(event.body, activation.phrases))
-    )
-      return { acao: "ignorar" };
+    if (!existing) {
+      if (event.fromMe) return ignore("enviada_pelo_proprio_whatsapp");
+      if (event.mediaKind !== "text") return ignore("midia_sem_conversa");
+      if (!matchesActivationPhrase(event.body, activation.phrases))
+        return ignore("sem_frase_de_ativacao");
+    }
   }
   // Even during human takeover/disabled automation, preserve the conversation history.
   const result = await transition(owner.clientId, "ingest", {
@@ -271,13 +280,22 @@ export async function advanceConversation(input: {
       await tx("idle");
       if ((await tx("notify_claim")).ok && settings.notificationWhatsapp) {
         try {
-          const sent = await sendWahaText(await getWahaConfig(), {
+          const credentials = await getWahaConfig();
+          const sent = await sendWahaText(credentials, {
             session: sessionName,
-            chatId: toWahaChatId(settings.notificationWhatsapp),
+            // Celular salvo com o 9 pode estar no WhatsApp sem ele.
+            chatId: await resolveWahaChatId(
+              credentials,
+              sessionName,
+              settings.notificationWhatsapp,
+            ),
             text: buildQualifiedLeadNotification(conversation),
           });
           await tx("notify_result", { success: Boolean(wahaMessageId(sent)) });
-        } catch {
+        } catch (error) {
+          console.warn("[ia] notificação não enviada", {
+            message: error instanceof Error ? error.message : "erro desconhecido",
+          });
           await tx("notify_result", { success: false });
         }
       }

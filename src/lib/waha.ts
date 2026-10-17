@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getIntegrationSettingByProvider } from "@/lib/integrations";
+import { whatsappNumberVariants } from "@/lib/ai-agent/shared";
 
 const WAHA_TIMEOUT_MS = 15_000;
 
@@ -236,6 +237,49 @@ export async function sendWahaText(
       text: input.text,
     }),
   });
+}
+
+/**
+ * chatId real de um número no WhatsApp. Muitos celulares fora de SP estão
+ * registrados sem o 9 da frente (5531 9524-8845 vira 553195248845@c.us), e o
+ * envio para a forma errada falha. Pergunta ao WAHA qual forma existe.
+ * Versões/engines sem o endpoint caem no formato padrão.
+ */
+export async function resolveWahaChatId(
+  credentials: WahaCredentials,
+  session: string,
+  number: string,
+) {
+  let checked = false;
+
+  for (const phone of whatsappNumberVariants(number)) {
+    try {
+      const result = await wahaFetchJson<{
+        numberExists?: boolean;
+        chatId?: string;
+      }>(
+        credentials,
+        `/api/contacts/check-exists?phone=${phone}&session=${encodeURIComponent(session)}`,
+        { method: "GET" },
+      );
+      checked = true;
+      if (result?.numberExists && result.chatId) return result.chatId;
+    } catch (error) {
+      const unsupported =
+        error instanceof WahaRequestError &&
+        (error.status === 404 || error.status === 405 || error.status === 501);
+      if (!unsupported) throw error;
+    }
+  }
+
+  if (checked) {
+    throw new WahaRequestError(
+      "Este número não tem WhatsApp. Confira o DDD e o número.",
+      404,
+    );
+  }
+
+  return `${number.replace(/\D/g, "")}@c.us`;
 }
 
 export async function setWahaTyping(
