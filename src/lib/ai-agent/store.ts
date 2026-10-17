@@ -172,6 +172,31 @@ export async function getClientPlan(clientId: string): Promise<ClientPlanType> {
   return toClientPlanType((data as { plan_type?: unknown } | null)?.plan_type);
 }
 
+/**
+ * Exclui o lead por completo. Mensagens, histórico de processamento e ecos
+ * pendentes saem junto (on delete cascade). Se a pessoa mandar a frase de
+ * ativação de novo, a IA começa do zero, como um lead novo.
+ */
+export async function deleteConversation(
+  clientId: string,
+  conversationId: string,
+) {
+  const { data, error } = await aiAdminClient()
+    .from("ai_conversations")
+    .delete()
+    .eq("client_id", clientId)
+    .eq("id", conversationId)
+    .select("id");
+
+  if (error) {
+    throw new AiAgentError("Não foi possível excluir o lead.");
+  }
+
+  if (!data?.length) {
+    throw new AiAgentError("Lead não encontrado.", 404);
+  }
+}
+
 /** Motivo legível da desqualificação, exibido no painel de leads. */
 export async function setDisqualificationReason(
   clientId: string,

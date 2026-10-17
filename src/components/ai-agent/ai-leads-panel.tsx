@@ -7,10 +7,13 @@ import {
   CircleUser,
   LoaderCircle,
   MessagesSquare,
+  Trash2,
+  TriangleAlert,
   UserRoundCheck,
   X,
 } from "lucide-react";
 import {
+  deleteAiConversationAction,
   loadConversationMessagesAction,
   setHumanTakeoverAction,
   type AiAgentActionState,
@@ -126,6 +129,8 @@ export function AiLeadsPanel({
   const [filter, setFilter] = useState<AiLeadStatus | "todos">("todos");
   const [selectedId, setSelected] = useState<string | null>(null);
   const selected = conversations.find((item) => item.id === selectedId);
+  const [deletingId, setDeleting] = useState<string | null>(null);
+  const deleting = conversations.find((item) => item.id === deletingId);
   const router = useRouter();
   useEffect(() => {
     if (!interactive) return;
@@ -183,7 +188,14 @@ export function AiLeadsPanel({
             {/* Celular: cartões. Desktop: tabela. */}
             <ul className="space-y-2 lg:hidden">
               {visible.map((item) => (
-                <li key={item.id}>
+                <li key={item.id} className="relative">
+                  {interactive ? (
+                    <DeleteLeadButton
+                      conversation={item}
+                      onClick={() => setDeleting(item.id)}
+                      className="absolute bottom-3 right-3 z-10"
+                    />
+                  ) : null}
                   <button
                     type="button"
                     disabled={!interactive}
@@ -226,6 +238,9 @@ export function AiLeadsPanel({
                     <th className="px-3 pb-1 font-medium">Atrasadas</th>
                     <th className="px-3 pb-1 font-medium">Data</th>
                     <th className="px-3 pb-1 font-medium">Status</th>
+                    <th className="px-3 pb-1 font-medium">
+                      <span className="sr-only">Ações</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -277,6 +292,14 @@ export function AiLeadsPanel({
                         </Badge>
                         <ProcessingStatus conversation={item} />
                       </td>
+                      <td className="w-12 text-right">
+                        {interactive ? (
+                          <DeleteLeadButton
+                            conversation={item}
+                            onClick={() => setDeleting(item.id)}
+                          />
+                        ) : null}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -290,9 +313,149 @@ export function AiLeadsPanel({
         <ConversationDialog
           conversation={selected}
           onClose={() => setSelected(null)}
+          onDelete={() => {
+            setSelected(null);
+            setDeleting(selected.id);
+          }}
+        />
+      ) : null}
+
+      {deleting ? (
+        <DeleteLeadDialog
+          conversation={deleting}
+          onClose={() => setDeleting(null)}
         />
       ) : null}
     </Card>
+  );
+}
+
+function DeleteLeadButton({
+  conversation,
+  onClick,
+  className,
+}: {
+  conversation: AiConversationSummary;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        // A linha inteira abre a conversa; a lixeira não.
+        event.stopPropagation();
+        onClick();
+      }}
+      onKeyDown={(event) => event.stopPropagation()}
+      aria-label={`Excluir lead ${formatBrazilianWhatsapp(conversation.whatsappNumber)}`}
+      title="Excluir lead"
+      className={cn(
+        "rounded-xl p-2 text-muted-foreground transition hover:bg-[#fef3f2] hover:text-[#b42318] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
+        className,
+      )}
+    >
+      <Trash2 className="size-4" />
+    </button>
+  );
+}
+
+function DeleteLeadDialog({
+  conversation,
+  onClose,
+}: {
+  conversation: AiConversationSummary;
+  onClose: () => void;
+}) {
+  const { showToast } = useToast();
+  const [state, action, isPending] = useActionState(
+    deleteAiConversationAction,
+    initialState,
+  );
+
+  useEffect(() => {
+    if (state.success) {
+      showToast({ message: state.success });
+      onClose();
+    } else if (state.error) {
+      showToast({ message: state.error, tone: "erro" });
+    }
+  }, [onClose, showToast, state]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !isPending) onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isPending, onClose]);
+
+  const phone = formatBrazilianWhatsapp(conversation.whatsappNumber);
+
+  return (
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="delete-lead-title"
+      aria-describedby="delete-lead-description"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !isPending) onClose();
+      }}
+    >
+      <div className="w-full max-w-md rounded-[1.5rem] border border-border/60 bg-card p-6 shadow-2xl">
+        <div className="flex size-11 items-center justify-center rounded-2xl bg-[#fef3f2] text-[#b42318]">
+          <TriangleAlert className="size-5" />
+        </div>
+        <h3
+          id="delete-lead-title"
+          className="mt-4 font-display text-lg font-medium text-foreground"
+        >
+          Excluir {conversation.name || "este lead"}?
+        </h3>
+        <div
+          id="delete-lead-description"
+          className="mt-2 space-y-2 text-sm leading-6 text-muted-foreground"
+        >
+          <p>
+            Apaga a conversa com{" "}
+            <strong className="text-foreground">{phone}</strong>, todas as
+            mensagens e os dados coletados, seja o lead qualificado ou não.
+          </p>
+          <p>
+            Fica como se ele nunca tivesse chamado: se mandar a frase de
+            ativação de novo, a IA começa do zero. Não dá para desfazer.
+          </p>
+        </div>
+        <form
+          action={action}
+          className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"
+        >
+          <input type="hidden" name="conversationId" value={conversation.id} />
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isPending}
+            onClick={onClose}
+            autoFocus
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="submit"
+            disabled={isPending}
+            className="bg-[#d92d20] bg-none text-white hover:brightness-110"
+          >
+            {isPending ? (
+              <LoaderCircle className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Trash2 className="mr-2 size-4" />
+            )}
+            {isPending ? "Excluindo..." : "Excluir lead"}
+          </Button>
+        </form>
+      </div>
+    </div>
   );
 }
 
@@ -301,9 +464,11 @@ const initialState: AiAgentActionState = {};
 function ConversationDialog({
   conversation,
   onClose,
+  onDelete,
 }: {
   conversation: AiConversationSummary;
   onClose: () => void;
+  onDelete: () => void;
 }) {
   const { showToast } = useToast();
   const [messages, setMessages] = useState<AiConversationMessage[] | null>(
@@ -561,6 +726,15 @@ function ConversationDialog({
               {conversation.humanTakeover
                 ? "Retomar IA nesta conversa"
                 : "Assumir atendimento (parar a IA)"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onDelete}
+              className="text-[#b42318] hover:bg-[#fef3f2]"
+            >
+              <Trash2 className="mr-2 size-4" />
+              Excluir lead
             </Button>
           </form>
 

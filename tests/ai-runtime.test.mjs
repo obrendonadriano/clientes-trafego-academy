@@ -456,6 +456,38 @@ test("Pipeline real com WAHA/DeepSeek simulados", async (t) => {
     },
   );
   await t.test(
+    "excluir o lead apaga conversa, mensagens e histórico; o número volta do zero",
+    async () => {
+      const r = await runtime();
+      try {
+        await r.ingest("e1", "Oi");
+        await r.step();
+        await r.expireDelay();
+        await r.step();
+        await r.step();
+        const before = await r.conversation();
+        assert.ok(before);
+        const count = async (table) =>
+          Number((await r.db.query(`select count(*)::int as n from ${table}`)).rows[0].n);
+        assert.ok((await count("ai_messages")) > 0);
+        assert.ok((await count("ai_processing_events")) > 0);
+        // Mesmo delete da store (client_id + id).
+        await r.db.query("delete from ai_conversations where client_id=$1 and id=$2", [r.client, before.id]);
+        assert.equal(await count("ai_messages"), 0);
+        assert.equal(await count("ai_processing_events"), 0);
+        assert.equal(await count("ai_pending_echoes"), 0);
+        // Volta a falar: é um lead novo, sem dados antigos.
+        await r.ingest("e2", "Oi de novo");
+        const fresh = await r.conversation();
+        assert.notEqual(fresh.id, before.id);
+        assert.equal(fresh.last_question, null);
+        assert.equal(fresh.status, "new");
+      } finally {
+        await r.db.close();
+      }
+    },
+  );
+  await t.test(
     "quitado: a IA não responde nada, agora nem depois",
     async () => {
       const r = await runtime();

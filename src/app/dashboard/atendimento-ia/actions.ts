@@ -10,6 +10,7 @@ import {
 } from "@/lib/ai-agent/shared";
 import {
   AiAgentError,
+  deleteConversation,
   ensureAiAgentSettings,
   findConversationById,
   getClientPlan,
@@ -856,6 +857,26 @@ export async function saveAiProfileAction(
         ? "Sua IA foi criada e já está atendendo."
         : "Sua IA foi criada. Ative o atendimento quando quiser.",
     };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Excluir lead
+// ---------------------------------------------------------------------------
+
+export async function deleteAiConversationAction(
+  _previous: AiAgentActionState,
+  formData: FormData,
+): Promise<AiAgentActionState> {
+  try {
+    const { clientId } = await requireCompletePlanClient();
+    const id = z.string().uuid().safeParse(formData.get("conversationId"));
+    if (!id.success) return { error: "Lead inválido." };
+    await deleteConversation(clientId, id.data);
+    refresh();
+    return { success: "Lead excluído com todas as mensagens." };
   } catch (error) {
     return toState(error);
   }
