@@ -219,6 +219,52 @@ export function formatBrazilianWhatsapp(value: string | null | undefined) {
   return value;
 }
 
+/**
+ * Formas do mesmo celular brasileiro. O WhatsApp ainda entrega muitos números
+ * antigos sem o 9 da frente (55 + DDD + 8 dígitos); um bloqueio cadastrado com
+ * o 9 precisa valer para as duas formas, e vice-versa.
+ */
+export function whatsappNumberVariants(number: string): string[] {
+  const digits = number.replace(/\D/g, "");
+  const variants = new Set([digits]);
+
+  if (/^55\d{2}9\d{8}$/.test(digits)) {
+    variants.add(`${digits.slice(0, 4)}${digits.slice(5)}`);
+  } else if (/^55\d{2}[6-9]\d{7}$/.test(digits)) {
+    variants.add(`${digits.slice(0, 4)}9${digits.slice(4)}`);
+  }
+
+  return [...variants];
+}
+
+/**
+ * Máscara do número brasileiro enquanto digita: "(11) 91234-5678" ou
+ * "(11) 3123-4567". Colar "+55 11 ..." também funciona: o 55 do país sai daqui
+ * e é recolocado pelo servidor.
+ */
+export function maskBrazilianPhone(raw: string) {
+  let digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("55") && digits.length > 11) digits = digits.slice(2);
+  digits = digits.slice(0, 11);
+
+  if (!digits) return "";
+  if (digits.length <= 2) return `(${digits}`;
+
+  const area = digits.slice(0, 2);
+  const rest = digits.slice(2);
+
+  if (rest.length <= 4) return `(${area}) ${rest}`;
+  if (digits.length === 11)
+    return `(${area}) ${rest.slice(0, 5)}-${rest.slice(5)}`;
+  return `(${area}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
+}
+
+/** Exibição com país: "5511912345678" -> "+55 (11) 91234-5678". */
+export function formatWhatsappInternational(value: string | null | undefined) {
+  const local = formatBrazilianWhatsapp(value);
+  return local.startsWith("(") ? `+55 ${local}` : local;
+}
+
 /** Converte um número normalizado no chatId que o WAHA espera. */
 export function toWahaChatId(normalizedNumber: string) {
   return `${normalizedNumber.replace(/\D/g, "")}@c.us`;

@@ -23,6 +23,7 @@ import {
   mapConversation,
 } from "@/lib/ai-agent/store";
 import { isSupabaseAdminConfigured } from "@/lib/env";
+import { listBlockedNumbers, type AiBlockedNumber } from "@/lib/ai-agent/blocked";
 import { hasAiAttendanceSegment } from "@/lib/segments";
 import type { User } from "@/lib/types";
 
@@ -38,6 +39,7 @@ export type AiAgentPageData = {
   unavailable?: boolean;
   // Atendimento nichado: false para clientes fora de compra de veículos.
   segmentEligible?: boolean;
+  blockedNumbers: AiBlockedNumber[];
 };
 
 function fallbackSettings(clientId: string): AiAgentSettings {
@@ -73,6 +75,7 @@ export async function getAiAgentPageData(user: User): Promise<AiAgentPageData> {
       whatsappPhone: null,
       conversations: [],
       totals: { total: 0, qualified: 0 },
+      blockedNumbers: [],
       unavailable: !isSupabaseAdminConfigured(),
     };
   }
@@ -92,6 +95,7 @@ export async function getAiAgentPageData(user: User): Promise<AiAgentPageData> {
         whatsappPhone: null,
         conversations: [],
         totals: { total: 0, qualified: 0 },
+        blockedNumbers: [],
         segmentEligible: false,
       };
     }
@@ -103,7 +107,7 @@ export async function getAiAgentPageData(user: User): Promise<AiAgentPageData> {
         ? await ensureAiAgentSettings(clientId)
         : ((await getAiAgentSettings(clientId)) ?? fallbackSettings(clientId));
 
-    const [session, conversations, totals] = await Promise.all([
+    const [session, conversations, totals, blockedNumbers] = await Promise.all([
       getSessionForClient(clientId),
       plan === "complete"
         ? listConversations({ clientId, limit: 50 })
@@ -111,6 +115,9 @@ export async function getAiAgentPageData(user: User): Promise<AiAgentPageData> {
       plan === "complete"
         ? countConversations(clientId)
         : Promise.resolve({ total: 0, qualified: 0 }),
+      plan === "complete"
+        ? listBlockedNumbers(clientId)
+        : Promise.resolve([] as AiBlockedNumber[]),
     ]);
 
     return {
@@ -121,6 +128,7 @@ export async function getAiAgentPageData(user: User): Promise<AiAgentPageData> {
       whatsappPhone: session?.phoneNumber ?? null,
       conversations,
       totals,
+      blockedNumbers,
     };
   } catch (error) {
     console.error("[ia/pagina] falha ao carregar", {
@@ -135,6 +143,7 @@ export async function getAiAgentPageData(user: User): Promise<AiAgentPageData> {
       whatsappPhone: null,
       conversations: [],
       totals: { total: 0, qualified: 0 },
+      blockedNumbers: [],
       unavailable: true,
     };
   }

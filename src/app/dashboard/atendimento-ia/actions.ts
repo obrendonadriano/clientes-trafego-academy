@@ -22,6 +22,16 @@ import {
 import { getWahaConfig, sendWahaText, setWahaTyping } from "@/lib/waha";
 import { transition } from "@/lib/ai-agent/transitions";
 import {
+  addBlockedNumber,
+  deleteBlockedNumber,
+  updateBlockedNumber,
+} from "@/lib/ai-agent/blocked";
+import {
+  DEFAULT_ACTIVATION,
+  DEFAULT_PROFILE,
+  MAX_ACTIVATION_PHRASES,
+  normalizeActivationText,
+  profileSchema,
   DEFAULT_SCRIPT,
   SCRIPT_QUESTIONS,
   SCRIPT_REPLIES,
@@ -549,6 +559,289 @@ export async function restoreAiScriptAction(): Promise<AiAgentActionState> {
     });
     refresh();
     return { success: "Mensagens padrão restauradas." };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Frase de ativação
+// ---------------------------------------------------------------------------
+
+export async function saveAiActivationAction(
+  _previous: AiAgentActionState,
+  formData: FormData,
+): Promise<AiAgentActionState> {
+  try {
+    const { clientId } = await requireCompletePlanClient();
+    const enabled = formData.get("activationEnabled") === "on";
+    const phrases = readActivationPhrases(formData);
+    if (!phrases.ok) return phrases.state;
+    const current = await ensureAiAgentSettings(clientId);
+    await updateAiAgentSettings(clientId, {
+      knowledge: {
+        ...current.knowledge,
+        activation: { enabled, phrases: phrases.value },
+      },
+    });
+    refresh();
+    return {
+      success: enabled
+        ? "Frases de ativação salvas."
+        : "Frases salvas. A IA vai responder qualquer número novo.",
+    };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+/** Lê as frases (um campo por frase), sem vazias e sem repetidas. */
+function readActivationPhrases(
+  formData: FormData,
+): { ok: true; value: string[] } | { ok: false; state: AiAgentActionState } {
+  const seen = new Set<string>();
+  const value: string[] = [];
+  for (const raw of formData.getAll("activationPhrase")) {
+    const phrase = String(raw).trim();
+    if (!phrase) continue;
+    if (phrase.length < 3 || phrase.length > 200)
+      return {
+        ok: false,
+        state: {
+          error: "Cada frase de ativação precisa ter entre 3 e 200 caracteres.",
+        },
+      };
+    const key = normalizeActivationText(phrase);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    value.push(phrase);
+  }
+  if (!value.length)
+    return { ok: false, state: { error: "Cadastre pelo menos uma frase." } };
+  if (value.length > MAX_ACTIVATION_PHRASES)
+    return {
+      ok: false,
+      state: { error: `Use no máximo ${MAX_ACTIVATION_PHRASES} frases.` },
+    };
+  return { ok: true, value };
+}
+
+export async function restoreAiActivationAction(): Promise<AiAgentActionState> {
+  try {
+    const { clientId } = await requireCompletePlanClient();
+    const current = await ensureAiAgentSettings(clientId);
+    await updateAiAgentSettings(clientId, {
+      knowledge: { ...current.knowledge, activation: DEFAULT_ACTIVATION },
+    });
+    refresh();
+    return { success: "Frase padrão restaurada." };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Números bloqueados
+// ---------------------------------------------------------------------------
+
+const blockedIdSchema = z.string().uuid("Número inválido.");
+
+type BlockedForm =
+  | { ok: true; whatsappNumber: string; label: string | null }
+  | { ok: false; state: AiAgentActionState };
+
+function readBlockedForm(formData: FormData): BlockedForm {
+  const phone = normalizeBrazilianWhatsapp(
+    String(formData.get("whatsappNumber") ?? ""),
+  );
+  const label = String(formData.get("label") ?? "").trim();
+  if (!phone.ok)
+    return {
+      ok: false,
+      state: { error: phone.error, fieldErrors: { whatsappNumber: phone.error } },
+    };
+  if (label.length > 80)
+    return {
+      ok: false,
+      state: {
+        error: "A identificação pode ter até 80 caracteres.",
+        fieldErrors: { label: "Até 80 caracteres." },
+      },
+    };
+  return { ok: true, whatsappNumber: phone.value, label: label || null };
+}
+
+export async function addBlockedNumberAction(
+  _previous: AiAgentActionState,
+  formData: FormData,
+): Promise<AiAgentActionState> {
+  try {
+    const { clientId } = await requireCompletePlanClient();
+    const parsed = readBlockedForm(formData);
+    if (!parsed.ok) return parsed.state;
+    await addBlockedNumber(clientId, parsed);
+    refresh();
+    return { success: "Número bloqueado. A IA não vai responder a ele." };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+export async function updateBlockedNumberAction(
+  _previous: AiAgentActionState,
+  formData: FormData,
+): Promise<AiAgentActionState> {
+  try {
+    const { clientId } = await requireCompletePlanClient();
+    const id = blockedIdSchema.safeParse(formData.get("id"));
+    if (!id.success) return { error: "Número inválido." };
+    const parsed = readBlockedForm(formData);
+    if (!parsed.ok) return parsed.state;
+    await updateBlockedNumber(clientId, id.data, {
+      whatsappNumber: parsed.whatsappNumber,
+      label: parsed.label,
+    });
+    refresh();
+    return { success: "Número atualizado." };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+export async function toggleBlockedNumberAction(
+  _previous: AiAgentActionState,
+  formData: FormData,
+): Promise<AiAgentActionState> {
+  try {
+    const { clientId } = await requireCompletePlanClient();
+    const id = blockedIdSchema.safeParse(formData.get("id"));
+    if (!id.success) return { error: "Número inválido." };
+    const blocked = formData.get("blocked") === "true";
+    await updateBlockedNumber(clientId, id.data, { blocked });
+    refresh();
+    return {
+      success: blocked
+        ? "Número bloqueado novamente."
+        : "Número liberado. A IA volta a responder a ele.",
+    };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+export async function deleteBlockedNumberAction(
+  _previous: AiAgentActionState,
+  formData: FormData,
+): Promise<AiAgentActionState> {
+  try {
+    const { clientId } = await requireCompletePlanClient();
+    const id = blockedIdSchema.safeParse(formData.get("id"));
+    if (!id.success) return { error: "Número inválido." };
+    await deleteBlockedNumber(clientId, id.data);
+    refresh();
+    return { success: "Número removido da lista." };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Quiz "Monte sua IA": perfil do lead qualificado
+// ---------------------------------------------------------------------------
+
+const splitList = (value: FormDataEntryValue | null) =>
+  String(value ?? "")
+    .split(/[\n,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+function optionalNumber(value: FormDataEntryValue | null) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return digits ? Number(digits) : null;
+}
+
+export async function saveAiProfileAction(
+  _previous: AiAgentActionState,
+  formData: FormData,
+): Promise<AiAgentActionState> {
+  try {
+    const { clientId } = await requireCompletePlanClient();
+    const phrases = readActivationPhrases(formData);
+    if (!phrases.ok) return phrases.state;
+
+    const company = String(formData.get("company") ?? "").trim();
+    if (company.length < 2 || company.length > 200)
+      return { error: "Informe o nome da empresa (até 200 caracteres)." };
+
+    const vehicleTypes = [
+      ...formData.getAll("vehicleTypes").map((v) => String(v).trim()),
+      ...splitList(formData.get("vehicleTypesOther")),
+    ].filter(Boolean);
+    if (!vehicleTypes.length)
+      return { error: "Escolha pelo menos um tipo de veículo." };
+
+    const overduePolicy = String(formData.get("overduePolicy") ?? "any");
+    const minVehicleYear = optionalNumber(formData.get("minVehicleYear"));
+    const currentYear = new Date().getFullYear();
+    if (
+      minVehicleYear !== null &&
+      (minVehicleYear < 1950 || minVehicleYear > currentYear + 1)
+    )
+      return { error: `O ano mínimo precisa estar entre 1950 e ${currentYear + 1}.` };
+    const minOverdueInstallments =
+      overduePolicy === "current_only"
+        ? null
+        : optionalNumber(formData.get("minOverdueInstallments"));
+    if (
+      minOverdueInstallments !== null &&
+      (minOverdueInstallments < 1 || minOverdueInstallments > 120)
+    )
+      return { error: "O mínimo de parcelas atrasadas precisa ser de 1 a 120." };
+    // Valor em reais inteiros, digitado com máscara ("R$ 50.000").
+    const maxDebtAmount = optionalNumber(formData.get("maxDebtAmount")) || null;
+
+    const profile = profileSchema.parse({
+      completedAt: new Date().toISOString(),
+      vehicleTypes: [...new Set(vehicleTypes)].slice(0, 12),
+      overduePolicy,
+      minOverdueInstallments,
+      minVehicleYear,
+      maxDebtAmount,
+      rejectedBanks: splitList(formData.get("rejectedBanks")).slice(0, 30),
+      ask: Object.fromEntries(
+        Object.keys(DEFAULT_PROFILE.ask).map((key) => [
+          key,
+          formData.get(`ask_${key}`) === "on",
+        ]),
+      ),
+      notes: String(formData.get("notes") ?? "").slice(0, 1000),
+    });
+
+    const current = await ensureAiAgentSettings(clientId);
+    const enableNow = formData.get("enableNow") === "on";
+    if (enableNow) {
+      const session = await getSessionForClient(clientId);
+      if (session?.status !== "WORKING")
+        return {
+          error: "Conecte seu WhatsApp antes de ativar o atendimento automático.",
+        };
+    }
+
+    await updateAiAgentSettings(clientId, {
+      knowledge: {
+        ...current.knowledge,
+        company,
+        profile,
+        activation: { enabled: true, phrases: phrases.value },
+      },
+      ...(enableNow ? { enabled: true, disabled_by_plan_at: null } : {}),
+    });
+    refresh();
+    return {
+      success: enableNow
+        ? "Sua IA foi criada e já está atendendo."
+        : "Sua IA foi criada. Ative o atendimento quando quiser.",
+    };
   } catch (error) {
     return toState(error);
   }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AiKnowledge } from "./config";
+import type { AiKnowledge, AiProfile, OptionalQuestion } from "./config";
 
 export const FIELDS = [
   "name",
@@ -54,6 +54,7 @@ export const extractionSchema = z
       "does_not_buy",
       "rules",
       "facts",
+      "no_vehicle",
     ]),
     human_requested: z.boolean(),
     confidence: z.number().min(0).max(1),
@@ -61,6 +62,82 @@ export const extractionSchema = z
   })
   .strict();
 export type Extraction = z.infer<typeof extractionSchema>;
+// Perguntas opcionais, na ordem da qualificação. Financiamento e modelo são
+// sempre perguntados. (Espelha config.OPTIONAL_QUESTIONS; aqui sem import de
+// valor para o módulo rodar isolado nos testes.)
+export const OPTIONAL_QUESTION_ORDER: OptionalQuestion[] = [
+  "vehicle_year",
+  "bank",
+  "debt_amount",
+  "has_overdue_installments",
+];
+
+/**
+ * Perguntas efetivas: um critério depende do dado, então o dado é perguntado
+ * mesmo que o cliente tenha desmarcado a pergunta.
+ */
+export function effectiveQuestions(profile: AiProfile) {
+  return {
+    vehicle_year: profile.ask.vehicle_year || profile.minVehicleYear !== null,
+    bank: profile.ask.bank || profile.rejectedBanks.length > 0,
+    debt_amount: profile.ask.debt_amount || profile.maxDebtAmount !== null,
+    has_overdue_installments:
+      profile.ask.has_overdue_installments ||
+      profile.overduePolicy !== "any" ||
+      profile.minOverdueInstallments !== null,
+  } satisfies Record<OptionalQuestion, boolean>;
+}
+
+// Por que o lead não passou. O código vai para o histórico de processamento e
+// o texto para o painel (disqualification_reason).
+export const DISQUALIFICATION_REASONS = {
+  not_financed: "Veículo quitado / não financiado.",
+  no_vehicle: "Não tem veículo.",
+  overdue_policy: "Situação das parcelas fora do perfil.",
+  min_overdue: "Menos parcelas atrasadas que o mínimo.",
+  min_year: "Veículo abaixo do ano mínimo.",
+  max_debt: "Dívida acima do máximo.",
+  rejected_bank: "Banco não atendido.",
+} as const;
+export type DisqualificationReason = keyof typeof DISQUALIFICATION_REASONS;
+
+/** Critérios do perfil, avaliados só sobre dados já informados. */
+function profileRejection(
+  facts: Facts,
+  profile: AiProfile,
+): DisqualificationReason | null {
+  const overdue = facts.has_overdue_installments;
+  if (profile.overduePolicy === "overdue_only" && overdue === false)
+    return "overdue_policy";
+  if (profile.overduePolicy === "current_only" && overdue === true)
+    return "overdue_policy";
+  if (
+    profile.minOverdueInstallments !== null &&
+    overdue === true &&
+    typeof facts.overdue_installments_count === "number" &&
+    facts.overdue_installments_count < profile.minOverdueInstallments
+  )
+    return "min_overdue";
+  if (
+    profile.minVehicleYear !== null &&
+    typeof facts.vehicle_year === "number" &&
+    facts.vehicle_year < profile.minVehicleYear
+  )
+    return "min_year";
+  if (
+    profile.maxDebtAmount !== null &&
+    typeof facts.debt_amount === "number" &&
+    facts.debt_amount > profile.maxDebtAmount
+  )
+    return "max_debt";
+  if (
+    typeof facts.bank === "string" &&
+    profile.rejectedBanks.some((bank) => fold(facts.bank as string).includes(fold(bank)))
+  )
+    return "rejected_bank";
+  return null;
+}
+
 export type PolicyDecision = {
   facts: Facts;
   unknownFields: Field[];
@@ -71,6 +148,7 @@ export type PolicyDecision = {
   candidates: string[][];
   changedFields: Field[];
   rejectedFields: Field[];
+  disqualification: DisqualificationReason | null;
 };
 const fold = (s: string) =>
   s
@@ -229,29 +307,28 @@ export function decidePolicy(input: {
     unknown.delete("overdue_installments_count");
   }
   for (const field of FIELDS) if (facts[field] !== null) unknown.delete(field);
-  const required: Field[] = [
-    "financed",
-    "vehicle",
-    "vehicle_year",
-    "bank",
-    "debt_amount",
-    "has_overdue_installments",
-  ];
-  if (facts.has_overdue_installments === true)
+  const profile = kb.profile;
+  const asked = effectiveQuestions(profile);
+  const required: Field[] = ["financed", "vehicle"];
+  for (const field of OPTIONAL_QUESTION_ORDER) if (asked[field]) required.push(field);
+  if (asked.has_overdue_installments && facts.has_overdue_installments === true)
     required.push("overdue_installments_count");
   const missing = required.filter(
     (field) =>
       facts[field] === null &&
       (!unknown.has(field) || field === "financed" || field === "vehicle"),
   );
-  const status =
+  const disqualification: DisqualificationReason | null =
     facts.financed === false
-      ? "disqualified"
-      : facts.financed === true &&
-          Boolean(facts.vehicle) &&
-          missing.length === 0
-        ? "qualified"
-        : "qualifying";
+      ? "not_financed"
+      : e.intent === "no_vehicle" && !injected && e.confidence >= 0.7
+        ? "no_vehicle"
+        : profileRejection(facts, profile);
+  const status = disqualification
+    ? "disqualified"
+    : facts.financed === true && Boolean(facts.vehicle) && missing.length === 0
+      ? "qualified"
+      : "qualifying";
   let human =
     injected ||
     e.human_requested ||
@@ -268,7 +345,13 @@ export function decidePolicy(input: {
   let nextField: Field | null =
     status === "qualifying" ? (missing[0] ?? null) : null;
   let reply = "";
-  if (human)
+  // Fora do perfil (quitado, sem veículo, critério do cliente): não é lead e
+  // a IA não responde nada, nem agora nem depois.
+  if (status === "disqualified") {
+    human = false;
+    reason = disqualification ?? "not_financed";
+    nextField = null;
+  } else if (human)
     reply = says.human;
   else if (input.media && input.media !== "text") {
     reply = input.media === "audio" ? says.audio : says.media;
@@ -300,7 +383,11 @@ export function decidePolicy(input: {
       hours: kb.hours,
       regions: kb.regions,
       company: [kb.company, kb.service].filter(Boolean),
-      buys: kb.buys,
+      buys: kb.buys.length
+        ? kb.buys
+        : profile.vehicleTypes.length
+          ? [`Trabalhamos com: ${profile.vehicleTypes.join(", ").toLowerCase()} financiados.`]
+          : [],
       does_not_buy: kb.doesNotBuy,
       rules: kb.rules,
       facts: kb.allowedFacts,
@@ -321,9 +408,6 @@ export function decidePolicy(input: {
     reply = kb.faq[e.faq_index].answer;
     reason = "knowledge_answer";
     nextField = null;
-  } else if (status === "disqualified") {
-    reply = says.disqualified;
-    reason = "not_financed";
   } else if (status === "qualified") {
     reply = says.qualified;
     reason = "policy_qualified";
@@ -351,9 +435,10 @@ export function decidePolicy(input: {
     }
   }
   // Uma única opção: o texto sai do roteiro do cliente, nunca escrito pelo modelo.
-  const candidates = [
-    [reply || "Recebi sua mensagem. Vou deixar a equipe conferir seu caso."],
-  ];
+  const candidates =
+    status === "disqualified"
+      ? [[]]
+      : [[reply || "Recebi sua mensagem. Vou deixar a equipe conferir seu caso."]];
   return {
     facts,
     unknownFields: [...unknown],
@@ -364,6 +449,7 @@ export function decidePolicy(input: {
     candidates,
     changedFields,
     rejectedFields,
+    disqualification,
   };
 }
 

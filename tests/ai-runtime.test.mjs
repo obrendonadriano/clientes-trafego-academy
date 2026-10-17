@@ -180,7 +180,12 @@ async function runtime() {
     debounceMs: 0,
     timezone: "America/Sao_Paulo",
     businessSchedule: DEFAULT_SCHEDULE,
-    knowledge: EMPTY_KNOWLEDGE,
+    // Cenários antigos abrem conversa com "Oi": a frase fica desligada aqui
+    // e os testes de ativação a ligam explicitamente.
+    knowledge: {
+      ...EMPTY_KNOWLEDGE,
+      activation: { ...EMPTY_KNOWLEDGE.activation, enabled: false },
+    },
   };
   const all = async (query, args = []) => (await db.query(query, args)).rows;
   const one = async (query, args = []) => (await all(query, args))[0] ?? null;
@@ -204,6 +209,11 @@ async function runtime() {
     getAiAgentSettings: async () => settings,
     getClientPlan: async () => "complete",
     getClientSegment: async () => state.segment ?? "veiculo_atrasado",
+    setDisqualificationReason: (client, id, reason) =>
+      db.query(
+        "update ai_conversations set disqualification_reason=$3 where client_id=$1 and id=$2 and status='disqualified'",
+        [client, id, reason],
+      ),
     findConversation: (client, number) =>
       one(
         "select * from ai_conversations where client_id=$1 and whatsapp_number=$2",
@@ -252,6 +262,9 @@ async function runtime() {
     Object.entries({
       "src/lib/ai-agent/store.ts": store,
       "src/lib/ai-agent/transitions.ts": { transition: tx },
+      "src/lib/ai-agent/blocked.ts": {
+        isNumberBlocked: async () => Boolean(state.blocked),
+      },
       "src/lib/waha.ts": mockWaha,
       "src/lib/integrations.ts": {
         getIntegrationSettingByProvider: async () => ({
@@ -357,6 +370,145 @@ async function runtime() {
 }
 
 test("Pipeline real com WAHA/DeepSeek simulados", async (t) => {
+  await t.test(
+    "frase de ativação: número novo só abre conversa com a frase",
+    async () => {
+      const r = await runtime();
+      try {
+        r.settings.knowledge.activation.enabled = true;
+        assert.deepEqual(await r.ingest("x1", "Oi, tudo bem?"), { acao: "ignorar" });
+        assert.deepEqual(
+          await r.ingest("x2", "", { fromMe: true, body: "mensagem pessoal" }),
+          { acao: "ignorar" },
+        );
+        assert.ok(!(await r.conversation()));
+        const opened = await r.ingest(
+          "x3",
+          "ola!! quero fazer uma AVALIACAO do meu veiculo 🚗 é um Corolla",
+        );
+        assert.equal(opened.acao, "aguardar");
+        // Conversa aberta: as próximas mensagens não precisam da frase.
+        assert.equal((await r.ingest("x4", "Oi")).acao, "aguardar");
+        assert.equal((await r.messages()).length, 2);
+      } finally {
+        await r.db.close();
+      }
+    },
+  );
+  await t.test(
+    "número bloqueado: não grava; bloqueado no meio da conversa não recebe nada",
+    async () => {
+      const r = await runtime();
+      try {
+        r.state.blocked = true;
+        assert.deepEqual(await r.ingest("b1", "Oi"), { acao: "ignorar" });
+        assert.ok(!(await r.conversation()));
+        r.state.blocked = false;
+        await r.ingest("b2", "Oi");
+        await r.step();
+        assert.equal((await r.messages()).filter((m) => m.status === "queued").length, 1);
+        // Bloqueou com a resposta na fila e o lead escreveu de novo.
+        r.state.blocked = true;
+        await r.ingest("b3", "Alô?");
+        const before = r.state.requests.length;
+        await r.expireDelay();
+        await r.step();
+        await r.step();
+        assert.equal(r.state.sent.length, 0);
+        assert.equal(r.state.requests.length, before);
+        const statuses = (await r.messages()).map((m) => m.status);
+        assert.ok(!statuses.includes("queued") && !statuses.includes("received"));
+      } finally {
+        await r.db.close();
+      }
+    },
+  );
+  await t.test(
+    "quitado: a IA não responde nada, agora nem depois",
+    async () => {
+      const r = await runtime();
+      try {
+        r.state.responses = [
+          {
+            facts: [{ field: "financed", value: false, evidence: "quitado", correction: false }],
+            unknown_fields: [],
+            intent: "qualification",
+            human_requested: false,
+            confidence: 0.95,
+            faq_index: null,
+          },
+        ];
+        await r.ingest("d1", "Meu carro já está quitado");
+        await r.step();
+        await r.expireDelay();
+        await r.step();
+        assert.equal(r.state.sent.length, 0);
+        const c = await r.conversation();
+        assert.equal(c.status, "disqualified");
+        assert.equal(c.disqualification_reason, "Veículo quitado / não financiado.");
+        assert.equal(c.human_takeover, false);
+        const requests = r.state.requests.length;
+        await r.ingest("d2", "Oi? Ninguém responde?");
+        await r.step();
+        await r.step();
+        assert.equal(r.state.sent.length, 0);
+        assert.equal(r.state.requests.length, requests);
+        assert.equal((await r.conversation()).human_takeover, false);
+        assert.ok((await r.messages()).every((m) => m.direction === "inbound"));
+      } finally {
+        await r.db.close();
+      }
+    },
+  );
+  await t.test(
+    "após a mensagem final a IA encerra e não responde mais o lead",
+    async () => {
+      const r = await runtime();
+      try {
+        const incoming = "Corolla 2020 financiado no Itau, devo 30000 e as parcelas estão em dia";
+        const fact = (field, value, evidence) => ({ field, value, evidence, correction: false });
+        r.state.responses = [
+          {
+            facts: [
+              fact("vehicle", "Corolla", "Corolla"),
+              fact("vehicle_year", 2020, "2020"),
+              fact("financed", true, "financiado"),
+              fact("bank", "Itau", "Itau"),
+              fact("debt_amount", 30000, "30000"),
+              fact("has_overdue_installments", false, "em dia"),
+            ],
+            unknown_fields: [],
+            intent: "qualification",
+            human_requested: false,
+            confidence: 0.95,
+            faq_index: null,
+          },
+        ];
+        await r.ingest("q1", incoming);
+        await r.step();
+        await r.expireDelay();
+        await r.step();
+        await r.step();
+        assert.equal(r.state.sent.length, 1);
+        assert.equal(r.state.sent[0].text, DEFAULT_SCRIPT.replies.qualified);
+        const closed = await r.conversation();
+        assert.equal(closed.status, "qualified");
+        assert.equal(closed.last_question, "closed");
+
+        const requests = r.state.requests.length;
+        await r.ingest("q2", "Obrigado! Quando vocês me ligam?");
+        await r.step();
+        await r.expireDelay();
+        await r.step();
+        assert.equal(r.state.sent.length, 1);
+        assert.equal(r.state.requests.length, requests);
+        const last = (await r.messages()).at(-1);
+        assert.equal(last.status, "handled_by_human");
+      } finally {
+        await r.db.close();
+      }
+    },
+  );
   await t.test(
     "cliente fora do segmento de veículos não grava nem responde",
     async () => {

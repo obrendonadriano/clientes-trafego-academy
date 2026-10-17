@@ -48,7 +48,7 @@ const SETTINGS_COLUMNS =
   "client_id, enabled, prompt, notification_whatsapp, always_on, typing_enabled, notify_qualified, delay_min_ms, delay_max_ms, message_gap_min_ms, message_gap_max_ms, debounce_ms, timezone, disabled_by_plan_at, knowledge, business_schedule";
 
 const CONVERSATION_COLUMNS =
-  "id, client_id, whatsapp_number, chat_id, name, status, vehicle, vehicle_year, financed, bank, debt_amount, has_overdue_installments, overdue_installments_count, unknown_fields, extra_data, disqualification_reason, qualified_at, notification_sent, notification_sent_at, human_takeover, human_takeover_requested, last_inbound_at, last_outbound_at, last_error, criado_em, atualizado_em, revision, processing_state, whatsapp_display_name, last_question, off_hours_period";
+  "id, client_id, whatsapp_number, chat_id, name, status, vehicle, vehicle_year, financed, bank, debt_amount, has_overdue_installments, overdue_installments_count, unknown_fields, extra_data, disqualification_reason, qualified_at, notification_sent, notification_sent_at, human_takeover, human_takeover_requested, last_inbound_at, last_outbound_at, last_error, criado_em, atualizado_em, revision, processing_state, whatsapp_display_name, last_question, off_hours_period, ai_resumed_at";
 
 type SettingsRow = {
   knowledge: unknown;
@@ -74,6 +74,7 @@ export type ConversationRow = {
   processing_state: string;
   whatsapp_display_name: string | null;
   last_question: string | null;
+  ai_resumed_at: string | null;
   off_hours_period: string | null;
   id: string;
   client_id: string;
@@ -169,6 +170,24 @@ export async function getClientPlan(clientId: string): Promise<ClientPlanType> {
   }
 
   return toClientPlanType((data as { plan_type?: unknown } | null)?.plan_type);
+}
+
+/** Motivo legível da desqualificação, exibido no painel de leads. */
+export async function setDisqualificationReason(
+  clientId: string,
+  conversationId: string,
+  reason: string,
+) {
+  const { error } = await aiAdminClient()
+    .from("ai_conversations")
+    .update({ disqualification_reason: reason })
+    .eq("client_id", clientId)
+    .eq("id", conversationId)
+    .eq("status", "disqualified");
+
+  if (error) {
+    throw new AiAgentError("Não foi possível registrar o motivo.");
+  }
 }
 
 /** Segmento do cliente: o Atendimento IA só vale para compra de veículos. */

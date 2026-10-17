@@ -158,14 +158,18 @@ test("01 Corolla 2020 financiado: extrai evidência, ainda não qualifica com da
   assert.equal(p.status, "qualifying");
   assert.equal(p.nextField, "bank");
 });
-test("02 quitado encerra sem perguntar banco/dívida", () => {
+test("02 quitado encerra em silêncio, sem perguntar banco/dívida", () => {
   const p = policy(
     { facts: [fact("financed", false, "quitado")] },
     { incoming: "Está quitado" },
   );
   assert.equal(p.status, "disqualified");
   assert.equal(p.nextField, null);
-  assert.ok(!text(p).includes("?"));
+  assert.equal(p.disqualification, "not_financed");
+  // Não é lead: nenhuma mensagem, nem pedido de atendimento humano.
+  assert.deepEqual(p.candidates, [[]]);
+  assert.equal(p.human, false);
+  assert.deepEqual(validateReply([], p, EMPTY_KNOWLEDGE), []);
 });
 for (const [number, field] of [
   ["03", "debt_amount"],
@@ -881,4 +885,206 @@ test("roteiro: salvar recusa duas perguntas, prefixo com pergunta e promessas", 
     checkScriptInput(withQuestions({ bank: "  " })),
     /Preencha todas/,
   );
+});
+
+// ---------------------------------------------------------------------------
+// Frase de ativação e números bloqueados
+// ---------------------------------------------------------------------------
+
+test("frase de ativação ignora acento, caixa, pontuação e emoji", async () => {
+  const { matchesActivationPhrase, DEFAULT_ACTIVATION } = await import(
+    "../src/lib/ai-agent/config.ts"
+  );
+  const [phrase, second] = DEFAULT_ACTIVATION.phrases;
+  assert.equal(DEFAULT_ACTIVATION.enabled, true);
+  assert.equal(phrase, "Olá! Quero fazer uma avaliação do meu veículo.");
+  assert.equal(second, "Olá! Tenho um veículo e gostaria de solicitar uma análise.");
+  assert.equal(
+    matchesActivationPhrase(
+      "ola, tenho um veiculo e gostaria de solicitar uma analise!",
+      DEFAULT_ACTIVATION.phrases,
+    ),
+    true,
+  );
+  // Formato antigo (uma frase só) continua valendo.
+  assert.deepEqual(
+    knowledgeSchema.parse({ activation: { enabled: false, phrase: "Quero vender" } }).activation,
+    { enabled: false, phrases: ["Quero vender"] },
+  );
+  for (const message of [
+    phrase,
+    "ola quero fazer uma avaliacao do meu veiculo",
+    "OLÁ!!! Quero fazer uma avaliação do meu veículo 🚗 é um Onix 2019",
+    "Bom dia. Olá, quero fazer uma avaliação do meu veículo",
+  ])
+    assert.equal(matchesActivationPhrase(message, phrase), true, message);
+  for (const message of ["Oi", "quero vender meu carro", "avaliação do veículo"])
+    assert.equal(matchesActivationPhrase(message, phrase), false, message);
+  assert.equal(matchesActivationPhrase("qualquer coisa", "!!!"), false);
+  // Contas antigas sem o campo usam o padrão; valor quebrado também.
+  assert.deepEqual(knowledgeSchema.parse({}).activation, DEFAULT_ACTIVATION);
+  assert.deepEqual(
+    knowledgeSchema.parse({ activation: { enabled: "x", phrase: "" } }).activation,
+    DEFAULT_ACTIVATION,
+  );
+});
+
+test("telefone: máscara, +55 automático e variantes com/sem o 9", async () => {
+  const {
+    maskBrazilianPhone,
+    normalizeBrazilianWhatsapp,
+    whatsappNumberVariants,
+    formatWhatsappInternational,
+  } = await import("../src/lib/ai-agent/shared.ts");
+  assert.equal(maskBrazilianPhone("11"), "(11");
+  assert.equal(maskBrazilianPhone("119123"), "(11) 9123");
+  assert.equal(maskBrazilianPhone("11912345678"), "(11) 91234-5678");
+  assert.equal(maskBrazilianPhone("1131234567"), "(11) 3123-4567");
+  assert.equal(maskBrazilianPhone("+55 (11) 91234-5678"), "(11) 91234-5678");
+  assert.equal(maskBrazilianPhone("119123456789999"), "(11) 91234-5678");
+  assert.deepEqual(normalizeBrazilianWhatsapp("(11) 91234-5678"), {
+    ok: true,
+    value: "5511912345678",
+  });
+  assert.equal(normalizeBrazilianWhatsapp("(00) 91234-5678").ok, false);
+  assert.deepEqual(whatsappNumberVariants("5511912345678").sort(), [
+    "551112345678",
+    "5511912345678",
+  ]);
+  assert.deepEqual(whatsappNumberVariants("551191234567").sort(), [
+    "551191234567",
+    "5511991234567",
+  ]);
+  assert.deepEqual(whatsappNumberVariants("551131234567"), ["551131234567"]);
+  assert.equal(formatWhatsappInternational("5511912345678"), "+55 (11) 91234-5678");
+});
+
+test("migration de números bloqueados: formato, único por cliente e só leitura para o cliente", async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`create role anon; create role authenticated; create role service_role bypassrls; create schema auth;
+      create function auth.uid() returns uuid language sql stable as $$ select (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid $$;
+      create table public.clients(id uuid primary key);
+      create table public.users(id uuid primary key,auth_user_id uuid,client_id uuid,role text,ativo boolean default true);
+      grant usage on schema public,auth to authenticated,service_role;
+      grant select on public.users to authenticated;
+      insert into clients values('${A}'),('${B}');`);
+    await db.exec(sqlFile("20261017120000_ai_blocked_numbers.sql"));
+    await db.exec(`insert into ai_blocked_numbers(client_id,whatsapp_number,label) values('${A}','5511912345678','Equipe');
+      insert into ai_blocked_numbers(client_id,whatsapp_number) values('${B}','5511912345678');`);
+    const row = (await db.query("select blocked from ai_blocked_numbers where client_id=$1", [A])).rows[0];
+    assert.equal(row.blocked, true);
+    await assert.rejects(
+      db.exec(`insert into ai_blocked_numbers(client_id,whatsapp_number) values('${A}','5511912345678')`),
+    );
+    await assert.rejects(
+      db.exec(`insert into ai_blocked_numbers(client_id,whatsapp_number) values('${A}','11912345678')`),
+    );
+    const user = "20000000-0000-4000-8000-000000000001";
+    await db.exec(`insert into users values('${user}','${user}','${A}','client',true);
+      set request.jwt.claims='{"sub":"${user}"}'; set role authenticated;`);
+    const visible = (await db.query("select client_id from ai_blocked_numbers")).rows;
+    assert.deepEqual(visible.map((r) => r.client_id), [A]);
+    await assert.rejects(
+      db.exec(`insert into ai_blocked_numbers(client_id,whatsapp_number) values('${A}','5511999999999')`),
+    );
+  } finally {
+    await db.close();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Perfil do lead qualificado (quiz "Monte sua IA")
+// ---------------------------------------------------------------------------
+
+const withProfile = (profile) => ({
+  ...EMPTY_KNOWLEDGE,
+  profile: { ...EMPTY_KNOWLEDGE.profile, ...profile },
+});
+
+test("perfil padrão reproduz a regra original e não exige quiz", () => {
+  const { profile } = knowledgeSchema.parse({});
+  assert.equal(profile.completedAt, null);
+  assert.equal(profile.overduePolicy, "any");
+  assert.deepEqual(profile.ask, {
+    vehicle_year: true,
+    bank: true,
+    debt_amount: true,
+    has_overdue_installments: true,
+  });
+});
+
+test("perfil: pergunta desmarcada não é feita; critério obriga a pergunta", () => {
+  const kb = withProfile({
+    ask: { vehicle_year: false, bank: false, debt_amount: false, has_overdue_installments: false },
+  });
+  const p = policy(
+    { facts: [fact("financed", true, "financiado"), fact("vehicle", "Corolla", "Corolla")] },
+    { incoming: "Corolla financiado", knowledge: kb, firstTurn: false },
+  );
+  assert.equal(p.status, "qualified");
+  const strict = withProfile({
+    ask: { vehicle_year: false, bank: false, debt_amount: false, has_overdue_installments: false },
+    minVehicleYear: 2015,
+  });
+  const q = policy(
+    { facts: [fact("financed", true, "financiado"), fact("vehicle", "Corolla", "Corolla")] },
+    { incoming: "Corolla financiado", knowledge: strict, firstTurn: false },
+  );
+  assert.equal(q.status, "qualifying");
+  assert.equal(q.nextField, "vehicle_year");
+});
+
+test("perfil: cada critério desqualifica em silêncio com o motivo certo", () => {
+  const base = [fact("financed", true, "financiado"), fact("vehicle", "Corolla", "Corolla")];
+  const cases = [
+    [{ overduePolicy: "overdue_only" }, [fact("has_overdue_installments", false, "em dia")], "estão em dia", "overdue_policy"],
+    [{ overduePolicy: "current_only" }, [fact("has_overdue_installments", true, "atrasadas")], "estão atrasadas", "overdue_policy"],
+    [{ minOverdueInstallments: 3 }, [fact("has_overdue_installments", true, "atrasadas"), fact("overdue_installments_count", 2, "2")], "2 atrasadas", "min_overdue"],
+    [{ minVehicleYear: 2015 }, [fact("vehicle_year", 2010, "2010")], "é 2010", "min_year"],
+    [{ maxDebtAmount: 50000 }, [fact("debt_amount", 80000, "80000")], "devo 80000", "max_debt"],
+    [{ rejectedBanks: ["Banco X"] }, [fact("bank", "banco x", "banco x")], "é no banco x", "rejected_bank"],
+  ];
+  for (const [profile, facts, tail, reason] of cases) {
+    const incoming = `Corolla financiado ${tail}`;
+    const p = policy(
+      { facts: [...base, ...facts] },
+      { incoming, knowledge: withProfile(profile), firstTurn: false },
+    );
+    assert.equal(p.status, "disqualified", reason);
+    assert.equal(p.disqualification, reason);
+    assert.deepEqual(p.candidates, [[]], reason);
+  }
+  // Dentro dos limites continua qualificando.
+  const ok = policy(
+    { facts: [...base, fact("vehicle_year", 2020, "2020")] },
+    { incoming: "Corolla financiado 2020", knowledge: withProfile({ minVehicleYear: 2015 }), firstTurn: false },
+  );
+  assert.notEqual(ok.status, "disqualified");
+});
+
+test("quem diz que não tem veículo é desqualificado em silêncio", () => {
+  const p = policy({ intent: "no_vehicle", confidence: 0.9 }, { incoming: "não tenho carro ainda" });
+  assert.equal(p.status, "disqualified");
+  assert.equal(p.disqualification, "no_vehicle");
+  assert.deepEqual(p.candidates, [[]]);
+  assert.equal(extractionSchema.safeParse({ ...blankExtraction(), intent: "no_vehicle" }).success, true);
+});
+
+test("resumo do perfil descreve as regras aplicadas", async () => {
+  const { describeProfile } = await import("../src/lib/ai-agent/profile-summary.ts");
+  const lines = describeProfile({
+    ...EMPTY_KNOWLEDGE.profile,
+    vehicleTypes: ["Carro", "Moto"],
+    overduePolicy: "overdue_only",
+    minOverdueInstallments: 3,
+    minVehicleYear: 2015,
+    maxDebtAmount: 80000,
+    rejectedBanks: ["Banco X"],
+  });
+  assert.equal(lines[0], "Compra carro e moto com financiamento ativo.");
+  assert.ok(lines.includes("Só parcelas atrasadas, com pelo menos 3 em atraso."));
+  assert.ok(lines.includes("Ano 2015 ou mais novo."));
+  assert.ok(lines.some((line) => line.startsWith("Dívida de até R$")));
+  assert.ok(lines.includes("Não atende: Banco X."));
 });

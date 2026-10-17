@@ -16,7 +16,6 @@ export const SCRIPT_QUESTIONS = {
 export type ScriptQuestion = keyof typeof SCRIPT_QUESTIONS;
 export const SCRIPT_REPLIES = {
   qualified: "Lead qualificado (todos os dados coletados)",
-  disqualified: "Veículo quitado (fora do perfil)",
   price: "Pergunta sobre preço ou valor",
   approval: "Pergunta sobre aprovação",
   human: "Pedido para falar com a equipe",
@@ -45,8 +44,6 @@ export const DEFAULT_SCRIPT = {
   replies: {
     qualified:
       "Já tenho os dados para a equipe avaliar seu caso. A próxima etapa é a análise deles.",
-    disqualified:
-      "Neste atendimento, buscamos veículos que ainda estão financiados. Como o seu está quitado, ele não se encaixa nesse perfil.",
     price:
       "Não tenho uma proposta ou valor confirmado para o seu veículo. A equipe precisa avaliar antes.",
     approval:
@@ -129,6 +126,133 @@ export function checkScriptInput(script: AiScript): string | null {
   return null;
 }
 
+// Frases de ativação: a IA só abre conversa com quem chega por uma delas (o
+// texto pré-preenchido dos anúncios). Conversas já abertas continuam.
+export const MAX_ACTIVATION_PHRASES = 10;
+export const DEFAULT_ACTIVATION = {
+  enabled: true,
+  phrases: [
+    "Olá! Quero fazer uma avaliação do meu veículo.",
+    "Olá! Tenho um veículo e gostaria de solicitar uma análise.",
+  ],
+};
+export type AiActivation = typeof DEFAULT_ACTIVATION;
+const activationPhrase = z.string().trim().min(3).max(200);
+export const activationSchema = z
+  .preprocess(
+    // Formato anterior guardava uma frase só em `phrase`.
+    (value) => {
+      if (!value || typeof value !== "object") return value;
+      const raw = value as Record<string, unknown>;
+      return "phrases" in raw || typeof raw.phrase !== "string"
+        ? raw
+        : { ...raw, phrases: [raw.phrase] };
+    },
+    z.object({
+      enabled: z.boolean().catch(DEFAULT_ACTIVATION.enabled),
+      phrases: z
+        .array(activationPhrase)
+        .min(1)
+        .max(MAX_ACTIVATION_PHRASES)
+        .catch(() => DEFAULT_ACTIVATION.phrases),
+    }),
+  )
+  .catch(() => DEFAULT_ACTIVATION);
+
+// Perfil do lead qualificado, montado pelo cliente no quiz de configuração.
+// O nicho é fixo (veículo financiado); estes critérios refinam quem passa.
+// Sem quiz feito, o padrão reproduz a regra original: pergunta tudo e aceita
+// parcelas em dia ou atrasadas, sem limites.
+export const VEHICLE_TYPES = [
+  "Carro",
+  "Moto",
+  "Caminhonete",
+  "Caminhão",
+  "Van / utilitário",
+] as const;
+export const OVERDUE_POLICIES = {
+  any: "Em dia ou atrasadas",
+  overdue_only: "Só com parcelas atrasadas",
+  current_only: "Só com parcelas em dia",
+} as const;
+export type OverduePolicy = keyof typeof OVERDUE_POLICIES;
+// Perguntas opcionais. Financiamento e modelo são sempre perguntados.
+export const OPTIONAL_QUESTIONS = [
+  "vehicle_year",
+  "bank",
+  "debt_amount",
+  "has_overdue_installments",
+] as const;
+export type OptionalQuestion = (typeof OPTIONAL_QUESTIONS)[number];
+export const DEFAULT_PROFILE = {
+  completedAt: null as string | null,
+  vehicleTypes: ["Carro"] as string[],
+  overduePolicy: "any" as OverduePolicy,
+  minOverdueInstallments: null as number | null,
+  minVehicleYear: null as number | null,
+  maxDebtAmount: null as number | null,
+  rejectedBanks: [] as string[],
+  ask: {
+    vehicle_year: true,
+    bank: true,
+    debt_amount: true,
+    has_overdue_installments: true,
+  } as Record<OptionalQuestion, boolean>,
+  notes: "",
+};
+export type AiProfile = typeof DEFAULT_PROFILE;
+const optionalInt = (min: number, max: number) =>
+  z.number().int().min(min).max(max).nullable().catch(null);
+export const profileSchema = z
+  .object({
+    completedAt: z.string().max(40).nullable().catch(null),
+    vehicleTypes: z
+      .array(z.string().trim().min(1).max(60))
+      .max(12)
+      .catch(() => DEFAULT_PROFILE.vehicleTypes),
+    overduePolicy: z
+      .enum(["any", "overdue_only", "current_only"])
+      .catch("any"),
+    minOverdueInstallments: optionalInt(1, 120),
+    minVehicleYear: optionalInt(1950, 2100),
+    maxDebtAmount: z.number().positive().max(100_000_000).nullable().catch(null),
+    rejectedBanks: z
+      .array(z.string().trim().min(2).max(60))
+      .max(30)
+      .catch(() => []),
+    ask: z
+      .object({
+        vehicle_year: z.boolean().catch(true),
+        bank: z.boolean().catch(true),
+        debt_amount: z.boolean().catch(true),
+        has_overdue_installments: z.boolean().catch(true),
+      })
+      .catch(() => DEFAULT_PROFILE.ask),
+    notes: z.string().trim().max(1000).catch(""),
+  })
+  .catch(() => DEFAULT_PROFILE);
+
+// Compara sem acento, caixa, pontuação ou emoji: "ola quero fazer uma
+// avaliacao do meu veiculo 🚗" ativa. O lead pode escrever mais coisa junto.
+export function normalizeActivationText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+export function matchesActivationPhrase(
+  message: string,
+  phrases: string | string[],
+) {
+  const text = normalizeActivationText(message);
+  return (Array.isArray(phrases) ? phrases : [phrases]).some((phrase) => {
+    const expected = normalizeActivationText(phrase);
+    return Boolean(expected) && text.includes(expected);
+  });
+}
+
 export const knowledgeSchema = z
   .object({
     company: z.string().trim().max(200).default(""),
@@ -154,6 +278,8 @@ export const knowledgeSchema = z
       .max(30)
       .default([]),
     script: scriptSchema,
+    activation: activationSchema,
+    profile: profileSchema,
   })
   .strict();
 export type AiKnowledge = z.infer<typeof knowledgeSchema>;

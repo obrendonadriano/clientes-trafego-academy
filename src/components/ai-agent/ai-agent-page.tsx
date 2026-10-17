@@ -23,6 +23,13 @@ import {
   type AiAgentActionState,
 } from "@/app/dashboard/atendimento-ia/actions";
 import { AiLeadsPanel } from "@/components/ai-agent/ai-leads-panel";
+import { AiSetupWizard } from "@/components/ai-agent/ai-setup-wizard";
+import { describeProfile } from "@/lib/ai-agent/profile-summary";
+import { Button } from "@/components/ui/button";
+import {
+  AiActivationCard,
+  AiBlockedNumbersCard,
+} from "@/components/ai-agent/ai-access-settings";
 import {
   AiKnowledgeSettings,
   AiScheduleSettings,
@@ -71,12 +78,33 @@ export function AiAgentPage({
   // Falso no Plano Essencial: a tela aparece inteira, mas inerte.
   interactive: boolean;
 }) {
+  const knowledge = data.settings.knowledge;
+  const [redoing, setRedoing] = useState(false);
+
+  // Primeiro acesso depois de conectar o WhatsApp: o cliente monta a IA no
+  // quiz antes de ver o painel. Refazer reabre o mesmo quiz já preenchido.
+  if (interactive && (redoing || !knowledge.profile.completedAt)) {
+    return (
+      <AiSetupWizard
+        profile={knowledge.profile}
+        company={knowledge.company}
+        activation={knowledge.activation}
+        onClose={knowledge.profile.completedAt ? () => setRedoing(false) : undefined}
+      />
+    );
+  }
+
   return (
     <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
       <div className="min-w-0 space-y-5">
         <StatusCard data={data} interactive={interactive} />
+        <ProfileSummaryCard
+          data={data}
+          onRedo={interactive ? () => setRedoing(true) : undefined}
+        />
         <ScriptCard data={data} />
         <AiKnowledgeSettings settings={data.settings} />
+        <AiBlockedNumbersCard numbers={data.blockedNumbers} />
         <AiLeadsPanel
           conversations={data.conversations}
           interactive={interactive}
@@ -85,6 +113,7 @@ export function AiAgentPage({
 
       <div className="min-w-0 space-y-5">
         <NotificationCard data={data} />
+        <AiActivationCard activation={data.settings.knowledge.activation} />
         <AdvancedCard data={data} />
         <AiScheduleSettings settings={data.settings} />
       </div>
@@ -310,6 +339,61 @@ function NotificationCard({ data }: { data: AiAgentPageData }) {
             <CheckCircle2 className="size-3.5 text-emerald-500" />
             Salvo como{" "}
             {formatBrazilianWhatsapp(data.settings.notificationWhatsapp)}
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Perfil do lead qualificado (resultado do quiz)
+// ---------------------------------------------------------------------------
+
+function ProfileSummaryCard({
+  data,
+  onRedo,
+}: {
+  data: AiAgentPageData;
+  onRedo?: () => void;
+}) {
+  const profile = data.settings.knowledge.profile;
+
+  return (
+    <Card className="min-w-0">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="rounded-2xl bg-primary/12 p-3 text-primary">
+            <Sparkles className="size-5" strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0">
+            <CardTitle className="font-display text-xl">
+              Seu lead qualificado
+            </CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Regras que você definiu no “Monte sua IA”.
+            </p>
+          </div>
+        </div>
+        {onRedo ? (
+          <Button type="button" variant="outline" onClick={onRedo}>
+            <RotateCcw className="mr-2 size-4" />
+            Refazer configuração
+          </Button>
+        ) : null}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <ul className="space-y-2">
+          {describeProfile(profile).map((line) => (
+            <li key={line} className="flex gap-2 text-sm text-foreground">
+              <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" />
+              {line}
+            </li>
+          ))}
+        </ul>
+        {profile.notes ? (
+          <p className="rounded-2xl border border-border/60 bg-surface-2/40 px-4 py-3 text-sm text-muted-foreground">
+            {profile.notes}
           </p>
         ) : null}
       </CardContent>

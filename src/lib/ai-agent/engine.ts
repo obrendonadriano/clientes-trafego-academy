@@ -56,7 +56,8 @@ Contexto anterior só ajuda a entender a pergunta, não é nova evidência.
 Se um dado corrigir outro, correction=true. Normalize números brasileiros. Se disser que não sabe, use unknown_fields.
 Nunca produza resposta nem status de lead. Formato JSON exato:
 {"facts":[{"field":"vehicle","value":"Corolla","evidence":"Corolla","correction":false}],"unknown_fields":[{"field":"bank","evidence":"não sei o banco"}],"intent":"qualification","human_requested":false,"confidence":0.95,"faq_index":null}
-Campos: ${FIELDS.join(", ")}. Intents: qualification,greeting,documents,price,approval,company,hours,regions,bot,human,off_topic,buys,does_not_buy,rules,facts.
+Campos: ${FIELDS.join(", ")}. Intents: qualification,greeting,documents,price,approval,company,hours,regions,bot,human,off_topic,buys,does_not_buy,rules,facts,no_vehicle.
+no_vehicle: a pessoa diz explicitamente que não tem veículo (ex.: "não tenho carro", "ainda vou comprar"). Veículo quitado não é no_vehicle: use o fato financed=false.
 buys/does_not_buy indicam perguntas sobre o que a empresa compra; rules são condições comerciais gerais; facts são outras informações cadastradas. Nunca extraia fatos do lead a partir da base da empresa.`,
         },
         {

@@ -8,12 +8,13 @@ import {
 } from "@/lib/waha";
 import { buildQualifiedLeadNotification, runConversationTurn } from "./engine";
 import { fromWahaChatId, toWahaChatId } from "./shared";
-import { businessHours } from "./config";
+import { businessHours, matchesActivationPhrase } from "./config";
+import { isNumberBlocked } from "./blocked";
 import { MEDIA_LABELS, type IncomingEvent } from "./event";
 import { buildDelaysForMessages } from "./humanize";
 import { transition } from "./transitions";
 import { prepareTurnInput } from "./media";
-import { offHoursReply } from "./policy";
+import { DISQUALIFICATION_REASONS, offHoursReply } from "./policy";
 import { hasAiAttendanceSegment } from "@/lib/segments";
 import {
   AiAgentError,
@@ -21,12 +22,36 @@ import {
   getAiAgentSettings,
   getClientPlan,
   getClientSegment,
+  setDisqualificationReason,
   findConversation,
   findConversationById,
   getNextOutboundMessage,
   getUnprocessedInbound,
 } from "./store";
 export { parseIncomingEvent } from "./event";
+// Gravado em last_question quando a mensagem final (qualificado/quitado) é
+// entregue. Daí em diante a IA não responde mais aquele lead.
+export const ATTENDANCE_CLOSED = "closed";
+// Quitado/fora do perfil não recebe mensagem, então só o qualificado encerra
+// por aqui; o desqualificado é encerrado pelo próprio status.
+const CLOSING_REASONS = new Set(["policy_qualified"]);
+
+/** Encerrado e sem "Retomar IA" depois da mensagem final. */
+function isAttendanceClosed(conversation: {
+  last_question: string | null;
+  ai_resumed_at: string | null;
+  last_outbound_at: string | null;
+}) {
+  if (conversation.last_question !== ATTENDANCE_CLOSED) return false;
+  const resumed = conversation.ai_resumed_at
+    ? Date.parse(conversation.ai_resumed_at)
+    : 0;
+  const closedAt = conversation.last_outbound_at
+    ? Date.parse(conversation.last_outbound_at)
+    : 0;
+  return !(resumed > closedAt);
+}
+
 export type PipelineResponse =
   | { acao: "aguardar"; esperarMs: number; sessionName: string; chatId: string }
   | { acao: "fim" | "ignorar"; motivo?: string };
@@ -96,6 +121,21 @@ export async function ingestInboundEvent(
   // Atendimento nichado: só clientes de compra e aquisição de veículos.
   if (!hasAiAttendanceSegment(await getClientSegment(owner.clientId)))
     return { acao: "ignorar" };
+  // Número bloqueado pelo cliente: nem grava, nem responde.
+  if (await isNumberBlocked(owner.clientId, number)) return { acao: "ignorar" };
+  // Frase de ativação: só abre conversa nova quem chega com ela. Mensagens
+  // do próprio número para quem não é lead também não viram conversa.
+  const activation = settings.knowledge.activation;
+  if (activation.enabled) {
+    const existing = await findConversation(owner.clientId, number);
+    if (
+      !existing &&
+      (event.fromMe ||
+        event.mediaKind !== "text" ||
+        !matchesActivationPhrase(event.body, activation.phrases))
+    )
+      return { acao: "ignorar" };
+  }
   // Even during human takeover/disabled automation, preserve the conversation history.
   const result = await transition(owner.clientId, "ingest", {
     number,
@@ -152,6 +192,20 @@ export async function advanceConversation(input: {
   try {
     const conversation = await findConversationById(owner.clientId, initial.id);
     if (!conversation || conversation.human_takeover) return end();
+    // Bloqueado no meio da conversa: cancela o que estava na fila e consome
+    // as mensagens recebidas sem responder.
+    if (await isNumberBlocked(owner.clientId, number)) {
+      await tx("cancel_pending");
+      await typing(sessionName, chatId, false);
+      if ((await getUnprocessedInbound(conversation.id)).length)
+        await tx("commit", {
+          messages: [],
+          reason: "blocked_number",
+          runId: randomUUID(),
+          startedAt: new Date().toISOString(),
+        });
+      return end();
+    }
     const pending = await getNextOutboundMessage(conversation.id);
     if (pending) {
       const hours = businessHours(settings.alwaysOn, settings.businessSchedule);
@@ -191,6 +245,20 @@ export async function advanceConversation(input: {
       return wait(sessionName, chatId, 300);
     }
     const inbound = await getUnprocessedInbound(conversation.id);
+    // Atendimento encerrado ou lead fora do perfil: consome as mensagens sem
+    // chamar a IA e sem enviar nada. Qualificado que volta a escrever fica
+    // com a equipe; desqualificado não é lead e segue em silêncio.
+    const disqualified = conversation.status === "disqualified";
+    if (inbound.length && (disqualified || isAttendanceClosed(conversation))) {
+      await tx("commit", {
+        messages: [],
+        human: !disqualified,
+        reason: disqualified ? "disqualified_silent" : "attendance_closed",
+        runId: randomUUID(),
+        startedAt: new Date().toISOString(),
+      });
+      return end();
+    }
     if (
       inbound.length > 30 ||
       inbound.reduce((total, message) => total + message.body.length, 0) > 32000
@@ -265,7 +333,11 @@ export async function advanceConversation(input: {
         status: decision.status,
         human: decision.human,
         reason: decision.reason,
-        nextField: decision.nextField,
+        // A mensagem final marca o encerramento quando for entregue.
+        nextField:
+          !decision.human && CLOSING_REASONS.has(decision.reason)
+            ? ATTENDANCE_CLOSED
+            : decision.nextField,
         changedFields: decision.changedFields,
         messages: result.messages.map((body, i) => ({
           body,
@@ -276,6 +348,19 @@ export async function advanceConversation(input: {
         runId: randomUUID(),
         startedAt,
       });
+      // A transição grava um motivo genérico; aqui fica o motivo real
+      // (quitado, sem veículo, critério do perfil) para o painel.
+      if (decision.disqualification) {
+        try {
+          await setDisqualificationReason(
+            owner.clientId,
+            conversation.id,
+            DISQUALIFICATION_REASONS[decision.disqualification],
+          );
+        } catch {
+          console.warn("[ia] disqualification_reason_unavailable");
+        }
+      }
     } catch {
       await tx("fail");
     } finally {
