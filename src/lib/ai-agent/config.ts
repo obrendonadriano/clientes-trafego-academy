@@ -22,10 +22,10 @@ export const SCRIPT_REPLIES = {
   bot: "Pergunta se é robô",
   offTopic: "Assunto fora do atendimento",
   audio: "Áudio recebido",
-  media: "Imagem ou documento recebido",
+  media: "Foto ou documento recebido (vai antes da próxima pergunta)",
   knowledgeMissing: "Dúvida sem resposta cadastrada",
   requiredUnknown: "Lead não sabe um dado obrigatório",
-  waiting: "Lead não respondeu a pergunta",
+  waiting: "Resposta não entendida (a pergunta é repetida em seguida)",
 } as const;
 export type ScriptReply = keyof typeof SCRIPT_REPLIES;
 export const DEFAULT_SCRIPT = {
@@ -54,13 +54,12 @@ export const DEFAULT_SCRIPT = {
       "Por aqui, posso ajudar com a avaliação do seu veículo financiado.",
     audio:
       "Recebi seu áudio, mas ainda não consigo ouvi-lo por aqui. Pode me contar por texto?",
-    media:
-      "Recebi o arquivo. Vou deixar a análise com a equipe, pois não consigo confirmar o conteúdo por aqui.",
+    media: "Recebi, obrigado por enviar!",
     knowledgeMissing:
       "Não tenho essa informação confirmada aqui. Vou deixar a equipe conferir para você.",
     requiredUnknown:
       "Esse dado é necessário para avaliar o caso. Vou deixar a equipe continuar com você.",
-    waiting: "Tudo bem, fico aguardando essa informação para continuar.",
+    waiting: "Desculpe, não consegui entender.",
   } satisfies Record<ScriptReply, string>,
 };
 export type AiScript = typeof DEFAULT_SCRIPT;
@@ -107,6 +106,10 @@ export function checkScriptInput(script: AiScript): string | null {
       .normalize("NFD")
       .replace(/\p{Diacritic}/gu, "")
       .toLowerCase();
+  if (script.replies.media.includes("?"))
+    return "A mensagem de foto ou documento recebido vai antes da próxima pergunta: não use ponto de interrogação nela.";
+  if (script.replies.waiting.includes("?"))
+    return "A mensagem de resposta não entendida vai antes da pergunta repetida: não use ponto de interrogação nela.";
   for (const prefix of [script.greeting, script.acknowledge]) {
     if (prefix.length > 80 || prefix.includes("?"))
       return "Saudação e confirmação: até 80 caracteres e sem ponto de interrogação.";

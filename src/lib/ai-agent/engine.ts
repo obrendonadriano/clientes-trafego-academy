@@ -33,8 +33,11 @@ export async function runConversationTurn(input: {
   conversation: ConversationRow;
   incoming: string;
   media: string;
+  // Há texto digitado no turno (mesmo que venha junto de foto/áudio).
+  hasText?: boolean;
 }) {
   const { settings, conversation, incoming, media } = input;
+  const hasText = input.hasText ?? media === "text";
   const history = await getRecentMessages(conversation.id, 12);
   const facts: Facts = { ...EMPTY_FACTS };
   for (const field of FIELDS) {
@@ -44,7 +47,7 @@ export async function runConversationTurn(input: {
   }
   const config = await getDeepseekRuntimeConfig();
   let extraction: Extraction = { ...EMPTY_EXTRACTION };
-  if (media === "text" && !isInjection(incoming)) {
+  if (hasText && !isInjection(incoming)) {
     const raw = await generateDeepseekJson(
       [
         {
@@ -53,6 +56,8 @@ export async function runConversationTurn(input: {
 Você é EXTRATOR, não atendente. Extraia APENAS fatos explícitos na mensagem NOVA.
 Cada evidence deve ser uma citação literal dela. Não infira nome pelo perfil do WhatsApp.
 Contexto anterior só ajuda a entender a pergunta, não é nova evidência.
+Se a mensagem nova for resposta curta à pergunta last_question (ex.: "sim", "não", "2020", "Itaú"), extraia o fato DESSE campo, com evidence = a própria resposta.
+Valores: booleanos como true/false (nunca texto), anos e quantias como número.
 Se um dado corrigir outro, correction=true. Normalize números brasileiros. Se disser que não sabe, use unknown_fields.
 Nunca produza resposta nem status de lead. Formato JSON exato:
 {"facts":[{"field":"vehicle","value":"Corolla","evidence":"Corolla","correction":false}],"unknown_fields":[{"field":"bank","evidence":"não sei o banco"}],"intent":"qualification","human_requested":false,"confidence":0.95,"faq_index":null}
@@ -64,6 +69,11 @@ buys/does_not_buy indicam perguntas sobre o que a empresa compra; rules são con
           role: "user",
           content: JSON.stringify({
             known: facts,
+            // Campo que a IA perguntou por último (ex.: "financed").
+            last_question:
+              conversation.last_question === "closed"
+                ? null
+                : conversation.last_question,
             history: history.map((m) => ({
               sender: m.sender_type,
               text: m.body,
@@ -87,6 +97,7 @@ buys/does_not_buy indicam perguntas sobre o que a empresa compra; rules são con
     firstTurn: history.length === 0,
     lastQuestion: conversation.last_question,
     media,
+    mediaOnly: media !== "text" && !hasText,
   });
   // A IA só interpreta (extração acima). O texto enviado é o do roteiro que a
   // política escolheu; não há segunda chamada ao modelo para redigir.

@@ -160,6 +160,51 @@ export function isInjection(input: string) {
     fold(input),
   );
 }
+/**
+ * Resposta curta de sim/não ("sim", "s", "isso", "tá sim", "não"). Só vale
+ * para a pergunta de financiamento: "em dia ou atrasada?" não se responde
+ * com sim.
+ */
+function shortAnswer(text: string): boolean | null {
+  const source = fold(text).replace(/[^\p{L}\s]/gu, " ").replace(/\s+/g, " ").trim();
+  if (!source || source.split(" ").length > 6) return null;
+  if (/^(nao|n|negativo)\b/.test(source)) return false;
+  if (
+    /^(sim|s|ss|isso|claro|exato|positivo|uhum|aham|com certeza|(ainda )?(esta|ta|e) sim|ainda (esta|ta|sim))\b/.test(
+      source,
+    )
+  )
+    return true;
+  return null;
+}
+
+/**
+ * O modelo às vezes devolve "true", "sim" ou "2.020" como texto. Converte
+ * para o tipo do campo antes da validação, que continua exigindo evidência.
+ */
+const BOOLEAN_FIELDS: Field[] = ["financed", "has_overdue_installments"];
+const NUMBER_FIELDS: Field[] = [
+  "vehicle_year",
+  "debt_amount",
+  "overdue_installments_count",
+];
+function coerceValue(field: Field, value: Facts[Field]): Facts[Field] {
+  if (typeof value !== "string") return value;
+  if (BOOLEAN_FIELDS.includes(field)) {
+    const folded = fold(value).trim();
+    if (/^(true|sim|yes)$/.test(folded)) return true;
+    if (/^(false|nao|no)$/.test(folded)) return false;
+    return value;
+  }
+  if (NUMBER_FIELDS.includes(field) && /^[\d.,\s]+$/.test(value.trim())) {
+    const number = Number(
+      value.trim().replace(/\s/g, "").replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", "."),
+    );
+    return Number.isFinite(number) ? number : value;
+  }
+  return value;
+}
+
 function validValue(
   field: Field,
   value: Facts[Field],
@@ -168,7 +213,14 @@ function validValue(
 ) {
   const source = fold(evidence);
   if (
-    ["financed", "has_overdue_installments"].includes(field) &&
+    field === "financed" &&
+    lastQuestion === field &&
+    typeof value === "boolean" &&
+    shortAnswer(evidence) !== null
+  )
+    return value === shortAnswer(evidence);
+  if (
+    field === "has_overdue_installments" &&
     lastQuestion === field &&
     typeof value === "boolean" &&
     /^(sim|nao)[.!\s]*$/.test(source)
@@ -186,8 +238,8 @@ function validValue(
       typeof value === "boolean" &&
       (value
         ? /financ|prestac|parcel|alienad/.test(source) &&
-          !/quitad|nao (e |esta )?financ/.test(source)
-        : /quitad|sem financ|nao (e |esta )?financ/.test(source))
+          !/quit(ad|ei|ou)|nao (e |esta |ta )?(mais )?financ/.test(source)
+        : /quit(ad|ei|ou)|sem financ|nao (e |esta |ta )?(mais )?financ/.test(source))
     );
   if (field === "has_overdue_installments")
     return (
@@ -257,6 +309,8 @@ export function decidePolicy(input: {
   firstTurn: boolean;
   lastQuestion?: string | null;
   media?: string;
+  // Só mídia, sem texto no turno. Ausente = comportamento antigo (só mídia).
+  mediaOnly?: boolean;
 }): PolicyDecision {
   const { extraction: e, incoming, knowledge: kb } = input;
   const script = kb.script;
@@ -269,9 +323,11 @@ export function decidePolicy(input: {
     rejectedFields: Field[] = [];
   const injected = isInjection(incoming);
   if (!injected && e.confidence >= 0.7) {
-    for (const fact of e.facts) {
+    for (const raw of e.facts) {
+      const fact = { ...raw, value: coerceValue(raw.field, raw.value) };
       if (
-        !incoming.includes(fact.evidence) ||
+        // Citação literal, sem depender de maiúscula/acento do modelo.
+        !fold(incoming).includes(fold(fact.evidence)) ||
         !validValue(
           fact.field,
           fact.value,
@@ -300,6 +356,23 @@ export function decidePolicy(input: {
         facts[item.field] = null;
         unknown.add(item.field);
       }
+    }
+  }
+  // Rede de segurança: resposta direta à pergunta de financiamento ("sim",
+  // "ainda está financiado", "já quitei") vale mesmo se o modelo não extrair.
+  if (
+    !injected &&
+    input.lastQuestion === "financed" &&
+    facts.financed === null &&
+    !changedFields.includes("financed")
+  ) {
+    const answer = [true, false].find((value) =>
+      validValue("financed", value, incoming, "financed"),
+    );
+    if (answer !== undefined) {
+      facts.financed = answer;
+      unknown.delete("financed");
+      changedFields.push("financed");
     }
   }
   if (facts.has_overdue_installments === false) {
@@ -353,11 +426,25 @@ export function decidePolicy(input: {
     nextField = null;
   } else if (human)
     reply = says.human;
-  else if (input.media && input.media !== "text") {
-    reply = input.media === "audio" ? says.audio : says.media;
-    human = input.media !== "audio";
-    reason = "media_fallback";
-    nextField = null;
+  else if (
+    input.media &&
+    input.media !== "text" &&
+    input.mediaOnly !== false
+  ) {
+    if (input.media === "audio") {
+      reply = says.audio;
+      nextField = null;
+    } else {
+      // Foto do carro, documento: agradece e segue com o que estava pendente,
+      // sem passar para a equipe e sem afirmar o que tem na imagem.
+      const followUp = nextField
+        ? script.questions[nextField as keyof typeof script.questions]
+        : status === "qualified"
+          ? says.qualified
+          : "";
+      reply = [says.media, followUp].filter(Boolean).join(" ");
+    }
+    reason = "media_ack";
   } else if (e.intent === "bot") {
     reply = says.bot;
     nextField = null;
@@ -421,8 +508,11 @@ export function decidePolicy(input: {
     nextField = null;
   } else if (nextField) {
     if (input.lastQuestion === nextField && changedFields.length === 0) {
-      reply = says.waiting;
-      nextField = null;
+      // Não entendeu a resposta: avisa e repete a pergunta, em vez de
+      // ficar "aguardando" sem dizer o que falta.
+      reply = [says.waiting, script.questions[nextField as keyof typeof script.questions]]
+        .filter(Boolean)
+        .join(" ");
     } else {
       const prefix = input.firstTurn
         ? script.greeting
@@ -434,6 +524,15 @@ export function decidePolicy(input: {
         .join(" ");
     }
   }
+  // Foto junto com texto: o texto foi tratado normalmente; o agradecimento
+  // vai antes da resposta.
+  if (
+    reply &&
+    input.mediaOnly === false &&
+    (input.media === "image" || input.media === "document") &&
+    !human
+  )
+    reply = `${says.media} ${reply}`;
   // Uma única opção: o texto sai do roteiro do cliente, nunca escrito pelo modelo.
   const candidates =
     status === "disqualified"

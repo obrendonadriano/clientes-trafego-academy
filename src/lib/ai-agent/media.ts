@@ -16,8 +16,11 @@ export async function prepareTurnInput(
     }[];
   },
   transcribe: AudioTranscriber = unavailable,
-): Promise<{ incoming: string; media: MediaKind }> {
+): Promise<{ incoming: string; media: MediaKind; hasText: boolean }> {
   const texts: string[] = [];
+  // Texto digitado (mensagens e legendas), sem os rótulos "📷 Imagem". Foto
+  // junto com texto não pode fazer a IA ignorar o que o lead escreveu.
+  const written: string[] = [];
   let media: MediaKind = "text";
   for (const message of input.messages) {
     if (message.media_kind === "audio" && message.provider_message_id) {
@@ -34,6 +37,7 @@ export async function prepareTurnInput(
           transcript.text.trim()
         ) {
           texts.push(transcript.text.slice(0, 8000));
+          written.push(transcript.text.slice(0, 8000));
           continue;
         }
       } catch {
@@ -41,7 +45,16 @@ export async function prepareTurnInput(
       }
     }
     texts.push(message.body);
-    if (message.media_kind !== "text") media = message.media_kind;
+    if (message.media_kind === "text") {
+      if (message.body.trim()) written.push(message.body);
+    } else {
+      media = message.media_kind;
+      // Mídia é gravada como "📷 Imagem\n<legenda>": a legenda é texto.
+      const caption = message.body.split("\n").slice(1).join("\n").trim();
+      if (caption) written.push(caption);
+    }
   }
-  return { incoming: texts.join("\n"), media };
+  return written.length
+    ? { incoming: written.join("\n"), media, hasText: true }
+    : { incoming: texts.join("\n"), media, hasText: false };
 }

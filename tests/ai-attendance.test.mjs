@@ -35,7 +35,7 @@ test("áudio transcrito usa o mesmo caminho de texto; baixa confiança mantém f
       text: "Corolla 2020 financiado",
       confidence: 0.95,
     })),
-    { incoming: "Corolla 2020 financiado", media: "text" },
+    { incoming: "Corolla 2020 financiado", media: "text", hasText: true },
   );
   assert.equal(
     (
@@ -258,12 +258,65 @@ test("25 áudio sem transcrição oferece alternativa sem fingir entender", () =
   assert.equal(event.mediaKind, "audio");
   assert.match(text(policy({}, { media: "audio" })), /não consigo ouvi/);
 });
-test("26 imagem/documento pede equipe sem descrever conteúdo", () => {
+test("26 foto/documento: agradece e repete a pergunta pendente, sem chamar a equipe", () => {
   for (const media of ["image", "document"]) {
-    const p = policy({}, { media });
-    assert.equal(p.human, true);
-    assert.match(text(p), /não consigo confirmar/);
+    const p = policy(
+      {},
+      { media, firstTurn: false, lastQuestion: "vehicle", facts: { ...EMPTY_FACTS, financed: true } },
+    );
+    assert.equal(p.human, false);
+    assert.equal(p.reason, "media_ack");
+    assert.equal(p.nextField, "vehicle");
+    assert.deepEqual(p.candidates, [
+      [`${DEFAULT_SCRIPT.replies.media} ${DEFAULT_SCRIPT.questions.vehicle}`],
+    ]);
+    // Não descreve o que tem na imagem.
+    assert.doesNotMatch(text(p), /corolla|carro bonito|vi o/i);
   }
+});
+
+test("foto com texto: o texto é entendido e o agradecimento vem antes", () => {
+  const p = policy(
+    { facts: [] },
+    {
+      media: "image",
+      mediaOnly: false,
+      incoming: "Sim",
+      firstTurn: false,
+      lastQuestion: "financed",
+    },
+  );
+  assert.equal(p.facts.financed, true);
+  assert.equal(p.human, false);
+  assert.deepEqual(p.candidates, [
+    [
+      `${DEFAULT_SCRIPT.replies.media} ${DEFAULT_SCRIPT.acknowledge} ${DEFAULT_SCRIPT.questions.vehicle}`,
+    ],
+  ]);
+  assert.equal(text(p).match(/\?/g).length, 1);
+});
+
+test("rajada com foto e texto separa o que foi escrito dos rótulos de mídia", async () => {
+  const turn = await prepareTurnInput({
+    sessionName: "s",
+    chatId: "5511999999999@c.us",
+    messages: [
+      { body: "📷 Imagem", media_kind: "image", provider_message_id: "a" },
+      { body: "📷 Imagem\nÉ esse aqui", media_kind: "image", provider_message_id: "b" },
+      { body: "Corolla 2020", media_kind: "text", provider_message_id: "c" },
+    ],
+  });
+  assert.deepEqual(turn, {
+    incoming: "É esse aqui\nCorolla 2020",
+    media: "image",
+    hasText: true,
+  });
+  const only = await prepareTurnInput({
+    sessionName: "s",
+    chatId: "5511999999999@c.us",
+    messages: [{ body: "📷 Imagem", media_kind: "image", provider_message_id: "a" }],
+  });
+  assert.equal(only.hasText, false);
 });
 for (const name of ["27 timeout", "28 429"])
   test(`${name}: duas retentativas com espera e depois falha explícita`, async () => {
@@ -1087,4 +1140,59 @@ test("resumo do perfil descreve as regras aplicadas", async () => {
   assert.ok(lines.includes("Ano 2015 ou mais novo."));
   assert.ok(lines.some((line) => line.startsWith("Dívida de até R$")));
   assert.ok(lines.includes("Não atende: Banco X."));
+});
+
+// ---------------------------------------------------------------------------
+// Respostas curtas à pergunta de financiamento (conversa real de 17/10)
+// ---------------------------------------------------------------------------
+
+test("'Sim' à pergunta de financiamento avança mesmo sem extração do modelo", () => {
+  const p = policy(
+    { facts: [] },
+    { incoming: "Sim", firstTurn: false, lastQuestion: "financed" },
+  );
+  assert.equal(p.facts.financed, true);
+  assert.deepEqual(p.changedFields, ["financed"]);
+  assert.equal(p.nextField, "vehicle");
+  assert.deepEqual(p.candidates, [
+    [`${DEFAULT_SCRIPT.acknowledge} ${DEFAULT_SCRIPT.questions.vehicle}`],
+  ]);
+  for (const answer of ["sim", "S", "Tá sim!", "isso", "Ainda está", "Estou falando que ainda está financiado"])
+    assert.equal(
+      policy({ facts: [] }, { incoming: answer, firstTurn: false, lastQuestion: "financed" }).facts.financed,
+      true,
+      answer,
+    );
+  for (const answer of ["Não", "já quitei", "não está mais financiado"])
+    assert.equal(
+      policy({ facts: [] }, { incoming: answer, firstTurn: false, lastQuestion: "financed" }).facts.financed,
+      false,
+      answer,
+    );
+});
+
+test("valor como texto e evidência com outra caixa são aceitos", () => {
+  const p = policy(
+    { facts: [fact("financed", "true", "AINDA ESTÁ FINANCIADO")] },
+    { incoming: "Estou falando que ainda está financiado", firstTurn: false, lastQuestion: "financed" },
+  );
+  assert.equal(p.facts.financed, true);
+  const y = policy(
+    { facts: [fact("vehicle_year", "2020", "2020")] },
+    { incoming: "é 2020", firstTurn: false },
+  );
+  assert.equal(y.facts.vehicle_year, 2020);
+});
+
+test("resposta não entendida repete a pergunta em vez de só aguardar", () => {
+  const p = policy(
+    { facts: [] },
+    { incoming: "talvez amanhã", firstTurn: false, lastQuestion: "financed" },
+  );
+  assert.equal(p.facts.financed, null);
+  assert.equal(p.nextField, "financed");
+  assert.deepEqual(p.candidates, [
+    [`${DEFAULT_SCRIPT.replies.waiting} ${DEFAULT_SCRIPT.questions.financed}`],
+  ]);
+  assert.equal(text(p).match(/\?/g).length, 1);
 });

@@ -424,6 +424,38 @@ test("Pipeline real com WAHA/DeepSeek simulados", async (t) => {
     },
   );
   await t.test(
+    "foto no meio da conversa: agradece, repete a pergunta e segue com a IA",
+    async () => {
+      const r = await runtime();
+      try {
+        await r.ingest("p1", "Oi");
+        await r.step();
+        await r.expireDelay();
+        await r.step();
+        await r.step();
+        assert.equal(r.state.sent.length, 1);
+        const requests = r.state.requests.length;
+        await r.ingest("p2", "", { mediaKind: "image" });
+        await r.step();
+        await r.expireDelay();
+        await r.step();
+        await r.step();
+        assert.equal(r.state.sent.length, 2);
+        assert.equal(
+          r.state.sent[1].text,
+          `${DEFAULT_SCRIPT.replies.media} ${DEFAULT_SCRIPT.questions.financed}`,
+        );
+        // Só foto: nem chama o modelo.
+        assert.equal(r.state.requests.length, requests);
+        const c = await r.conversation();
+        assert.equal(c.human_takeover, false);
+        assert.equal(c.last_question, "financed");
+      } finally {
+        await r.db.close();
+      }
+    },
+  );
+  await t.test(
     "quitado: a IA não responde nada, agora nem depois",
     async () => {
       const r = await runtime();
