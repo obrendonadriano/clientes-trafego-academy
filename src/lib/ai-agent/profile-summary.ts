@@ -39,7 +39,17 @@ export function describeProfile(profile: AiProfile): string[] {
     lines.push("Parcelas em dia ou atrasadas.");
   }
 
-  if (profile.minVehicleYear) lines.push(`Ano ${profile.minVehicleYear} ou mais novo.`);
+  const minYear =
+    profile.minVehicleYear ?? new Date().getFullYear() - 10;
+  lines.push(
+    profile.minVehicleYear
+      ? `Ano ${minYear} ou mais novo.`
+      : `Ano ${minYear} ou mais novo (até 10 anos de uso).`,
+  );
+  if (profile.manualReviewYears > 0)
+    lines.push(
+      `De ${minYear - profile.manualReviewYears} a ${minYear - 1}: a IA atende e avisa você para análise manual.`,
+    );
   if (profile.maxDebtAmount) lines.push(`Dívida de até ${brl(profile.maxDebtAmount)}.`);
   if (profile.rejectedBanks.length)
     lines.push(`Não atende: ${joinList(profile.rejectedBanks)}.`);

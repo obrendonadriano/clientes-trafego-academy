@@ -44,6 +44,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { formatBrazilianWhatsapp } from "@/lib/ai-agent/shared";
 import {
+  describeWhatsappCountry,
+  formatWhatsappNumber,
+  maskWhatsappInput,
+} from "@/lib/phone";
+import {
   SCRIPT_QUESTIONS,
   SCRIPT_REPLIES,
   type ScriptQuestion,
@@ -108,6 +113,7 @@ export function AiAgentPage({
         <AiLeadsPanel
           conversations={data.conversations}
           interactive={interactive}
+          profile={data.settings.knowledge.profile}
         />
       </div>
 
@@ -271,8 +277,9 @@ function NotificationCard({ data }: { data: AiAgentPageData }) {
   useActionToast(testState);
 
   const [value, setValue] = useState(() =>
-    formatBrazilianWhatsapp(data.settings.notificationWhatsapp),
+    formatWhatsappNumber(data.settings.notificationWhatsapp),
   );
+  const country = value ? describeWhatsappCountry(value) : null;
 
   const error =
     saveState.fieldErrors?.notificationWhatsapp ??
@@ -305,11 +312,23 @@ function NotificationCard({ data }: { data: AiAgentPageData }) {
               name="notificationWhatsapp"
               inputMode="tel"
               autoComplete="tel"
-              placeholder="(14) 99999-9999"
+              placeholder="(14) 99999-9999 ou +1 415 555 2671"
               value={value}
-              onChange={(event) => setValue(event.target.value)}
+              onChange={(event) => setValue(maskWhatsappInput(event.target.value))}
+              aria-describedby="notificationWhatsapp-hint"
             />
-            {error ? <p className="text-xs text-destructive">{error}</p> : null}
+            {error ? (
+              <p className="text-xs text-destructive">{error}</p>
+            ) : (
+              <p
+                id="notificationWhatsapp-hint"
+                className="text-xs leading-5 text-muted-foreground"
+              >
+                {country
+                  ? `País identificado: ${country}.`
+                  : "Brasil: DDD + número. Outro país: comece com + e o código do país."}
+              </p>
+            )}
           </div>
 
           <FormPendingButton
@@ -338,7 +357,7 @@ function NotificationCard({ data }: { data: AiAgentPageData }) {
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <CheckCircle2 className="size-3.5 text-emerald-500" />
             Salvo como{" "}
-            {formatBrazilianWhatsapp(data.settings.notificationWhatsapp)}
+            {formatWhatsappNumber(data.settings.notificationWhatsapp)}
           </p>
         ) : null}
       </CardContent>
@@ -453,7 +472,8 @@ function ScriptCard({ data }: { data: AiAgentPageData }) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="script-acknowledge">
-                Confirmação ao receber um dado
+                Confirmação ao receber um dado{" "}
+                <span className="text-muted-foreground">(opcional)</span>
               </Label>
               <Input
                 id="script-acknowledge"
@@ -464,7 +484,8 @@ function ScriptCard({ data }: { data: AiAgentPageData }) {
             </div>
             <p className="text-xs text-muted-foreground sm:col-span-2">
               Vão antes da pergunta, na mesma mensagem. Sem ponto de
-              interrogação.
+              interrogação. Deixe a confirmação em branco para a IA perguntar
+              direto, sem “Entendi.” a cada resposta.
             </p>
           </div>
 

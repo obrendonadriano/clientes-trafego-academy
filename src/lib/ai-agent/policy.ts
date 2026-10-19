@@ -78,7 +78,8 @@ export const OPTIONAL_QUESTION_ORDER: OptionalQuestion[] = [
  */
 export function effectiveQuestions(profile: AiProfile) {
   return {
-    vehicle_year: profile.ask.vehicle_year || profile.minVehicleYear !== null,
+    // Sempre há um ano mínimo (o padrão é 10 anos de uso).
+    vehicle_year: true,
     bank: profile.ask.bank || profile.rejectedBanks.length > 0,
     debt_amount: profile.ask.debt_amount || profile.maxDebtAmount !== null,
     has_overdue_installments:
@@ -86,6 +87,30 @@ export function effectiveQuestions(profile: AiProfile) {
       profile.overduePolicy !== "any" ||
       profile.minOverdueInstallments !== null,
   } satisfies Record<OptionalQuestion, boolean>;
+}
+
+/** Idade máxima padrão: veículos com até 10 anos. */
+export const DEFAULT_MAX_VEHICLE_AGE = 10;
+
+/** Ano mínimo efetivo: o do cliente ou, sem ele, ano atual - 10. */
+export function effectiveMinYear(profile: AiProfile, now = new Date()) {
+  return profile.minVehicleYear ?? now.getFullYear() - DEFAULT_MAX_VEHICLE_AGE;
+}
+
+/**
+ * Veículo abaixo do mínimo, mas dentro da faixa de análise manual: a IA
+ * continua e o cliente recebe o lead marcado para olhar com calma.
+ */
+export function manualReviewYear(
+  year: number | null | undefined,
+  profile: AiProfile,
+  now = new Date(),
+) {
+  if (typeof year !== "number" || profile.manualReviewYears <= 0) return null;
+  const minYear = effectiveMinYear(profile, now);
+  return year < minYear && year >= minYear - profile.manualReviewYears
+    ? { year, minYear }
+    : null;
 }
 
 // Por que o lead não passou. O código vai para o histórico de processamento e
@@ -118,10 +143,11 @@ function profileRejection(
     facts.overdue_installments_count < profile.minOverdueInstallments
   )
     return "min_overdue";
+  // Abaixo do mínimo só desqualifica fora da faixa de análise manual.
   if (
-    profile.minVehicleYear !== null &&
     typeof facts.vehicle_year === "number" &&
-    facts.vehicle_year < profile.minVehicleYear
+    facts.vehicle_year < effectiveMinYear(profile) &&
+    !manualReviewYear(facts.vehicle_year, profile)
   )
     return "min_year";
   if (
@@ -160,22 +186,210 @@ export function isInjection(input: string) {
     fold(input),
   );
 }
-/**
- * Resposta curta de sim/não ("sim", "s", "isso", "tá sim", "não"). Só vale
- * para a pergunta de financiamento: "em dia ou atrasada?" não se responde
- * com sim.
- */
-function shortAnswer(text: string): boolean | null {
-  const source = fold(text).replace(/[^\p{L}\s]/gu, " ").replace(/\s+/g, " ").trim();
+// ---------------------------------------------------------------------------
+// Português do dia a dia
+// ---------------------------------------------------------------------------
+// O lead escreve como fala: "ss", "tá pago", "tô pagando", "22", "100 pau",
+// "tudo certinho". Estas leituras são a rede de segurança quando o modelo não
+// extrai; o resultado ainda passa pela mesma validação de evidência.
+
+/** Sem acento, caixa e pontuação: "Tá pago!!" -> "ta pago". */
+const plain = (text: string) =>
+  fold(text)
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const YES =
+  /^(?:s+i*m+|s+|si|isso(?: ai| mesmo)?|exato|exatamente|positivo|afirmativo|claro|com certeza|certeza|correto|pode crer|aham|uhum|unhum|yes|e sim|e isso|ta sim|esta sim|to sim|tem sim|sim senhora?|ainda(?: sim| ta| esta| e| tem)?)(?: .*)?$/;
+const NO = /^(?:na+o+|n+|num|nada|negativo|nope|nem)(?: .*)?$/;
+
+/** Sim/não curto. Mensagem longa não é resposta curta. */
+function yesNo(text: string): boolean | null {
+  const source = plain(text);
   if (!source || source.split(" ").length > 6) return null;
-  if (/^(nao|n|negativo)\b/.test(source)) return false;
-  if (
-    /^(sim|s|ss|isso|claro|exato|positivo|uhum|aham|com certeza|(ainda )?(esta|ta|e) sim|ainda (esta|ta|sim))\b/.test(
-      source,
-    )
-  )
-    return true;
+  if (NO.test(source)) return false;
+  if (YES.test(source) || source === "e") return true;
   return null;
+}
+
+/** "Não sei", "sei lá", "não lembro"... */
+function saysUnknown(text: string) {
+  return /^(?:(?:eu )?(?:na+o+|num) (?:sei|lembro|recordo|faco ideia|tenho (?:certeza|ideia|como saber))|sei (?:la|nao)|lembro nao|vou (?:ver|olhar|conferir)|preciso (?:ver|olhar|conferir))\b/.test(
+    plain(text),
+  );
+}
+
+const PAID_OFF =
+  /quit(?:ad|ei|ou|amos)|(?:ta|esta|ja|tudo) pago|ja paguei|paguei tudo|terminei de pagar|acabei de pagar|nao devo|nao to devendo|sem divida|a vista|sem financ|nao (?:e|esta|ta|tem|tenho|eh)? ?(?:mais )?financ/;
+const STILL_PAYING =
+  /financ|alienad|prestac|parcel|(?:to|tou|estou) pagando|pagando ainda|ainda (?:pago|devo|to pagando|estou pagando)|devo ainda|carne|boleto/;
+
+/** Financiado? "tô pagando" = sim; "tá pago", "quitei" = não. */
+function readFinanced(text: string, allowYesNo: boolean): boolean | null {
+  const source = plain(text);
+  if (PAID_OFF.test(source)) return false;
+  if (STILL_PAYING.test(source)) return true;
+  return allowYesNo ? yesNo(text) : null;
+}
+
+const ON_TIME =
+  /em dia|tudo (?:certo|certinho|pago|ok|em ordem)|certinho|nenhum|sem atraso|nao (?:tem|tenho|ha|estou|to|ta|esta|tem nenhuma)(?: nenhuma)?(?: parcela)?(?: em)? atras|nao atrasei|nunca atrasei|pago (?:certo|certinho)|tudo em dia/;
+const LATE =
+  /atras|vencid|devendo|em aberto|pendente|deixei de pagar|nao paguei|parei de pagar/;
+
+/** Parcelas: "tudo em dia" = sem atraso; "2 atrasadas", "tô devendo" = com atraso. */
+function readOverdue(text: string): boolean | null {
+  const source = plain(text);
+  if (ON_TIME.test(source)) return false;
+  if (LATE.test(source)) return true;
+  return null;
+}
+
+const NUMBER_WORDS: Record<string, number> = {
+  zero: 0, um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5,
+  seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12,
+  treze: 13, quatorze: 14, catorze: 14, quinze: 15, dezesseis: 16,
+  dezessete: 17, dezoito: 18, dezenove: 19, vinte: 20, trinta: 30,
+  quarenta: 40, cinquenta: 50, sessenta: 60, setenta: 70, oitenta: 80,
+  noventa: 90, cem: 100, cento: 100, duzentos: 200, trezentos: 300,
+  quatrocentos: 400, quinhentos: 500, seiscentos: 600, setecentos: 700,
+  oitocentos: 800, novecentos: 900,
+};
+
+/** "cinquenta e cinco" -> 55, "tres" -> 3. Lista na ordem do texto. */
+function wordNumbers(source: string) {
+  const found: { value: number; end: number }[] = [];
+  const tokens = source.split(" ");
+  let total = 0;
+  let open = false;
+  tokens.forEach((token, index) => {
+    if (token in NUMBER_WORDS) {
+      total += NUMBER_WORDS[token];
+      open = true;
+    } else if (!(open && token === "e")) {
+      if (open) found.push({ value: total, end: index });
+      total = 0;
+      open = false;
+    }
+  });
+  if (open) found.push({ value: total, end: tokens.length });
+  return { found, tokens };
+}
+
+/** Quantidade de parcelas: "3", "umas 3", "duas", "uma só". */
+function readCount(text: string): number | null {
+  const source = plain(text);
+  const digits = /\b(\d{1,3})\b/.exec(source);
+  if (digits) return Number(digits[1]);
+  const { found } = wordNumbers(source);
+  return found.length ? found[0].value : null;
+}
+
+/** Anos citados: "2022", "22" (=2022), "22/23" (fabricação/modelo). */
+function yearsIn(text: string) {
+  const source = fold(text);
+  const max = new Date().getFullYear() + 1;
+  const years: number[] = [];
+  for (const match of source.matchAll(/\b(\d{4}|\d{2})\b/g)) {
+    const n = Number(match[1]);
+    const year =
+      match[1].length === 4
+        ? n
+        : n <= max % 100
+          ? 2000 + n
+          : n >= 50
+            ? 1900 + n
+            : null;
+    if (year !== null && year >= 1950 && year <= max) years.push(year);
+  }
+  return years;
+}
+
+/** Ano do veículo; em "22/23" vale o ano modelo (o maior). */
+function readYear(text: string): number | null {
+  const years = yearsIn(text);
+  return years.length ? Math.max(...years) : null;
+}
+
+/**
+ * Valores em reais do jeito que o lead escreve: "100k", "100 mil", "100 pau",
+ * "R$ 100.000", "85,5 mil", "1,2 milhão", "cem mil", "oitenta e cinco mil".
+ * Cada número vale como está e com o multiplicador que veio junto.
+ */
+function amountsIn(text: string) {
+  const source = fold(text);
+  const scale = (unit: string | undefined) =>
+    !unit ? 1 : /^(?:mi|milhao|milhoes)$/.test(unit) ? 1_000_000 : 1000;
+  const amounts = [
+    ...source.matchAll(/(\d[\d.,]*)\s*(k|mil|paus?|mi|milhao|milhoes)?\b/g),
+  ].flatMap((m) => {
+    const n = Number(m[1].replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", "."));
+    if (!Number.isFinite(n)) return [];
+    const factor = scale(m[2]) || 1;
+    return factor > 1 || /\bmil\b/.test(source)
+      ? [n, Math.round(n * (factor > 1 ? factor : 1000))]
+      : [n];
+  });
+  const { found, tokens } = wordNumbers(plain(text));
+  for (const { value, end } of found) {
+    const unit = tokens[end];
+    amounts.push(
+      unit === "mil" || unit === "pau" || unit === "paus"
+        ? value * 1000
+        : unit === "milhao" || unit === "milhoes"
+          ? value * 1_000_000
+          : value,
+    );
+  }
+  return amounts;
+}
+
+function readAmount(text: string): number | null {
+  const amounts = amountsIn(text);
+  // Com multiplicador, o valor maior é o que o lead quis dizer.
+  return amounts.length ? Math.max(...amounts) : null;
+}
+
+/** Nome curto respondido direto: "Bv", "no Itaú", "é um Onix 2020". */
+function readShortText(text: string, field: "bank" | "vehicle"): string | null {
+  const trimmed = text.trim().replace(/[.!]+$/, "");
+  if (!trimmed || trimmed.includes("?") || trimmed.length > 60) return null;
+  if (yesNo(trimmed) !== null || saysUnknown(trimmed)) return null;
+  const cleaned = trimmed
+    .replace(
+      field === "bank"
+        ? /^(?:(?:e|é|eh|foi|pelo|pela|no|na|o|a)\s+)*/i
+        : /^(?:(?:e|é|eh|meu carro e|meu carro é|o carro e|o carro é|tenho|um|uma)\s+)*/i,
+      "",
+    )
+    .trim();
+  return cleaned.length >= 2 && cleaned.split(/\s+/).length <= 5 ? cleaned : null;
+}
+
+/** Resposta direta ao campo perguntado, sem depender do modelo. */
+function directAnswer(
+  field: Field,
+  text: string,
+): Facts[Field] | "unknown" | null {
+  if (saysUnknown(text)) return "unknown";
+  switch (field) {
+    case "financed":
+      return readFinanced(text, true);
+    case "has_overdue_installments":
+      return readOverdue(text);
+    case "overdue_installments_count":
+      return readCount(text);
+    case "vehicle_year":
+      return readYear(text);
+    case "debt_amount":
+      return readAmount(text);
+    case "bank":
+    case "vehicle":
+      return readShortText(text, field);
+    default:
+      return null;
+  }
 }
 
 /**
@@ -216,9 +430,9 @@ function validValue(
     field === "financed" &&
     lastQuestion === field &&
     typeof value === "boolean" &&
-    shortAnswer(evidence) !== null
+    yesNo(evidence) !== null
   )
-    return value === shortAnswer(evidence);
+    return value === readFinanced(evidence, true);
   if (
     field === "has_overdue_installments" &&
     lastQuestion === field &&
@@ -234,20 +448,9 @@ function validValue(
       source.includes(fold(value))
     );
   if (field === "financed")
-    return (
-      typeof value === "boolean" &&
-      (value
-        ? /financ|prestac|parcel|alienad/.test(source) &&
-          !/quit(ad|ei|ou)|nao (e |esta |ta )?(mais )?financ/.test(source)
-        : /quit(ad|ei|ou)|sem financ|nao (e |esta |ta )?(mais )?financ/.test(source))
-    );
+    return typeof value === "boolean" && readFinanced(evidence, false) === value;
   if (field === "has_overdue_installments")
-    return (
-      typeof value === "boolean" &&
-      (value
-        ? /atras|vencid/.test(source) && !/sem atras|nao.*atras/.test(source)
-        : /em dia|sem atras|nao.*atras/.test(source))
-    );
+    return typeof value === "boolean" && readOverdue(evidence) === value;
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0)
     return false;
   if (field === "vehicle_year")
@@ -255,13 +458,14 @@ function validValue(
       Number.isInteger(value) &&
       value >= 1950 &&
       value <= new Date().getFullYear() + 2 &&
-      source.includes(String(value))
+      yearsIn(evidence).includes(value)
     );
   if (field === "overdue_installments_count")
     return (
       Number.isInteger(value) &&
       value <= 999 &&
       (source.includes(String(value)) ||
+        readCount(evidence) === value ||
         ([
           "zero",
           "uma",
@@ -292,44 +496,9 @@ function validValue(
           )))
     );
   if (value > 100_000_000) return false;
-  return parseAmounts(source).includes(value);
+  return amountsIn(evidence).includes(value);
 }
 
-/**
- * Valores em reais do jeito que o lead escreve: "100k", "100 mil",
- * "R$ 100.000", "85,5 mil". Cada número vale como está e, se vier com
- * k/mil, multiplicado por mil.
- */
-function parseAmounts(text: string) {
-  const source = fold(text);
-  return [...source.matchAll(/(\d[\d.,]*)\s*(k|mil)?\b/g)].flatMap((m) => {
-    const n = Number(m[1].replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", "."));
-    if (!Number.isFinite(n)) return [];
-    return m[2] || /mil/.test(source) ? [n, Math.round(n * 1000)] : [n];
-  });
-}
-
-/** Resposta direta a uma pergunta numérica, sem depender do modelo. */
-function numberAnswer(field: Field, text: string): number | null {
-  const source = fold(text);
-  if (field === "vehicle_year") {
-    const year = /\b(19[5-9]\d|20\d\d)\b/.exec(source);
-    return year ? Number(year[1]) : null;
-  }
-  if (field === "overdue_installments_count") {
-    const count = /\b(\d{1,3})\b/.exec(source);
-    if (count) return Number(count[1]);
-    const words = ["zero", "uma", "duas", "tres", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez"];
-    const index = words.findIndex((word) => new RegExp(`\\b${word}\\b`).test(source));
-    return index >= 0 ? index : null;
-  }
-  if (field === "debt_amount") {
-    const amounts = parseAmounts(source);
-    // Com k/mil, o valor multiplicado é o que o lead quis dizer.
-    return amounts.length ? Math.max(...amounts) : null;
-  }
-  return null;
-}
 export function decidePolicy(input: {
   facts: Facts;
   unknown: string[];
@@ -388,37 +557,48 @@ export function decidePolicy(input: {
       }
     }
   }
-  // Rede de segurança: resposta direta à pergunta de financiamento ("sim",
-  // "ainda está financiado", "já quitei") vale mesmo se o modelo não extrair.
-  if (
-    !injected &&
-    input.lastQuestion === "financed" &&
-    facts.financed === null &&
-    !changedFields.includes("financed")
-  ) {
-    const answer = [true, false].find((value) =>
-      validValue("financed", value, incoming, "financed"),
-    );
-    if (answer !== undefined) {
-      facts.financed = answer;
-      unknown.delete("financed");
-      changedFields.push("financed");
-    }
-  }
-  // Mesma rede para ano, valor e quantidade ("2024", "100k", "3").
-  const pending = input.lastQuestion as Field | null | undefined;
+  // Rede de segurança: resposta direta à pergunta feita ("sim", "tá pago",
+  // "22", "100 pau", "tudo em dia", "Bv", "não sei") vale mesmo se o modelo
+  // não extrair. Só para conversa de qualificação, nunca para outra intenção.
+  const pending = FIELDS.includes(input.lastQuestion as Field)
+    ? (input.lastQuestion as Field)
+    : null;
   if (
     !injected &&
     pending &&
-    NUMBER_FIELDS.includes(pending) &&
     facts[pending] === null &&
-    !changedFields.includes(pending)
+    !changedFields.includes(pending) &&
+    !unknown.has(pending) &&
+    // Resposta curta costuma vir classificada como cumprimento ou fora do
+    // assunto; pedido de preço, equipe etc. nunca vira dado.
+    (e.intent === "qualification" ||
+      e.intent === "off_topic" ||
+      (e.intent === "greeting" && pending !== "bank" && pending !== "vehicle"))
   ) {
-    const value = numberAnswer(pending, incoming);
-    if (value !== null && validValue(pending, value, incoming, pending)) {
-      facts[pending] = value;
+    const answer = directAnswer(pending, incoming);
+    if (answer === "unknown") {
+      unknown.add(pending);
+    } else if (
+      answer !== null &&
+      validValue(pending, answer, incoming, pending)
+    ) {
+      facts[pending] = answer;
       unknown.delete(pending);
       changedFields.push(pending);
+    }
+  }
+  // "2 atrasadas" responde a situação e a quantidade de uma vez.
+  if (
+    !injected &&
+    facts.has_overdue_installments === true &&
+    facts.overdue_installments_count === null &&
+    (pending === "has_overdue_installments" ||
+      changedFields.includes("has_overdue_installments"))
+  ) {
+    const count = readCount(incoming);
+    if (count !== null && count > 0 && count <= 999) {
+      facts.overdue_installments_count = count;
+      changedFields.push("overdue_installments_count");
     }
   }
   if (facts.has_overdue_installments === false) {

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getOptionalCurrentUser } from "@/lib/auth/session";
+import { normalizeWhatsappNumber } from "@/lib/phone";
 import {
   AI_AGENT_LIMITS,
   normalizeBrazilianWhatsapp,
@@ -167,7 +168,8 @@ export async function saveNotificationNumberAction(
       return { success: "Número de notificação removido." };
     }
 
-    const normalized = normalizeBrazilianWhatsapp(raw);
+    // Brasil ou outro país, identificado pela forma do número.
+    const normalized = normalizeWhatsappNumber(raw);
 
     if (!normalized.ok) {
       return {
@@ -199,7 +201,7 @@ export async function testNotificationNumberAction(
     const raw = String(formData.get("notificationWhatsapp") ?? "").trim();
     const settings = await ensureAiAgentSettings(clientId);
     const target = raw
-      ? normalizeBrazilianWhatsapp(raw)
+      ? normalizeWhatsappNumber(raw)
       : settings.notificationWhatsapp
         ? ({ ok: true, value: settings.notificationWhatsapp } as const)
         : ({ ok: false, error: "Informe o número antes de testar." } as const);
@@ -821,6 +823,10 @@ export async function saveAiProfileAction(
       overduePolicy,
       minOverdueInstallments,
       minVehicleYear,
+      manualReviewYears: Math.min(
+        10,
+        optionalNumber(formData.get("manualReviewYears")) ?? 0,
+      ),
       maxDebtAmount,
       rejectedBanks: splitList(formData.get("rejectedBanks")).slice(0, 30),
       ask: Object.fromEntries(

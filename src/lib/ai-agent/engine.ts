@@ -59,6 +59,11 @@ Contexto anterior só ajuda a entender a pergunta, não é nova evidência.
 Se a mensagem nova for resposta curta à pergunta last_question (ex.: "sim", "não", "2020", "Itaú"), extraia o fato DESSE campo, com evidence = a própria resposta.
 Valores: booleanos como true/false (nunca texto), anos e quantias como número.
 Se um dado corrigir outro, correction=true. Normalize números brasileiros. Se disser que não sabe, use unknown_fields.
+O lead escreve em português informal do Brasil, com gíria, abreviação (vc, tb, q, ss, n, blz), erro de digitação e sem acento. Exemplos:
+- financed=true: "sim", "ss", "tô pagando", "ainda devo", "tá alienado", "pago boleto/carnê". financed=false: "tá pago", "quitei", "já paguei tudo", "comprei à vista".
+- vehicle_year: "22" = 2022, "2019/2020" ou "19/20" = 2020 (ano modelo).
+- debt_amount: "100k", "100 mil", "100 pau", "cem mil" = 100000; "1,2 mi" = 1200000.
+- has_overdue_installments=false: "tudo em dia", "certinho", "nenhuma atrasada". true: "2 atrasadas", "tô devendo 3", "atrasei uma" (e overdue_installments_count quando houver número).
 Nunca produza resposta nem status de lead. Formato JSON exato:
 {"facts":[{"field":"vehicle","value":"Corolla","evidence":"Corolla","correction":false}],"unknown_fields":[{"field":"bank","evidence":"não sei o banco"}],"intent":"qualification","human_requested":false,"confidence":0.95,"faq_index":null}
 Campos: ${FIELDS.join(", ")}. Intents: qualification,greeting,documents,price,approval,company,hours,regions,bot,human,off_topic,buys,does_not_buy,rules,facts,no_vehicle.
@@ -135,7 +140,11 @@ function formatCurrencyBRL(value: number | null) {
 }
 
 /** Resumo enviado ao WhatsApp pessoal do cliente. Nunca inventa dados. */
-export function buildQualifiedLeadNotification(conversation: ConversationRow) {
+export function buildQualifiedLeadNotification(
+  conversation: ConversationRow,
+  // Veículo abaixo do ano mínimo, dentro da faixa de análise manual.
+  review: { year: number; minYear: number } | null = null,
+) {
   const phone = formatBrazilianWhatsapp(conversation.whatsapp_number);
   const overdue =
     conversation.has_overdue_installments === null
@@ -144,9 +153,15 @@ export function buildQualifiedLeadNotification(conversation: ConversationRow) {
         ? "Sim"
         : "Não";
 
-  const lines = [
-    "🔥 NOVO LEAD QUALIFICADO",
-    "",
+  const lines = review
+    ? [
+        "⚠️ LEAD PARA ANÁLISE MANUAL",
+        "",
+        `Veículo ${review.year}, abaixo do seu ano mínimo (${review.minYear}). Não é o perfil ideal, mas pode ser uma oportunidade: vale uma análise.`,
+        "",
+      ]
+    : ["🔥 NOVO LEAD QUALIFICADO", ""];
+  lines.push(
     `Nome: ${orNotInformed(conversation.name)}`,
     `WhatsApp: ${phone}`,
     "",
@@ -159,7 +174,7 @@ export function buildQualifiedLeadNotification(conversation: ConversationRow) {
         : Number(conversation.debt_amount),
     )}`,
     `⚠️ Parcelas atrasadas: ${overdue}`,
-  ];
+  );
 
   if (conversation.has_overdue_installments) {
     lines.push(
@@ -169,7 +184,7 @@ export function buildQualifiedLeadNotification(conversation: ConversationRow) {
 
   lines.push(
     "",
-    "Lead qualificado pela IA.",
+    review ? "Lead para análise manual, enviado pela IA." : "Lead qualificado pela IA.",
     "",
     "👉 Entre em contato:",
     `+${conversation.whatsapp_number}`,

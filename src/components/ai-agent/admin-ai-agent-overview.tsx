@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { formatWhatsappNumber } from "@/lib/phone";
 import { Bot, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   CLIENT_PLAN_LABELS,
-  formatBrazilianWhatsapp,
   type ClientPlanType,
 } from "@/lib/ai-agent/shared";
 
@@ -108,7 +108,7 @@ export function AdminAiAgentOverview({ rows }: { rows: AdminAiAgentRow[] }) {
                       </td>
                       <td className="text-muted-foreground">
                         {row.notificationWhatsapp
-                          ? formatBrazilianWhatsapp(row.notificationWhatsapp)
+                          ? formatWhatsappNumber(row.notificationWhatsapp)
                           : "Não configurado"}
                       </td>
                       <td>{row.totalConversations}</td>

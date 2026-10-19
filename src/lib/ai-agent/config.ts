@@ -30,7 +30,8 @@ export const SCRIPT_REPLIES = {
 export type ScriptReply = keyof typeof SCRIPT_REPLIES;
 export const DEFAULT_SCRIPT = {
   greeting: "Olá!",
-  acknowledge: "Entendi.",
+  // Vazio: a próxima pergunta vai direto, sem "Entendi." toda hora.
+  acknowledge: "",
   questions: {
     financed: "O veículo ainda está financiado?",
     vehicle: "Qual é o modelo do veículo?",
@@ -106,7 +107,9 @@ function dropLegacyReplies(value: unknown) {
   for (const [key, legacy] of Object.entries(LEGACY_REPLIES)) {
     if (legacy?.includes(String(replies[key] ?? "").trim())) delete replies[key];
   }
-  return { ...script, replies };
+  // "Entendi." antes de cada pergunta era o padrão antigo.
+  const legacyAck = (script as { acknowledge?: unknown }).acknowledge === "Entendi.";
+  return { ...script, replies, ...(legacyAck ? { acknowledge: "" } : {}) };
 }
 
 export const scriptSchema = z
@@ -215,7 +218,11 @@ export const DEFAULT_PROFILE = {
   vehicleTypes: ["Carro"] as string[],
   overduePolicy: "any" as OverduePolicy,
   minOverdueInstallments: null as number | null,
+  // null = idade máxima padrão de 10 anos (ano atual - 10).
   minVehicleYear: null as number | null,
+  // Veículos até N anos abaixo do mínimo: a IA atende e avisa o cliente para
+  // análise manual em vez de descartar. 0 desliga.
+  manualReviewYears: 5,
   maxDebtAmount: null as number | null,
   rejectedBanks: [] as string[],
   ask: {
@@ -241,6 +248,7 @@ export const profileSchema = z
       .catch("any"),
     minOverdueInstallments: optionalInt(1, 120),
     minVehicleYear: optionalInt(1950, 2100),
+    manualReviewYears: z.number().int().min(0).max(10).catch(5),
     maxDebtAmount: z.number().positive().max(100_000_000).nullable().catch(null),
     rejectedBanks: z
       .array(z.string().trim().min(2).max(60))

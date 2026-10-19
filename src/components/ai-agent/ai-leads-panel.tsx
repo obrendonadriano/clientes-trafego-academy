@@ -29,6 +29,8 @@ import {
   type AiConversationSummary,
   type AiLeadStatus,
 } from "@/lib/ai-agent/shared";
+import type { AiProfile } from "@/lib/ai-agent/config";
+import { manualReviewYear } from "@/lib/ai-agent/policy";
 import { cn } from "@/lib/utils";
 
 const STATUS_VARIANT: Record<
@@ -121,11 +123,16 @@ const FILTERS: { key: AiLeadStatus | "todos"; label: string }[] = [
 export function AiLeadsPanel({
   conversations,
   interactive,
+  profile,
 }: {
   conversations: AiConversationSummary[];
   // Falso no Plano Essencial: a lista aparece, mas nada abre.
   interactive: boolean;
+  // Perfil do lead: marca veículos na faixa de análise manual.
+  profile?: AiProfile;
 }) {
+  const needsReview = (item: AiConversationSummary) =>
+    Boolean(profile && item.status === "qualified" && manualReviewYear(item.vehicleYear, profile));
   const [filter, setFilter] = useState<AiLeadStatus | "todos">("todos");
   const [selectedId, setSelected] = useState<string | null>(null);
   const selected = conversations.find((item) => item.id === selectedId);
@@ -211,9 +218,12 @@ export function AiLeadsPanel({
                           {formatBrazilianWhatsapp(item.whatsappNumber)}
                         </p>
                       </div>
-                      <Badge variant={STATUS_VARIANT[item.status]}>
-                        {AI_LEAD_STATUS_LABELS[item.status]}
-                      </Badge>
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge variant={STATUS_VARIANT[item.status]}>
+                          {AI_LEAD_STATUS_LABELS[item.status]}
+                        </Badge>
+                        {needsReview(item) ? <ReviewBadge /> : null}
+                      </div>
                     </div>
                     <ProcessingStatus conversation={item} />
                     <p className="mt-3 text-sm text-muted-foreground">
@@ -287,9 +297,12 @@ export function AiLeadsPanel({
                         {formatDateTime(item.createdAt)}
                       </td>
                       <td>
-                        <Badge variant={STATUS_VARIANT[item.status]}>
-                          {AI_LEAD_STATUS_LABELS[item.status]}
-                        </Badge>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <Badge variant={STATUS_VARIANT[item.status]}>
+                            {AI_LEAD_STATUS_LABELS[item.status]}
+                          </Badge>
+                          {needsReview(item) ? <ReviewBadge /> : null}
+                        </div>
                         <ProcessingStatus conversation={item} />
                       </td>
                       <td className="w-12 text-right">
@@ -327,6 +340,18 @@ export function AiLeadsPanel({
         />
       ) : null}
     </Card>
+  );
+}
+
+/** Veículo abaixo do ano mínimo, dentro da faixa de análise manual. */
+function ReviewBadge() {
+  return (
+    <Badge
+      className="bg-[#fffaeb] text-[#b54708]"
+      title="Veículo abaixo do seu ano mínimo: vale uma análise manual."
+    >
+      Análise manual
+    </Badge>
   );
 }
 

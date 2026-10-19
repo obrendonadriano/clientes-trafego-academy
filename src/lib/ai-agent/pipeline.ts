@@ -15,7 +15,11 @@ import { MEDIA_LABELS, type IncomingEvent } from "./event";
 import { buildDelaysForMessages } from "./humanize";
 import { transition } from "./transitions";
 import { prepareTurnInput } from "./media";
-import { DISQUALIFICATION_REASONS, offHoursReply } from "./policy";
+import {
+  DISQUALIFICATION_REASONS,
+  manualReviewYear,
+  offHoursReply,
+} from "./policy";
 import { hasAiAttendanceSegment } from "@/lib/segments";
 import {
   AiAgentError,
@@ -289,7 +293,10 @@ export async function advanceConversation(input: {
               sessionName,
               settings.notificationWhatsapp,
             ),
-            text: buildQualifiedLeadNotification(conversation),
+            text: buildQualifiedLeadNotification(
+              conversation,
+              manualReviewYear(conversation.vehicle_year, settings.knowledge.profile),
+            ),
           });
           await tx("notify_result", { success: Boolean(wahaMessageId(sent)) });
         } catch (error) {

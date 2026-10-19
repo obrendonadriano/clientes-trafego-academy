@@ -290,7 +290,7 @@ test("foto com texto: o texto é entendido e o agradecimento vem antes", () => {
   assert.equal(p.human, false);
   assert.deepEqual(p.candidates, [
     [
-      `${DEFAULT_SCRIPT.replies.media} ${DEFAULT_SCRIPT.acknowledge} ${DEFAULT_SCRIPT.questions.vehicle}`,
+      `${DEFAULT_SCRIPT.replies.media} ${DEFAULT_SCRIPT.questions.vehicle}`,
     ],
   ]);
   assert.equal(text(p).match(/\?/g).length, 1);
@@ -1071,11 +1071,18 @@ test("perfil: pergunta desmarcada não é feita; critério obriga a pergunta", (
   const kb = withProfile({
     ask: { vehicle_year: false, bank: false, debt_amount: false, has_overdue_installments: false },
   });
+  // O ano é sempre perguntado: há sempre um ano mínimo (10 anos de uso).
   const p = policy(
     { facts: [fact("financed", true, "financiado"), fact("vehicle", "Corolla", "Corolla")] },
     { incoming: "Corolla financiado", knowledge: kb, firstTurn: false },
   );
-  assert.equal(p.status, "qualified");
+  assert.equal(p.nextField, "vehicle_year");
+  const year = new Date().getFullYear() - 2;
+  const done = policy(
+    { facts: [fact("financed", true, "financiado"), fact("vehicle", "Corolla", "Corolla"), fact("vehicle_year", year, String(year))] },
+    { incoming: `Corolla ${year} financiado`, knowledge: kb, firstTurn: false },
+  );
+  assert.equal(done.status, "qualified");
   const strict = withProfile({
     ask: { vehicle_year: false, bank: false, debt_amount: false, has_overdue_installments: false },
     minVehicleYear: 2015,
@@ -1094,7 +1101,8 @@ test("perfil: cada critério desqualifica em silêncio com o motivo certo", () =
     [{ overduePolicy: "overdue_only" }, [fact("has_overdue_installments", false, "em dia")], "estão em dia", "overdue_policy"],
     [{ overduePolicy: "current_only" }, [fact("has_overdue_installments", true, "atrasadas")], "estão atrasadas", "overdue_policy"],
     [{ minOverdueInstallments: 3 }, [fact("has_overdue_installments", true, "atrasadas"), fact("overdue_installments_count", 2, "2")], "2 atrasadas", "min_overdue"],
-    [{ minVehicleYear: 2015 }, [fact("vehicle_year", 2010, "2010")], "é 2010", "min_year"],
+    // 2015 menos a faixa de análise (5 anos) = 2010; 2008 já fica fora.
+    [{ minVehicleYear: 2015 }, [fact("vehicle_year", 2008, "2008")], "é 2008", "min_year"],
     [{ maxDebtAmount: 50000 }, [fact("debt_amount", 80000, "80000")], "devo 80000", "max_debt"],
     [{ rejectedBanks: ["Banco X"] }, [fact("bank", "banco x", "banco x")], "é no banco x", "rejected_bank"],
   ];
@@ -1155,7 +1163,7 @@ test("'Sim' à pergunta de financiamento avança mesmo sem extração do modelo"
   assert.deepEqual(p.changedFields, ["financed"]);
   assert.equal(p.nextField, "vehicle");
   assert.deepEqual(p.candidates, [
-    [`${DEFAULT_SCRIPT.acknowledge} ${DEFAULT_SCRIPT.questions.vehicle}`],
+    [DEFAULT_SCRIPT.questions.vehicle],
   ]);
   for (const answer of ["sim", "S", "Tá sim!", "isso", "Ainda está", "Estou falando que ainda está financiado"])
     assert.equal(
@@ -1256,4 +1264,133 @@ test("mensagem final padrão passa para a equipe; textos antigos salvos viram o 
   assert.equal(saved.replies.waiting, DEFAULT_SCRIPT.replies.waiting);
   // O que o cliente escreveu nunca é trocado.
   assert.equal(saved.replies.price, "Texto do cliente.");
+});
+
+// ---------------------------------------------------------------------------
+// Português do dia a dia (rede de segurança sem o modelo)
+// ---------------------------------------------------------------------------
+
+const answer = (lastQuestion, incoming, facts = {}) =>
+  policy(
+    { facts: [] },
+    {
+      incoming,
+      firstTurn: false,
+      lastQuestion,
+      facts: { ...EMPTY_FACTS, financed: true, vehicle: "Amarok", ...facts },
+    },
+  ).facts;
+
+test("financiamento: sim/não do jeito que o brasileiro fala", () => {
+  for (const text of ["sim", "Simmm", "ss", "S", "isso aí", "aham", "uhum", "com certeza", "claro", "é sim", "tá sim", "ainda tá", "tô pagando ainda", "ainda devo", "tá alienado", "pago boleto todo mês"])
+    assert.equal(answer("financed", text, { financed: null }).financed, true, text);
+  for (const text of ["não", "nao", "n", "nn", "negativo", "tá pago", "já paguei tudo", "quitei ano passado", "comprei à vista", "não devo mais nada"])
+    assert.equal(answer("financed", text, { financed: null }).financed, false, text);
+});
+
+test("ano: '22', '2022', '22/23', '19/20' e 'é 2018'", () => {
+  for (const [text, year] of [["22", 2022], ["2022", 2022], ["22/23", 2023], ["2019/2020", 2020], ["19/20", 2020], ["é 2018", 2018], ["modelo 98", 1998]])
+    assert.equal(answer("vehicle_year", text).vehicle_year, year, text);
+  // O modelo citando "22" com valor 2022 também passa.
+  const p = policy(
+    { facts: [fact("vehicle_year", 2022, "22")] },
+    { incoming: "22", firstTurn: false, lastQuestion: "vehicle_year", facts: { ...EMPTY_FACTS, financed: true, vehicle: "Amarok" } },
+  );
+  assert.equal(p.facts.vehicle_year, 2022);
+});
+
+test("dívida: k, mil, pau, por extenso e milhão", () => {
+  for (const [text, value] of [["100k", 100000], ["100 pau", 100000], ["cem mil", 100000], ["oitenta e cinco mil", 85000], ["uns 85,5 mil", 85500], ["R$ 72.300", 72300], ["1,2 mi", 1200000]])
+    assert.equal(answer("debt_amount", text).debt_amount, value, text);
+});
+
+test("parcelas: em dia, atrasadas e quantidade na mesma resposta", () => {
+  for (const text of ["tudo em dia", "tá certinho", "nenhuma atrasada", "não tenho atraso", "nunca atrasei"]) {
+    const facts = answer("has_overdue_installments", text);
+    assert.equal(facts.has_overdue_installments, false, text);
+  }
+  for (const [text, count] of [["1 atrasada", 1], ["2 atrasadas", 2], ["tô devendo 3", 3], ["atrasei duas", 2], ["umas 4 em atraso", 4]]) {
+    const facts = answer("has_overdue_installments", text);
+    assert.equal(facts.has_overdue_installments, true, text);
+    assert.equal(facts.overdue_installments_count, count, text);
+  }
+  assert.equal(answer("overdue_installments_count", "três", { has_overdue_installments: true }).overdue_installments_count, 3);
+});
+
+test("banco e modelo respondidos direto; 'não sei' vira desconhecido", () => {
+  assert.equal(answer("bank", "Bv").bank, "Bv");
+  assert.equal(answer("bank", "no Itaú").bank, "Itaú");
+  assert.equal(answer("bank", "banco do brasil").bank, "banco do brasil");
+  assert.equal(answer("bank", "é o BV").bank, "BV");
+  assert.equal(answer("vehicle", "é um Onix", { vehicle: null }).vehicle, "Onix");
+  const p = policy(
+    { facts: [] },
+    { incoming: "sei lá, não lembro", firstTurn: false, lastQuestion: "bank", facts: { ...EMPTY_FACTS, financed: true, vehicle: "Amarok", vehicle_year: 2022 } },
+  );
+  assert.ok(p.unknownFields.includes("bank"));
+  assert.equal(p.nextField, "debt_amount");
+});
+
+test("pedido de preço nunca vira dado, mesmo com número na mensagem", () => {
+  const p = policy(
+    { intent: "price" },
+    { incoming: "quanto vocês pagam num 2022?", firstTurn: false, lastQuestion: "vehicle_year", facts: { ...EMPTY_FACTS, financed: true, vehicle: "Amarok" } },
+  );
+  assert.equal(p.facts.vehicle_year, null);
+});
+
+test("sem 'Entendi.' antes das perguntas; padrão antigo salvo também sai", () => {
+  assert.equal(DEFAULT_SCRIPT.acknowledge, "");
+  const p = policy(
+    { facts: [] },
+    { incoming: "Sim", firstTurn: false, lastQuestion: "financed" },
+  );
+  assert.deepEqual(p.candidates, [[DEFAULT_SCRIPT.questions.vehicle]]);
+  assert.equal(
+    knowledgeSchema.parse({ script: { ...DEFAULT_SCRIPT, acknowledge: "Entendi." } }).script.acknowledge,
+    "",
+  );
+  assert.equal(
+    knowledgeSchema.parse({ script: { ...DEFAULT_SCRIPT, acknowledge: "Show!" } }).script.acknowledge,
+    "Show!",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Idade do veículo: até 10 anos; abaixo do mínimo, faixa de análise manual
+// ---------------------------------------------------------------------------
+
+test("idade: padrão de 10 anos; faixa de análise manual qualifica e marca; abaixo dela, silêncio", async () => {
+  const { manualReviewYear, effectiveMinYear } = await import("../src/lib/ai-agent/policy.ts");
+  const now = new Date().getFullYear();
+  const profile = { ...EMPTY_KNOWLEDGE.profile };
+  assert.equal(effectiveMinYear(profile), now - 10);
+  const lead = (year, kb = EMPTY_KNOWLEDGE) =>
+    policy(
+      { facts: [] },
+      {
+        incoming: String(year),
+        firstTurn: false,
+        lastQuestion: "vehicle_year",
+        knowledge: kb,
+        facts: { ...EMPTY_FACTS, financed: true, vehicle: "Onix", bank: "BV", debt_amount: 50000, has_overdue_installments: false },
+      },
+    );
+  // Dentro dos 10 anos: qualificado normal.
+  assert.equal(lead(now - 3).status, "qualified");
+  assert.equal(manualReviewYear(now - 3, profile), null);
+  // 11 a 15 anos: atende, qualifica e marca para análise manual.
+  assert.equal(lead(now - 12).status, "qualified");
+  assert.deepEqual(manualReviewYear(now - 12, profile), { year: now - 12, minYear: now - 10 });
+  // Mais de 15 anos: fora, em silêncio.
+  const old = lead(now - 16);
+  assert.equal(old.status, "disqualified");
+  assert.equal(old.disqualification, "min_year");
+  // Cliente com mínimo 2015 (exemplo do pedido): 2010 a 2014 vão para análise.
+  const kb2015 = withProfile({ minVehicleYear: 2015 });
+  assert.equal(lead(2012, kb2015).status, "qualified");
+  assert.deepEqual(manualReviewYear(2012, kb2015.profile), { year: 2012, minYear: 2015 });
+  assert.equal(lead(2009, kb2015).status, "disqualified");
+  // Faixa desligada (0): abaixo do mínimo sai direto.
+  assert.equal(lead(2012, withProfile({ minVehicleYear: 2015, manualReviewYears: 0 })).status, "disqualified");
 });

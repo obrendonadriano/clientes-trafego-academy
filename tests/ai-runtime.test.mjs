@@ -981,3 +981,92 @@ test("contato @lid vira o telefone real antes da leitura", async () => {
   const plain = body("5511912345678@c.us");
   assert.equal(await resolveLidPayload(plain, credentials), plain);
 });
+
+test("notificação marca o lead para análise manual quando o veículo está abaixo do mínimo", () => {
+  const load = loader({
+    [resolve("src/lib/services/deepseek.ts")]: {},
+    [resolve("src/lib/ai-agent/store.ts")]: {},
+  });
+  const { buildQualifiedLeadNotification } = load("src/lib/ai-agent/engine.ts");
+  const conversation = {
+    name: null,
+    whatsapp_number: "5514991542734",
+    vehicle: "Onix",
+    vehicle_year: 2012,
+    bank: "BV",
+    debt_amount: "50000",
+    has_overdue_installments: false,
+    overdue_installments_count: 0,
+  };
+  const normal = buildQualifiedLeadNotification(conversation);
+  assert.match(normal, /^🔥 NOVO LEAD QUALIFICADO/);
+  const review = buildQualifiedLeadNotification(conversation, { year: 2012, minYear: 2015 });
+  assert.match(review, /^⚠️ LEAD PARA ANÁLISE MANUAL/);
+  assert.match(review, /Veículo 2012, abaixo do seu ano mínimo \(2015\)/);
+  assert.match(review, /pode ser uma oportunidade/);
+  assert.match(review, /🚗 Veículo: Onix/);
+});
+
+test("número de notificação: Brasil pelo DDD, outros países pelo código", () => {
+  const { normalizeWhatsappNumber, maskWhatsappInput, formatWhatsappNumber, describeWhatsappCountry } =
+    loader({})("src/lib/phone.ts");
+  const ok = (raw, value, country) => {
+    const result = normalizeWhatsappNumber(raw);
+    assert.equal(result.ok, true, raw);
+    assert.equal(result.value, value, raw);
+    assert.equal(result.country, country, raw);
+  };
+  // Brasil: com ou sem 55, com ou sem máscara.
+  ok("(31) 99524-8845", "5531995248845", "BR");
+  ok("31995248845", "5531995248845", "BR");
+  ok("5531995248845", "5531995248845", "BR");
+  ok("+55 31 99524-8845", "5531995248845", "BR");
+  ok("(11) 3123-4567", "551131234567", "BR");
+  // Outros países, com e sem "+".
+  ok("+1 415 555 2671", "14155552671", "US");
+  ok("14155552671", "14155552671", "US");
+  ok("+351 912 345 678", "351912345678", "PT");
+  ok("351912345678", "351912345678", "PT");
+  ok("00351912345678", "351912345678", "PT");
+  ok("+54 9 11 2345-6789", "5491123456789", "AR");
+  ok("+44 7400 123456", "447400123456", "GB");
+  // Inválidos.
+  for (const raw of ["", "123", "(00) 91234-5678", "+999 123", "+1 000 000 0000"])
+    assert.equal(normalizeWhatsappNumber(raw).ok, false, raw);
+
+  // Máscara enquanto digita.
+  assert.equal(maskWhatsappInput("319952"), "(31) 9952");
+  assert.equal(maskWhatsappInput("31995248845"), "(31) 99524-8845");
+  assert.equal(maskWhatsappInput("+14155552671"), "+1 415 555 2671");
+  assert.equal(maskWhatsappInput("351912345678"), "+351 912 345 678");
+  assert.equal(maskWhatsappInput("5531995248845"), "+55 (31) 99524-8845");
+  assert.equal(maskWhatsappInput("+"), "+");
+
+  // Exibição e país identificado.
+  assert.equal(formatWhatsappNumber("5531995248845"), "+55 (31) 99524-8845");
+  assert.equal(formatWhatsappNumber("14155552671"), "+1 415 555 2671");
+  assert.match(describeWhatsappCountry("+351 912 345 678"), /\(\+351\)$/);
+  assert.match(describeWhatsappCountry("(31) 99524-8845"), /\(\+55\)$/);
+});
+
+test("banco aceita número de notificação de outro país e mantém os brasileiros", async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`create role anon; create role authenticated; create role service_role bypassrls; create schema auth;
+      create function auth.uid() returns uuid language sql as $$ select null::uuid $$;
+      create table clients(id uuid primary key,nome_empresa text);
+      create table users(id uuid primary key,auth_user_id uuid,client_id uuid,role text,ativo boolean);
+      create table whatsapp_sessions(client_id uuid,session_name text,status text,phone_number text);`);
+    await db.exec(readMigration("20260916120000_ai_agent_whatsapp.sql"));
+    await db.exec(`insert into clients(id,plan_type) values('${A}','complete');
+      insert into ai_agent_settings(client_id,notification_whatsapp) values('${A}','5531995248845');`);
+    await assert.rejects(db.exec(`update ai_agent_settings set notification_whatsapp='351912345678'`));
+    await db.exec(readMigration("20261018120000_ai_notification_international.sql"));
+    await db.exec(`update ai_agent_settings set notification_whatsapp='351912345678'`);
+    await db.exec(`update ai_agent_settings set notification_whatsapp='5531995248845'`);
+    for (const bad of ["+351912345678", "0351912345678", "123", "1234567890123456"])
+      await assert.rejects(db.exec(`update ai_agent_settings set notification_whatsapp='${bad}'`), bad);
+  } finally {
+    await db.close();
+  }
+});

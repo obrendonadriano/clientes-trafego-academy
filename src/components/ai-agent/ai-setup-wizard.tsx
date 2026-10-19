@@ -58,7 +58,7 @@ const OVERDUE_HINTS: Record<OverduePolicy, string> = {
 };
 
 const QUESTION_LOCK: Record<OptionalQuestion, string> = {
-  vehicle_year: "Necessária pelo ano mínimo",
+  vehicle_year: "Necessária pela idade do veículo",
   bank: "Necessária pelos bancos não atendidos",
   debt_amount: "Necessária pela dívida máxima",
   has_overdue_installments: "Necessária pela regra das parcelas",
@@ -82,6 +82,7 @@ type Draft = {
   overduePolicy: OverduePolicy;
   minOverdueInstallments: string;
   minVehicleYear: string;
+  manualReviewYears: string;
   maxDebtAmount: string;
   rejectedBanks: string;
   ask: Record<OptionalQuestion, boolean>;
@@ -106,6 +107,7 @@ function draftFrom(
       ? String(profile.minOverdueInstallments)
       : "",
     minVehicleYear: profile.minVehicleYear ? String(profile.minVehicleYear) : "",
+    manualReviewYears: String(profile.manualReviewYears),
     maxDebtAmount: profile.maxDebtAmount
       ? maskReais(String(profile.maxDebtAmount))
       : "",
@@ -128,6 +130,7 @@ function profileFromDraft(draft: Draft): AiProfile {
         ? null
         : number(draft.minOverdueInstallments),
     minVehicleYear: number(draft.minVehicleYear),
+    manualReviewYears: Math.min(10, number(draft.manualReviewYears) ?? 0),
     maxDebtAmount: number(draft.maxDebtAmount) || null,
     rejectedBanks: splitList(draft.rejectedBanks),
     ask: draft.ask,
@@ -240,6 +243,8 @@ export function AiSetupWizard({
   }
 
   const preview = useMemo(() => profileFromDraft(draft), [draft]);
+  const defaultMinYear = new Date().getFullYear() - 10;
+  const reviewMinYear = preview.minVehicleYear ?? defaultMinYear;
   const locked = effectiveQuestions({
     ...preview,
     ask: { vehicle_year: false, bank: false, debt_amount: false, has_overdue_installments: false },
@@ -415,8 +420,11 @@ export function AiSetupWizard({
                   onChange={(event) =>
                     set("minVehicleYear", digitsOnly(event.target.value).slice(0, 4))
                   }
-                  placeholder="Ex.: 2015"
+                  placeholder={`Padrão: ${defaultMinYear} (até 10 anos)`}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Em branco, vale até 10 anos de uso.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="wizard-max-debt">Dívida máxima</Label>
@@ -429,6 +437,32 @@ export function AiSetupWizard({
                   placeholder="Ex.: R$ 80.000"
                 />
               </div>
+            </div>
+            <div className="space-y-2 rounded-2xl border border-border/60 bg-surface-2/40 p-4">
+              <Label htmlFor="wizard-review-years">
+                Mais antigos que o mínimo: avisar para análise manual
+              </Label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">até</span>
+                <Input
+                  id="wizard-review-years"
+                  name="manualReviewYears"
+                  inputMode="numeric"
+                  value={draft.manualReviewYears}
+                  onChange={(event) =>
+                    set("manualReviewYears", digitsOnly(event.target.value).slice(0, 2))
+                  }
+                  className="w-20"
+                />
+                <span className="text-sm text-muted-foreground">
+                  anos abaixo do mínimo
+                </span>
+              </div>
+              <p className="text-xs leading-5 text-muted-foreground">
+                {Number(draft.manualReviewYears) > 0
+                  ? `Veículos de ${reviewMinYear - Math.min(10, Number(draft.manualReviewYears))} a ${reviewMinYear - 1} não são o perfil ideal, mas a IA atende e manda o lead para você marcado “análise manual”: pode ser uma oportunidade. Mais antigos que isso, a IA não responde.`
+                  : "Com 0, veículos abaixo do mínimo não são atendidos."}
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="wizard-banks">Bancos que você não atende</Label>
