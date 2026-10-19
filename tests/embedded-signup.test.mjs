@@ -629,3 +629,157 @@ test('o teste controlado no Test Events só envia com código, confirmação e s
   assert.notEqual(runScript([...base, '--send', '--test-event-code', 'T1']).code, 0);
   assert.notEqual(runScript([...base, '--send', '--test-event-code', 'T1', '--confirm']).code, 0);
 });
+
+// ---------------------------------------------------------------------------
+// Dataset: nome automático e compartilhamento com a agência (best-effort)
+// ---------------------------------------------------------------------------
+
+const AGENCY = '339151175949110';
+const GENERIC = 'WhatsApp Marketing Messages Dataset 777777';
+const TARGET = 'Berg Auto Car · WhatsApp CAPI';
+
+const withAgency = (meta) => {
+  meta.deps.agencyBusinessId = AGENCY;
+  return meta;
+};
+
+test('Dataset com nome genérico da Meta é renomeado para "<cliente> · WhatsApp CAPI"', async () => {
+  const meta = fakeMeta({
+    read_dataset: { id: '777777', name: GENERIC },
+    rename_dataset: { success: true },
+  });
+  const result = await run(meta, { clientName: '  Berg   Auto Car ' });
+
+  const rename = meta.calls.find((call) => call.stage === 'rename_dataset');
+  assert.equal(rename.path, '/777777');
+  assert.equal(rename.init.method, 'POST');
+  assert.deepEqual(rename.init.body, { name: TARGET });
+  assert.equal(result.datasetName, TARGET);
+  assert.deepEqual(result.datasetNaming, { status: 'renamed', reason: null });
+  assert.equal(result.status, 'active');
+});
+
+test('Dataset com nome personalizado não é renomeado', async () => {
+  const meta = fakeMeta({ read_dataset: { name: 'Dataset da Berg (nosso)' } });
+  const result = await run(meta, { clientName: 'Berg Auto Car' });
+
+  assert.ok(!meta.stages().includes('rename_dataset'));
+  assert.equal(result.datasetName, 'Dataset da Berg (nosso)');
+  assert.equal(result.datasetNaming.status, 'custom_name');
+  assert.equal(result.status, 'active');
+});
+
+test('reconectar não renomeia de novo (idempotente)', async () => {
+  const meta = fakeMeta({ read_dataset: { name: TARGET } });
+  const result = await run(meta, { clientName: 'Berg Auto Car' });
+
+  assert.ok(!meta.stages().includes('rename_dataset'));
+  assert.deepEqual(result.datasetNaming, { status: 'renamed', reason: null });
+});
+
+test('sem nome do cliente ou sem Dataset, não tenta renomear', async () => {
+  const noName = fakeMeta({ read_dataset: { name: GENERIC } });
+  const a = await run(noName, { clientName: '' });
+  assert.ok(!noName.stages().includes('read_dataset'));
+  assert.equal(a.datasetNaming.status, 'skipped');
+
+  const noDataset = fakeMeta({ resolve_dataset: fail(403, 200) });
+  const b = await run(noDataset, { clientName: 'Berg Auto Car' });
+  assert.ok(!noDataset.stages().includes('read_dataset'));
+  assert.equal(b.datasetNaming.status, 'skipped');
+});
+
+test('falha ao renomear não muda o status active e o motivo vai para warnings/lastError', async () => {
+  for (const overrides of [
+    { read_dataset: { name: GENERIC }, rename_dataset: fail(403, 200) },
+    { read_dataset: fail(400, 100) },
+    { read_dataset: { name: GENERIC }, rename_dataset: fail(500, 2) },
+  ]) {
+    const result = await run(fakeMeta(overrides), { clientName: 'Berg Auto Car' });
+    assert.equal(result.status, 'active');
+    assert.equal(result.datasetId, '777777');
+    assert.equal(result.datasetNaming.status, 'failed');
+    assert.ok(result.datasetNaming.reason);
+    assert.ok(result.warnings.some((w) => w.stage === 'rename_dataset' || w.stage === 'read_dataset'));
+    assert.match(result.lastError, /etapa (rename|read)_dataset/);
+  }
+});
+
+test('compartilhamento: detecta a agência; criar por API nunca é tentado (exige business_management)', async () => {
+  const shared = await run(
+    withAgency(fakeMeta({ check_dataset_sharing: { data: [{ id: '1' }, { id: AGENCY }] } })),
+    { clientName: 'Berg Auto Car' },
+  );
+  assert.deepEqual(shared.datasetSharing, { status: 'shared', reason: null });
+
+  const meta = withAgency(fakeMeta({ check_dataset_sharing: { data: [] } }));
+  const manual = await run(meta, { clientName: 'Berg Auto Car' });
+  assert.equal(manual.datasetSharing.status, 'manual_required');
+  assert.match(manual.datasetSharing.reason, /business_management/);
+  const sharingCall = meta.calls.find((call) => call.stage === 'check_dataset_sharing');
+  assert.equal(sharingCall.init.method, 'GET');
+  assert.equal(sharingCall.path, '/777777/shared_agencies');
+  assert.ok(!meta.calls.some((call) => call.init.method === 'POST' && /agencies|shared_accounts/.test(call.path)));
+
+  // Sem a BM da agência configurada, nem consulta.
+  const off = fakeMeta();
+  const skipped = await run(off, { clientName: 'Berg Auto Car' });
+  assert.equal(skipped.datasetSharing.status, 'skipped');
+  assert.ok(!off.stages().includes('check_dataset_sharing'));
+});
+
+test('falha no compartilhamento não muda o status active nem polui o lastError', async () => {
+  const result = await run(
+    withAgency(fakeMeta({ check_dataset_sharing: fail(403, 200) })),
+    { clientName: 'Berg Auto Car' },
+  );
+  assert.equal(result.status, 'active');
+  assert.equal(result.datasetSharing.status, 'manual_required');
+  assert.ok(result.warnings.some((w) => w.stage === 'check_dataset_sharing'));
+  assert.equal(result.lastError, null);
+});
+
+test('o token nunca aparece em log, warnings, motivos ou lastError do Dataset', async () => {
+  // A Meta às vezes ecoa parâmetros na mensagem de erro: aqui, o próprio token.
+  const echo = `Invalid request access_token=${TOKEN}`;
+  const result = await run(
+    withAgency(
+      fakeMeta({
+        read_dataset: { name: GENERIC },
+        rename_dataset: fail(403, 200, null, echo),
+        check_dataset_sharing: fail(403, 200, null, echo),
+      }),
+    ),
+    { clientName: 'Berg Auto Car' },
+  );
+  const logs = result.warnings.map((warning) => [
+    diagnostics.failureLogLabel(warning),
+    diagnostics.failureLogPayload(warning),
+  ]);
+  const exposed = JSON.stringify({
+    logs,
+    warnings: result.warnings,
+    lastError: result.lastError,
+    naming: result.datasetNaming,
+    sharing: result.datasetSharing,
+    name: result.datasetName,
+  });
+  assert.ok(!exposed.includes(TOKEN));
+  assert.ok(!exposed.includes('EAA'));
+  assert.ok(!exposed.includes('app-secret-test'));
+});
+
+test('migração do status do Dataset é só aditiva', () => {
+  const sql = readFileSync(
+    new URL('../supabase/migrations/20261019120000_whatsapp_dataset_name_share.sql', import.meta.url),
+    'utf8',
+  )
+    .replace(/--.*$/gm, '')
+    .toLowerCase();
+  assert.doesNotMatch(sql, /\b(drop|delete|update|truncate|rename|alter column|create or replace|revoke|grant)\b/);
+  const statements = sql.split(';').map((part) => part.trim()).filter(Boolean);
+  assert.equal(statements.length, 1);
+  assert.match(statements[0], /^alter table public\.client_whatsapp_connections/);
+  for (const clause of statements[0].split(',').slice(0))
+    assert.match(clause, /add column if not exists/);
+});

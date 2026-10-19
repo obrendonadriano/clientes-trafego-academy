@@ -130,12 +130,20 @@ export async function POST(request: Request) {
     await setStatus("onboarding", null);
   }
 
+  // Nome do cliente no sistema: vira o nome do Dataset na Meta.
+  const { data: clientRow } = await admin
+    .from("clients")
+    .select("nome_empresa")
+    .eq("id", clientId)
+    .maybeSingle<{ nome_empresa: string | null }>();
+
   try {
     const result = await runOnboarding({
       code,
       wabaId,
       phoneNumberId,
       event,
+      clientName: clientRow?.nome_empresa ?? null,
       previous: previous
         ? {
             phoneNumberId: previous.phone_number_id,
@@ -186,6 +194,32 @@ export async function POST(request: Request) {
         },
         { status: duplicate ? 409 : 500 },
       );
+    }
+
+    // Nome e compartilhamento do Dataset (best-effort). Sem a migração
+    // 20261019120000 a gravação falha e a conexão segue igual.
+    if (result.datasetId) {
+      const { error: datasetError } = await admin
+        .from("client_whatsapp_connections")
+        .update({
+          dataset_name: result.datasetName,
+          dataset_rename_status: result.datasetNaming.status,
+          dataset_rename_reason: result.datasetNaming.reason
+            ? redactSecrets(result.datasetNaming.reason).slice(0, 500)
+            : null,
+          dataset_share_status: result.datasetSharing.status,
+          dataset_share_reason: result.datasetSharing.reason
+            ? redactSecrets(result.datasetSharing.reason).slice(0, 500)
+            : null,
+          dataset_checked_at: new Date().toISOString(),
+        })
+        .eq("client_id", clientId);
+
+      if (datasetError) {
+        console.warn("[meta/onboarding] record_dataset_status_failed", {
+          dbCode: datasetError.code ?? null,
+        });
+      }
     }
 
     if (result.businessApp.contactsSyncRequested || result.businessApp.historySyncRequested) {

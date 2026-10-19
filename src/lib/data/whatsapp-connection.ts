@@ -114,6 +114,68 @@ export type AdminConnectionRow = {
   ingestMode: "legacy_waha" | "official_meta";
   // Modelo de conversão: decide o evento do fechamento.
   goalType: ConversionGoalType;
+  // Nome do Dataset na Meta e resultado do renomear/compartilhar.
+  dataset: DatasetStatus;
+};
+
+export type DatasetStatus = {
+  name: string | null;
+  renameStatus: "renamed" | "custom_name" | "failed" | "skipped" | null;
+  renameReason: string | null;
+  shareStatus: "shared" | "manual_required" | "skipped" | null;
+  shareReason: string | null;
+  checkedAt: string | null;
+};
+
+type DatasetRow = {
+  client_id: string;
+  dataset_name: string | null;
+  dataset_rename_status: string | null;
+  dataset_rename_reason: string | null;
+  dataset_share_status: string | null;
+  dataset_share_reason: string | null;
+  dataset_checked_at: string | null;
+};
+
+const RENAME_STATUSES = ["renamed", "custom_name", "failed", "skipped"] as const;
+const SHARE_STATUSES = ["shared", "manual_required", "skipped"] as const;
+const pick = <T extends string>(list: readonly T[], value: string | null) =>
+  list.find((item) => item === value) ?? null;
+
+/**
+ * Colunas da migração 20261019120000, lidas à parte para não mexer na RPC do
+ * diagnóstico. Sem a migração aplicada, volta vazio e o painel só não mostra.
+ */
+async function loadDatasetStatus(
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
+) {
+  const { data, error } = await admin
+    .from("client_whatsapp_connections")
+    .select(
+      "client_id, dataset_name, dataset_rename_status, dataset_rename_reason, dataset_share_status, dataset_share_reason, dataset_checked_at",
+    );
+  const byClient = new Map<string, DatasetStatus>();
+  if (error) return byClient;
+  for (const row of (data as DatasetRow[] | null) ?? []) {
+    byClient.set(row.client_id, {
+      name: row.dataset_name,
+      renameStatus: pick(RENAME_STATUSES, row.dataset_rename_status),
+      renameReason: row.dataset_rename_reason,
+      shareStatus: pick(SHARE_STATUSES, row.dataset_share_status),
+      shareReason: row.dataset_share_reason,
+      checkedAt: row.dataset_checked_at,
+    });
+  }
+  return byClient;
+}
+
+const EMPTY_DATASET_STATUS: DatasetStatus = {
+  name: null,
+  renameStatus: null,
+  renameReason: null,
+  shareStatus: null,
+  shareReason: null,
+  checkedAt: null,
 };
 
 export type AdminConnectionOverview = {
@@ -161,7 +223,10 @@ export async function getAdminConnectionOverview(): Promise<AdminConnectionOverv
     };
   }
 
-  const { data, error } = await admin.rpc("admin_client_capi_status");
+  const [{ data, error }, datasets] = await Promise.all([
+    admin.rpc("admin_client_capi_status"),
+    loadDatasetStatus(admin),
+  ]);
 
   if (error) {
     return { clients: [], signup, notice: error.message };
@@ -192,6 +257,7 @@ export async function getAdminConnectionOverview(): Promise<AdminConnectionOverv
       ingestMode:
         row.ingest_mode === "official_meta" ? "official_meta" : "legacy_waha",
       goalType: toConversionGoalType(row.goal_type),
+      dataset: datasets.get(row.client_id) ?? EMPTY_DATASET_STATUS,
     })),
   };
 }

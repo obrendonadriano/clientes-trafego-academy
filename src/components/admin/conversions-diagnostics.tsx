@@ -7,7 +7,10 @@ import {
   formatOfficialPhone,
 } from "@/lib/conversions/connection-shared";
 import { goalCopy } from "@/lib/conversions/shared";
-import type { AdminConnectionOverview } from "@/lib/data/whatsapp-connection";
+import type {
+  AdminConnectionOverview,
+  DatasetStatus,
+} from "@/lib/data/whatsapp-connection";
 import { cn } from "@/lib/utils";
 
 // Diagnóstico por cliente. Mostra tudo que o gestor precisa para saber se a
@@ -208,6 +211,9 @@ export function ConversionsDiagnostics({
                       <dd className="truncate font-mono">
                         {client.datasetId ?? "—"}
                       </dd>
+                      {client.datasetId ? (
+                        <DatasetNotes dataset={client.dataset} />
+                      ) : null}
                     </div>
                     <div>
                       <dt className="text-muted-foreground">Coexistence</dt>
@@ -267,6 +273,71 @@ export function ConversionsDiagnostics({
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+const RENAME_LABEL = {
+  renamed: "Renomeado",
+  custom_name: "Nome personalizado mantido",
+  failed: "Não renomeado",
+  skipped: "Não renomeado",
+} as const;
+
+/** Nome do Dataset e resultado do renomear/compartilhar (best-effort). */
+function DatasetNotes({ dataset }: { dataset: DatasetStatus }) {
+  if (!dataset.checkedAt) {
+    return (
+      <p className="mt-1 text-xs text-muted-foreground">
+        Nome e compartilhamento verificados na próxima conexão.
+      </p>
+    );
+  }
+
+  const rename = dataset.renameStatus
+    ? dataset.renameStatus === "renamed" || dataset.renameStatus === "custom_name"
+      ? RENAME_LABEL[dataset.renameStatus]
+      : `${RENAME_LABEL[dataset.renameStatus]}: ${dataset.renameReason ?? "motivo não informado"}`
+    : null;
+  const share =
+    dataset.shareStatus === "shared"
+      ? "Compartilhado com a agência"
+      : dataset.shareStatus === "manual_required"
+        ? "Compartilhamento manual necessário"
+        : dataset.shareStatus === "skipped"
+          ? `Compartilhamento não verificado${dataset.shareReason ? `: ${dataset.shareReason}` : ""}`
+          : null;
+
+  return (
+    <div className="mt-1 space-y-0.5 text-xs leading-5">
+      {dataset.name ? (
+        <p className="truncate text-foreground" title={dataset.name}>
+          {dataset.name}
+        </p>
+      ) : null}
+      {rename ? (
+        <p
+          className={
+            dataset.renameStatus === "failed"
+              ? "text-amber-700"
+              : "text-muted-foreground"
+          }
+        >
+          {rename}
+        </p>
+      ) : null}
+      {share ? (
+        <p
+          className={
+            dataset.shareStatus === "shared"
+              ? "text-emerald-700"
+              : "text-amber-700"
+          }
+          title={dataset.shareReason ?? undefined}
+        >
+          {share}
+        </p>
+      ) : null}
     </div>
   );
 }

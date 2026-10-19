@@ -21,6 +21,9 @@ export type OnboardingStage =
   | 'check_subscription'
   | 'subscribe_webhook'
   | 'resolve_dataset'
+  | 'read_dataset'
+  | 'rename_dataset'
+  | 'check_dataset_sharing'
   | 'smb_sync_contacts'
   | 'smb_sync_history'
   | 'save_connection';
@@ -176,6 +179,12 @@ export function failureAdminHint(failure: MetaFailure): string {
       // seguem conectados e a conexão fica em dataset_pending.
       if (failure.stage === 'resolve_dataset') {
         return `Dataset pendente: a Meta recusou por permissão (${where}). O endpoint de Dataset exige whatsapp_business_manage_events, que depende de um App Review separado para Conversões. WhatsApp e número continuam conectados.`;
+      }
+      if (failure.stage === 'read_dataset' || failure.stage === 'rename_dataset') {
+        return `Dataset não renomeado: a Meta recusou por permissão (${where}). A conexão segue ativa; renomeie em Gerenciador de Eventos > Configurações.`;
+      }
+      if (failure.stage === 'check_dataset_sharing') {
+        return `Compartilhamento do Dataset não verificado: a Meta recusou por permissão (${where}). Compartilhe manualmente com a BM da agência.`;
       }
       return `Permissão ausente (${where}). Confira as permissões da Configuration ID e o acesso avançado do app.`;
     case 'rate_limited':

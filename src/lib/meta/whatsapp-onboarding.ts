@@ -128,6 +128,8 @@ export async function runOnboarding(
       graph,
       appId,
       appSecret,
+      // BM da agência que roda os anúncios; nada fixo no código.
+      agencyBusinessId: process.env.META_AGENCY_BUSINESS_ID?.trim() || null,
       selection,
       diagnostics,
     });

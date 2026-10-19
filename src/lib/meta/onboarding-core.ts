@@ -17,6 +17,13 @@
 //       POST /{PHONE_NUMBER_ID}/smb_app_data { sync_type: smb_app_state_sync | history }
 //   - Conversions API for Business Messaging:
 //       POST /{WABA_ID}/dataset (idempotente: devolve o Dataset já existente)
+//   - Ads Pixel (o Dataset é um AdsPixel) > Updating:
+//       POST /{DATASET_ID} { name }  — https://developers.facebook.com/docs/marketing-api/reference/ads-pixel/
+//   - Compartilhar o Dataset com outra BM: POST /{DATASET_ID}/agencies
+//       { business, permitted_tasks }, que exige business_management e um token
+//       do dono do Dataset. O token do Embedded Signup não tem
+//       business_management, então aqui só se LÊ /shared_agencies.
+//       https://developers.facebook.com/docs/business-management-apis/business-asset-management/guides/business-pixel-sharing
 
 import type * as Diagnostics from './onboarding-diagnostics';
 import type * as Selection from './onboarding-selection';
@@ -39,6 +46,9 @@ export type OnboardingDeps = {
   graph: GraphCall;
   appId: string;
   appSecret: string;
+  // BM da agência (META_AGENCY_BUSINESS_ID). Sem ela, não verifica
+  // compartilhamento.
+  agencyBusinessId?: string | null;
   selection: Pick<
     typeof Selection,
     'assertManagementScope' | 'resolveAuthorizedWaba' | 'resolveSharedNumber' | 'BUSINESS_APP_EVENT'
@@ -54,6 +64,8 @@ export type OnboardingInput = {
   wabaId?: string | null;
   phoneNumberId?: string | null;
   event?: Selection.SignupEvent | null;
+  // Nome do cliente no sistema (clients.nome_empresa), usado no Dataset.
+  clientName?: string | null;
   // Conexão já gravada para este cliente (reconexão). Usada só para não
   // repetir a sincronização de uma vez só do aplicativo WhatsApp Business.
   previous?: {
@@ -71,6 +83,10 @@ export type OnboardingResult = {
   verifiedName: string | null;
   businessId: string | null;
   datasetId: string | null;
+  // Nome do Dataset e resultado das tarefas best-effort sobre ele.
+  datasetName: string | null;
+  datasetNaming: DatasetNaming;
+  datasetSharing: DatasetSharing;
   isOnBizApp: boolean | null;
   platformType: string | null;
   webhookSubscribed: boolean;
@@ -112,6 +128,128 @@ type SubscribedApps = {
 };
 
 const DATASET_ID = /^\d{5,30}$/;
+
+// Nome que a Meta dá ao Dataset criado por POST /{WABA_ID}/dataset.
+export const GENERIC_DATASET_NAME = /^\s*whatsapp marketing messages/i;
+
+export function datasetDisplayName(clientName: string) {
+  return `${clientName.trim().replace(/\s+/g, ' ').slice(0, 80)} · WhatsApp CAPI`;
+}
+
+export type DatasetNaming = {
+  // renamed: renomeado agora ou já estava com o nosso nome (idempotente).
+  // custom_name: o cliente deu outro nome; não mexemos.
+  status: 'renamed' | 'custom_name' | 'failed' | 'skipped';
+  reason: string | null;
+};
+
+export type DatasetSharing = {
+  status: 'shared' | 'manual_required' | 'skipped';
+  reason: string | null;
+};
+
+const MANUAL_SHARE_REASON =
+  'Compartilhar por API exige business_management (POST /{dataset}/agencies), que o token do Embedded Signup não tem. Compartilhe pelo Business Manager do cliente.';
+
+/**
+ * 5b. Renomeia o Dataset para "<cliente> · WhatsApp CAPI", só se ele ainda
+ *     tiver o nome genérico da Meta. Nunca lança: o resultado volta como
+ *     status, e a recusa da Meta entra nos warnings.
+ */
+export async function ensureDatasetName(
+  deps: OnboardingDeps,
+  datasetId: string,
+  accessToken: string,
+  clientName: string | null | undefined,
+  keep: (error: unknown) => void,
+): Promise<{ name: string | null; naming: DatasetNaming }> {
+  if (!clientName?.trim()) {
+    return { name: null, naming: { status: 'skipped', reason: 'Nome do cliente ausente.' } };
+  }
+
+  const target = datasetDisplayName(clientName);
+  let current: string | null = null;
+
+  try {
+    const payload = await deps.graph<{ name?: string }>(
+      'read_dataset',
+      `/${encodeURIComponent(datasetId)}`,
+      { method: 'GET', accessToken, searchParams: { fields: 'name' } },
+    );
+    current = payload?.name?.trim() || null;
+  } catch (error) {
+    keep(error);
+    return {
+      name: null,
+      naming: { status: 'failed', reason: reasonOf(deps, error) },
+    };
+  }
+
+  if (current === target) {
+    return { name: current, naming: { status: 'renamed', reason: null } };
+  }
+
+  if (current && !GENERIC_DATASET_NAME.test(current)) {
+    return {
+      name: current,
+      naming: { status: 'custom_name', reason: 'O Dataset já tem um nome personalizado.' },
+    };
+  }
+
+  try {
+    await deps.graph<{ success?: boolean }>(
+      'rename_dataset',
+      `/${encodeURIComponent(datasetId)}`,
+      { method: 'POST', accessToken, body: { name: target } },
+    );
+    return { name: target, naming: { status: 'renamed', reason: null } };
+  } catch (error) {
+    keep(error);
+    return {
+      name: current,
+      naming: { status: 'failed', reason: reasonOf(deps, error) },
+    };
+  }
+}
+
+/**
+ * 5c. Compartilhamento com a agência. Criar o compartilhamento exige
+ *     business_management, que este token não tem; então só verificamos se
+ *     a BM da agência já tem acesso (compartilhado à mão). Nunca lança.
+ */
+export async function checkDatasetSharing(
+  deps: OnboardingDeps,
+  datasetId: string,
+  accessToken: string,
+  keep: (error: unknown) => void,
+): Promise<DatasetSharing> {
+  const agency = deps.agencyBusinessId?.trim();
+
+  if (!agency) {
+    return { status: 'skipped', reason: 'META_AGENCY_BUSINESS_ID não configurado.' };
+  }
+
+  try {
+    const payload = await deps.graph<{ data?: { id?: string }[] }>(
+      'check_dataset_sharing',
+      `/${encodeURIComponent(datasetId)}/shared_agencies`,
+      { method: 'GET', accessToken, searchParams: { fields: 'id' } },
+    );
+    if ((payload?.data ?? []).some((business) => business.id === agency)) {
+      return { status: 'shared', reason: null };
+    }
+  } catch (error) {
+    keep(error);
+  }
+
+  return { status: 'manual_required', reason: MANUAL_SHARE_REASON };
+}
+
+function reasonOf(deps: OnboardingDeps, error: unknown) {
+  return deps.diagnostics.isMetaGraphFailure(error)
+    ? deps.diagnostics.failureAdminHint(error.failure)
+    : 'Falha inesperada.';
+}
 
 /**
  * 1. Troca do code por token de negócio. O code do FB.login é trocado com
@@ -346,6 +484,25 @@ export async function runOnboardingCore(
     keep(error);
   }
 
+  // Best-effort: nome do Dataset e compartilhamento nunca mudam o status.
+  // A falha de leitura do compartilhamento é esperada (falta de
+  // business_management) e não entra no lastError do cliente.
+  const sharingWarnings: Diagnostics.MetaFailure[] = [];
+  const keepSharing = (error: unknown) => {
+    if (!diagnostics.isMetaGraphFailure(error)) throw error;
+    sharingWarnings.push(error.failure);
+  };
+  let datasetName: string | null = null;
+  let datasetNaming: DatasetNaming = { status: 'skipped', reason: 'Dataset ainda não resolvido.' };
+  let datasetSharing: DatasetSharing = { status: 'skipped', reason: 'Dataset ainda não resolvido.' };
+
+  if (datasetId) {
+    const naming = await ensureDatasetName(deps, datasetId, accessToken, input.clientName, keep);
+    datasetName = naming.name;
+    datasetNaming = naming.naming;
+    datasetSharing = await checkDatasetSharing(deps, datasetId, accessToken, keepSharing);
+  }
+
   const businessAppExpected =
     input.event === selection.BUSINESS_APP_EVENT || chosen.isOnBizApp === true;
   const alreadySynced = Boolean(
@@ -407,6 +564,9 @@ export async function runOnboardingCore(
     verifiedName: chosen.verifiedName ?? details?.name ?? null,
     businessId: details?.owner_business_info?.id ?? null,
     datasetId,
+    datasetName,
+    datasetNaming,
+    datasetSharing,
     isOnBizApp: chosen.isOnBizApp,
     platformType: chosen.platformType,
     webhookSubscribed,
@@ -420,7 +580,7 @@ export async function runOnboardingCore(
       skippedAlreadySynced: businessAppExpected && alreadySynced,
     },
     status,
-    warnings,
+    warnings: [...warnings, ...sharingWarnings],
     lastError: notes.length > 0 ? notes.join(' | ') : null,
   };
 }
