@@ -223,3 +223,24 @@ test('migração do evento de teste só cria uma função nova, restrita ao serv
   assert.doesNotMatch(sql, /conversion_events/);
   assert.equal((sql.match(/create or replace function/g) ?? []).length, 1);
 });
+
+test('erro da CAPI no cartão: JSON do n8n e texto do site viram campos legíveis', async () => {
+  const { readCapiError } = await import('../src/lib/conversions/capi-error.ts');
+  const n8n = readCapiError(
+    '{"status":400,"events_received":0,"code":190,"error_subcode":null,"fbtrace_id":"AbbKHy4q_-U-hIaIfvWcDbL","detail":"Envio não confirmado. Conferir no Gerenciador de Eventos antes de reenviar."}',
+  );
+  assert.equal(n8n.summary, 'Token de acesso inválido ou expirado.');
+  assert.equal(n8n.code, 190);
+  assert.equal(n8n.subcode, null);
+  assert.equal(n8n.httpStatus, 400);
+  assert.equal(n8n.fbtraceId, 'AbbKHy4q_-U-hIaIfvWcDbL');
+  assert.match(n8n.detail, /Envio não confirmado/);
+
+  assert.equal(readCapiError('{"status":403,"code":200}').summary, 'Permissão negada pela Meta.');
+  assert.equal(readCapiError('{"status":400,"code":100,"error_subcode":2804003}').subcode, 2804003);
+  const site = readCapiError('Recusado pela Meta: Invalid parameter');
+  assert.equal(site.summary, 'Recusado pela Meta: Invalid parameter');
+  assert.equal(site.code, null);
+  assert.equal(readCapiError('').summary, 'A Meta não devolveu detalhes do erro.');
+  assert.equal(readCapiError('{quebrado').summary, '{quebrado');
+});
