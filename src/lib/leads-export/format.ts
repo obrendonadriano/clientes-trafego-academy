@@ -210,3 +210,40 @@ export function buildExportRows(records: UnifiedLeadRecord[]): ExportRow[] {
 export function exportFileName(from: string, to: string) {
   return `Leads_Unificados_${from}_a_${to}.xlsx`;
 }
+
+const foldText = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+/**
+ * Busca de leads específicos: com 3+ dígitos procura no telefone (com ou sem
+ * o 55, com ou sem máscara); senão procura no nome, sem acento nem caixa.
+ * Vários termos separados por vírgula valem como "qualquer um deles".
+ */
+export function matchesLeadSearch(
+  record: Pick<UnifiedLeadRecord, "lead_name" | "phone">,
+  search: string | null | undefined,
+) {
+  const terms = (search ?? "")
+    .split(/[,;\n]+/)
+    .map((term) => term.trim())
+    .filter(Boolean);
+  if (!terms.length) return true;
+
+  const phone = (record.phone ?? "").replace(/\D/g, "");
+  const name = foldText(record.lead_name ?? "");
+
+  return terms.some((term) => {
+    const digits = term.replace(/\D/g, "");
+    if (digits.length >= 3 && digits.length >= term.replace(/[\s()+\-.]/g, "").length) {
+      const local = digits.startsWith("55") && digits.length >= 12 ? digits.slice(2) : digits;
+      return phone.includes(digits) || phone.includes(local);
+    }
+    const text = foldText(term);
+    return Boolean(text) && name.includes(text);
+  });
+}

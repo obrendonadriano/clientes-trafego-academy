@@ -22,6 +22,38 @@ function brasiliaDay(offsetDays = 0) {
   }).format(now);
 }
 
+/** Último dia do mês de uma data AAAA-MM-DD. */
+function monthEnd(year: number, month: number) {
+  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+}
+
+// Atalhos de período, calculados no horário de Brasília.
+const PRESETS: { label: string; range: () => [string, string] }[] = [
+  { label: "Hoje", range: () => [brasiliaDay(), brasiliaDay()] },
+  { label: "Ontem", range: () => [brasiliaDay(-1), brasiliaDay(-1)] },
+  { label: "7 dias", range: () => [brasiliaDay(-6), brasiliaDay()] },
+  { label: "30 dias", range: () => [brasiliaDay(-29), brasiliaDay()] },
+  {
+    label: "Este mês",
+    range: () => {
+      const today = brasiliaDay();
+      return [`${today.slice(0, 8)}01`, today];
+    },
+  },
+  {
+    label: "Mês passado",
+    range: () => {
+      const [year, month] = brasiliaDay().split("-").map(Number);
+      const prevYear = month === 1 ? year - 1 : year;
+      const prevMonth = month === 1 ? 12 : month - 1;
+      return [
+        `${prevYear}-${String(prevMonth).padStart(2, "0")}-01`,
+        monthEnd(prevYear, prevMonth),
+      ];
+    },
+  },
+];
+
 export function LeadsExportPanel({ clients }: { clients: ExportClientOption[] }) {
   const [from, setFrom] = useState(() => brasiliaDay(-29));
   const [to, setTo] = useState(() => brasiliaDay());
@@ -29,6 +61,7 @@ export function LeadsExportPanel({ clients }: { clients: ExportClientOption[] })
   const [selected, setSelected] = useState<string[]>([]);
   const [origin, setOrigin] = useState<"all" | LeadOrigin>("all");
   const [query, setQuery] = useState("");
+  const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
 
@@ -63,6 +96,7 @@ export function LeadsExportPanel({ clients }: { clients: ExportClientOption[] })
           to,
           clientIds: allClients ? null : selected,
           origins: origin === "all" ? null : [origin],
+          search: search.trim() || null,
         }),
       });
 
@@ -105,6 +139,32 @@ export function LeadsExportPanel({ clients }: { clients: ExportClientOption[] })
         </p>
       </CardHeader>
       <CardContent className="space-y-5">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Período rápido">
+          {PRESETS.map((preset) => {
+            const [presetFrom, presetTo] = preset.range();
+            const active = presetFrom === from && presetTo === to;
+            return (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => {
+                  setFrom(presetFrom);
+                  setTo(presetTo);
+                }}
+                aria-pressed={active}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                  active
+                    ? "border-primary/30 bg-primary/12 text-primary"
+                    : "border-border/60 text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                )}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label htmlFor="export-from">Data inicial</Label>
@@ -130,6 +190,24 @@ export function LeadsExportPanel({ clients }: { clients: ExportClientOption[] })
               ))}
             </select>
           </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="export-search">
+            Leads específicos <span className="text-muted-foreground">(opcional)</span>
+          </Label>
+          <Input
+            id="export-search"
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Nome ou telefone. Vários: separe por vírgula"
+            maxLength={500}
+          />
+          <p className="text-xs text-muted-foreground">
+            Em branco, baixa todos os leads do período. Telefone vale com ou sem
+            o 55 e com ou sem máscara.
+          </p>
         </div>
 
         <fieldset className="space-y-2">

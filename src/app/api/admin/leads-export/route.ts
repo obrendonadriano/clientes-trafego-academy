@@ -3,6 +3,7 @@ import { getOptionalCurrentUser } from "@/lib/auth/session";
 import {
   ORIGINS,
   buildExportRows,
+  matchesLeadSearch,
   exportFileName,
   type UnifiedLeadRecord,
 } from "@/lib/leads-export/format";
@@ -33,6 +34,8 @@ const bodySchema = z
     to: date,
     clientIds: z.array(z.string().uuid()).max(500).nullable(),
     origins: z.array(z.enum(ORIGINS)).max(ORIGINS.length).nullable(),
+    // Nome ou telefone (vários separados por vírgula). Vazio = todos.
+    search: z.string().trim().max(500).nullish(),
   })
   .refine((value) => value.from <= value.to, "Período inválido.");
 
@@ -99,9 +102,12 @@ export async function POST(request: Request) {
     if (page.length < PAGE_SIZE) break;
   }
 
-  await fillMissingAdNames(records);
+  // "Telefone repetido?" considera só o que vai para a planilha.
+  const selected = records.filter((record) => matchesLeadSearch(record, input.search));
 
-  const rows = buildExportRows(records);
+  await fillMissingAdNames(selected);
+
+  const rows = buildExportRows(selected);
   const file = await buildLeadsWorkbook(rows);
   const name = exportFileName(input.from, input.to);
 
