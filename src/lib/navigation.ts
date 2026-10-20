@@ -94,7 +94,6 @@ const ADMIN_SECTIONS: NavSection[] = [
     subTabs: [
       { label: "Leads", href: "/admin/conversoes", exact: true },
       { label: "Integração com o Meta", href: "/admin/conversoes/integracao" },
-      { label: "Exportar leads", href: "/admin/conversoes/exportar" },
     ],
   },
   {
@@ -128,6 +127,7 @@ const ADMIN_SECTIONS: NavSection[] = [
       { label: "Integrações", href: "/admin/configuracoes", exact: true },
       { label: "Contas Meta", href: "/admin/configuracoes/contas" },
       { label: "Sincronização", href: "/admin/configuracoes/sincronizacao" },
+      { label: "Exportar leads", href: "/admin/configuracoes/exportar" },
     ],
   },
 ];

@@ -313,3 +313,33 @@ test('exportação: 4 origens, só os dois nichos, período, filtros, nomes do a
     await db.close();
   }
 });
+
+test('busca de leads específicos: nome sem acento/caixa e telefone com ou sem 55/máscara', () => {
+  const lead = { lead_name: 'José da Silva', phone: '5511912345678' };
+  const match = (search) => format.matchesLeadSearch(lead, search);
+  assert.equal(match(''), true);
+  assert.equal(match(null), true);
+  assert.equal(match('jose'), true);
+  assert.equal(match('SILVA'), true);
+  assert.equal(match('maria'), false);
+  assert.equal(match('11 91234-5678'), true);
+  assert.equal(match('(11) 91234-5678'), true);
+  assert.equal(match('+55 11 91234-5678'), true);
+  assert.equal(match('5678'), true);
+  assert.equal(match('99999-0000'), false);
+  // Vários termos: qualquer um deles.
+  assert.equal(match('maria, 91234'), true);
+  assert.equal(match('maria; pedro'), false);
+  // Lead sem nome não quebra.
+  assert.equal(format.matchesLeadSearch({ lead_name: null, phone: null }, 'jose'), false);
+});
+
+test('exportação mudou para Configurações; o endereço antigo redireciona', () => {
+  const nav = readFileSync('src/lib/navigation.ts', 'utf8');
+  assert.match(nav, /\{ label: "Exportar leads", href: "\/admin\/configuracoes\/exportar" \}/);
+  assert.doesNotMatch(nav, /\/admin\/conversoes\/exportar/);
+  const legacy = readFileSync('src/app/admin/conversoes/exportar/page.tsx', 'utf8');
+  assert.match(legacy, /redirect\("\/admin\/configuracoes\/exportar"\)/);
+  const route = readFileSync('src/app/api/admin/leads-export/route.ts', 'utf8');
+  assert.match(route, /matchesLeadSearch\(record, input\.search\)/);
+});
