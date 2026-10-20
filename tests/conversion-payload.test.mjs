@@ -164,3 +164,62 @@ test('LeadSubmitted e QualifiedLead continuam sem custom_data nos dois modelos',
     assert.equal(event.action_source, 'business_messaging');
   }
 });
+
+// ---------------------------------------------------------------------------
+// Evento de teste do admin (Test Events) com a credencial salva
+// ---------------------------------------------------------------------------
+
+test('evento de teste do admin usa exatamente o payload do sistema', async () => {
+  const { buildRequestBody } = await import('../src/lib/conversions/capi-payload.ts');
+  const body = buildRequestBody({
+    lead_id: 'teste-admin',
+    dataset_id: '1992274104791081',
+    waba_id: '1602646821417667',
+    access_token: null,
+    event_name: 'LeadSubmitted',
+    event_id: 'teste-LeadSubmitted-1',
+    event_time: Math.floor(Date.now() / 1000),
+    action_source: 'business_messaging',
+    user_data: { ctwa_clid: 'ARclid', whatsapp_business_account_id: '1602646821417667' },
+  });
+  const [event] = body.data;
+  assert.equal(event.action_source, 'business_messaging');
+  assert.equal(event.messaging_channel, 'whatsapp');
+  assert.deepEqual(event.user_data, {
+    ctwa_clid: 'ARclid',
+    whatsapp_business_account_id: '1602646821417667',
+  });
+  assert.equal(JSON.stringify(body).includes('access_token'), false);
+});
+
+test('ação de teste: só admin, exige código e confirmação, token só no cabeçalho, nunca devolvido', async () => {
+  const { readFileSync } = await import('node:fs');
+  const source = readFileSync(new URL('../src/app/admin/conversoes/capi-test-actions.ts', import.meta.url), 'utf8');
+  assert.match(source, /user\.role !== "admin"/);
+  assert.match(source, /\^TEST\[A-Za-z0-9\]/);
+  assert.match(source, /z\.literal\("on"/);
+  assert.match(source, /buildRequestBody\(/);
+  assert.match(source, /action_source: "business_messaging"/);
+  assert.match(source, /Authorization: `Bearer \$\{token\}`/);
+  // O resultado devolvido ao navegador não tem campo de token.
+  const resultBlock = source.slice(source.indexOf('return {\n    result:'));
+  assert.doesNotMatch(resultBlock, /token/i);
+  // Não consome nem marca a fila.
+  assert.doesNotMatch(source, /capi_fetch_queue|capi_mark_result|conversion_events/);
+});
+
+test('migração do evento de teste só cria uma função nova, restrita ao service_role', async () => {
+  const { readFileSync } = await import('node:fs');
+  const sql = readFileSync(
+    new URL('../supabase/migrations/20261020120000_admin_capi_test_target.sql', import.meta.url),
+    'utf8',
+  ).replace(/--.*$/gm, '').toLowerCase();
+  assert.match(sql, /create or replace function public\.admin_capi_test_target\(p_client_id uuid\)/);
+  assert.match(sql, /security definer/);
+  assert.match(sql, /set search_path = ''/);
+  assert.match(sql, /revoke all on function public\.admin_capi_test_target\(uuid\) from public, anon, authenticated/);
+  assert.match(sql, /grant execute on function public\.admin_capi_test_target\(uuid\) to service_role/);
+  assert.doesNotMatch(sql, /\b(drop|delete|update|insert|truncate|alter table)\b/);
+  assert.doesNotMatch(sql, /conversion_events/);
+  assert.equal((sql.match(/create or replace function/g) ?? []).length, 1);
+});

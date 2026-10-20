@@ -1095,3 +1095,44 @@ test('WEBHOOK: falha de ingestão responde 500 sem abandonar o resto do payload'
 
   await db.close();
 });
+
+test('evento de teste do admin: função nova lê a credencial salva sem tocar na fila (SQL real)', async () => {
+  const db = await bootstrap();
+  try {
+    await db.exec(goals);
+    await db.exec(businessAppSync);
+    await db.exec(reconcile);
+    await db.exec(read('20261020120000_admin_capi_test_target.sql'));
+    await db.exec(`
+      insert into private.client_whatsapp_credentials(client_id, access_token)
+        values ('${clientA}', 'tav1.iv.tag.cifrado');
+      insert into conversion_leads(client_id, telefone, ctwa_clid, criado_em)
+        values ('${clientA}', '5511970000009', 'clique-mais-recente', now() + interval '1 minute'),
+               ('${clientB}', '5511970000010', 'clique-de-outro-cliente', now() + interval '2 minutes');
+    `);
+    const queueBefore = (await db.query('select count(*)::int as n, coalesce(max(claimed_at)::text, \'\') as c from private.conversion_events')).rows[0];
+
+    await db.exec(`set role service_role;`);
+    const row = (await db.query('select * from public.admin_capi_test_target($1)', [clientA])).rows[0];
+    assert.equal(row.dataset_id, 'dataset-a');
+    assert.equal(row.waba_id, 'waba-a');
+    assert.equal(row.access_token, 'tav1.iv.tag.cifrado');
+    assert.equal(row.credential_source, 'official');
+    // O clique é do próprio cliente, o mais recente; nunca de outro cliente.
+    assert.equal(row.ctwa_clid, 'clique-mais-recente');
+    await db.exec(`reset role;`);
+
+    // A fila não foi lida, reservada nem alterada.
+    const queueAfter = (await db.query('select count(*)::int as n, coalesce(max(claimed_at)::text, \'\') as c from private.conversion_events')).rows[0];
+    assert.deepEqual(queueAfter, queueBefore);
+
+    // Cliente e anônimo não executam.
+    for (const role of ['authenticated', 'anon']) {
+      await db.exec(`set role ${role};`);
+      await assert.rejects(db.query('select * from public.admin_capi_test_target($1)', [clientA]));
+      await db.exec(`reset role;`);
+    }
+  } finally {
+    await db.close();
+  }
+});

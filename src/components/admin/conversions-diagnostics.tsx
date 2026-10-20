@@ -11,6 +11,7 @@ import type {
   AdminConnectionOverview,
   DatasetStatus,
 } from "@/lib/data/whatsapp-connection";
+import { CapiTestEventForm } from "@/components/admin/capi-test-event-form";
 import { cn } from "@/lib/utils";
 
 // Diagnóstico por cliente. Mostra tudo que o gestor precisa para saber se a
@@ -266,6 +267,10 @@ export function ConversionsDiagnostics({
                     <p className="rounded-lg bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground">
                       {client.lastError}
                     </p>
+                  ) : null}
+
+                  {client.datasetId && client.wabaId ? (
+                    <CapiTestEventForm clientId={client.clientId} />
                   ) : null}
                 </CardContent>
               </Card>
