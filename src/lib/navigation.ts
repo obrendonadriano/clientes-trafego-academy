@@ -94,6 +94,7 @@ const ADMIN_SECTIONS: NavSection[] = [
     subTabs: [
       { label: "Leads", href: "/admin/conversoes", exact: true },
       { label: "Integração com o Meta", href: "/admin/conversoes/integracao" },
+      { label: "Exportar leads", href: "/admin/conversoes/exportar" },
     ],
   },
   {

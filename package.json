@@ -8,7 +8,7 @@
     "postbuild": "node scripts/copy-standalone-assets.mjs",
     "start": "next start",
     "lint": "eslint",
-    "test:conversions": "node --test tests/conversion-events.test.mjs tests/conversion-payload.test.mjs tests/conversions-decoupling.test.mjs tests/onboarding-selection.test.mjs tests/legacy-n8n-payload.test.mjs tests/embedded-signup.test.mjs",
+    "test:conversions": "node --test tests/conversion-events.test.mjs tests/conversion-payload.test.mjs tests/conversions-decoupling.test.mjs tests/onboarding-selection.test.mjs tests/legacy-n8n-payload.test.mjs tests/embedded-signup.test.mjs tests/leads-export.test.mjs",
     "test:ai": "node --test tests/ai-attendance.test.mjs tests/ai-runtime.test.mjs",
     "test:sync": "node --test tests/meta-sync-scope.test.mjs tests/business-timezone.test.mjs",
     "test:meta-review": "node --test tests/meta-review.test.mjs"
@@ -21,6 +21,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "exceljs": "4.4.0",
     "libphonenumber-js": "1.13.14",
     "lucide-react": "^1.7.0",
     "next": "16.2.2",

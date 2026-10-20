@@ -891,3 +891,55 @@ export async function getCurrencyRateToBrl(currency: string): Promise<number> {
   const info = await getExchangeRateInfo(currency);
   return info.rate;
 }
+
+export type MetaAdNames = {
+  adName: string | null;
+  adsetName: string | null;
+  campaignName: string | null;
+};
+
+/**
+ * Nome do anúncio, do conjunto e da campanha de cada ID de anúncio (o
+ * source_id do referral de Click-to-WhatsApp). Usado pela exportação de leads
+ * quando o anúncio ainda não está no cache de métricas. Falha de um lote não
+ * derruba os outros: o que não vier fica sem nome.
+ */
+export async function fetchMetaAdNames(input: {
+  adIds: string[];
+  accessToken: string;
+}) {
+  const names = new Map<string, MetaAdNames>();
+  const ids = [...new Set(input.adIds.filter((id) => /^\d{5,30}$/.test(id)))].sort();
+
+  for (let index = 0; index < ids.length; index += CREATIVE_BATCH_SIZE) {
+    const batch = ids.slice(index, index + CREATIVE_BATCH_SIZE);
+    const params = new URLSearchParams({
+      ids: batch.join(","),
+      fields: "name,adset{name},campaign{name}",
+      access_token: input.accessToken,
+    });
+
+    try {
+      const response = await fetch(
+        `https://graph.facebook.com/${META_GRAPH_VERSION}/?${params.toString()}`,
+        { cache: "no-store", signal: AbortSignal.timeout(CREATIVE_TIMEOUT_MS) },
+      );
+      if (!response.ok) continue;
+      const payload = (await response.json()) as Record<
+        string,
+        { name?: string; adset?: { name?: string }; campaign?: { name?: string } }
+      >;
+      for (const [adId, ad] of Object.entries(payload)) {
+        names.set(adId, {
+          adName: ad.name ?? null,
+          adsetName: ad.adset?.name ?? null,
+          campaignName: ad.campaign?.name ?? null,
+        });
+      }
+    } catch {
+      // Sem resposta da Meta: esses anúncios ficam sem nome nesta exportação.
+    }
+  }
+
+  return names;
+}
