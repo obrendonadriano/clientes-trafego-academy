@@ -165,12 +165,18 @@ reconectar nunca gera um segundo Dataset.
 
 ### Vínculo com a conta de anúncios
 
-A documentação da Meta afirma que *"attribution is based on the page/dataset id
-and is not related to the app id"*. Não há, hoje, endpoint oficial para
-"compartilhar" o Dataset de mensagens com uma conta de anúncios, e nenhum é
-necessário para a atribuição funcionar. Por isso o sistema **não** inventa essa
-chamada. `META_AD_ACCOUNT_ID` existe só como configuração central de
-diagnóstico.
+O Dataset é criado na **BM do cliente**, mas os anúncios rodam nas contas de
+anúncios da Tráfego Academy. Para o Dataset ser usado na **otimização** das
+campanhas, ele precisa ser **compartilhado com a conta de anúncios da
+agência**.
+
+Compartilhar por API exige `business_management` e um token do dono do Dataset
+(`POST /{dataset_id}/agencies`, depois `POST /{dataset_id}/shared_accounts`),
+que o token do Embedded Signup não tem. Por isso o compartilhamento é **manual**,
+pelo Business Manager do cliente. O onboarding só **verifica** se a BM da
+agência (`META_AGENCY_BUSINESS_ID`) já tem acesso e mostra o resultado no
+diagnóstico do admin: "Compartilhado com a agência" ou "Compartilhamento manual
+necessário".
 
 ## Segurança
 
@@ -284,15 +290,25 @@ aceito pela Meta**.
 | --- | --- | --- |
 | `whatsapp_business_manage_events` | Resolver o Dataset (`POST /{WABA_ID}/dataset`) e enviar `LeadSubmitted`/`QualifiedLead` pela Conversions API de Business Messaging. | **Avançado** |
 
-**Boa notícia:** a documentação de App Review para provedores diz que
-`whatsapp_business_manage_events` é **aprovada automaticamente quando o app já
-tem acesso avançado a `whatsapp_business_messaging`**. Ou seja, ela normalmente
-não é um segundo processo de revisão — mas confirme no painel que ela aparece
+**Atenção:** `whatsapp_business_manage_events` **não** foi aprovada
+automaticamente junto com `whatsapp_business_messaging`. Na prática ela
+precisou de um **App Review próprio**, com evidência do envio de eventos de
+conversão. Sem ela aprovada, o Dataset não é resolvido (a conexão fica em
+`dataset_pending`) e nenhum evento é aceito. Confirme no painel que ela aparece
 como concedida antes de ligar o envio.
 
-> Correção em relação à primeira versão deste documento: ela foi descrita ali
-> como exigindo um App Review próprio. A referência oficial indica aprovação
-> automática a partir de `whatsapp_business_messaging`.
+> Correção em relação à versão anterior deste documento, que dizia que ela era
+> aprovada automaticamente a partir de `whatsapp_business_messaging`.
+
+#### Grupo C — login de clientes de fora do app
+
+| Permissão | Para quê | Acesso |
+| --- | --- | --- |
+| `public_profile` | Login do Facebook usado pelo Embedded Signup. | **Avançado** |
+
+Sem **Acesso Avançado** em `public_profile`, só quem tem função no app
+(administrador, desenvolvedor, testador) consegue conectar. Os clientes veem
+**"Recurso indisponível"** ao clicar em "Conectar WhatsApp Business".
 
 #### Pré-requisitos do app
 
@@ -314,11 +330,20 @@ Ative o onboarding de usuários do **aplicativo WhatsApp Business**
 (Coexistence). O código já envia `featureType: "whatsapp_business_app_onboarding"`
 e `sessionInfoVersion: 3`; a configuração precisa permiti-lo.
 
+A configuração precisa incluir:
+
+- o produto **Conversions API for Business Messaging (WhatsApp)**;
+- a permissão **`whatsapp_business_manage_events`**, além de
+  `whatsapp_business_management` e `whatsapp_business_messaging`.
+
+Sem esses dois itens, o cliente conecta, mas o token não pode resolver o Dataset
+nem enviar eventos. Configuração em produção: `2381787565899161`.
+
 Anote o **Configuration ID**.
 
 Em **Configurações → Básico → Domínios do app** e em **Login do Facebook →
 Configurações**, inclua o domínio da dashboard
-(`https://dashboard.trafegoacademy.online`).
+(`https://cliente.trafegoacademy.online`).
 
 O cliente precisa estar com o **WhatsApp Business 2.24.17 ou superior** no
 celular. Números em coexistência têm taxa fixa de 20 mensagens por segundo — o
@@ -328,9 +353,11 @@ que não afeta Conversões, que não envia mensagens.
 
 No app: **WhatsApp → Configuração → Webhooks**.
 
-- URL de callback: `https://dashboard.trafegoacademy.online/api/whatsapp/meta-webhook`
+- URL de callback: `https://cliente.trafegoacademy.online/api/whatsapp/meta-webhook`
 - Token de verificação: o mesmo valor de `META_WEBHOOK_VERIFY_TOKEN`
-- Assinar o campo **`messages`**
+- Em **Webhooks → Whatsapp Business Account**, o campo **`messages`** precisa
+  estar **assinado**. Sem isso a Meta não entrega nada e **nenhum lead chega**,
+  mesmo com tudo conectado.
 
 A rota já responde ao desafio `hub.challenge`. A assinatura por WABA é feita
 automaticamente no onboarding (`POST /{WABA_ID}/subscribed_apps`).
@@ -433,27 +460,29 @@ Nenhum passo interrompe a captação. O fluxo antigo continua funcionando até o
 | --- | --- | --- | --- |
 | 1 | **Migração ADITIVA** `20260924210000` | Supabase (staging → produção) | Roda sem erro. `select conversion_pipeline_version()` = 3. Todo cliente em `legacy_waha`. **A captação antiga continua funcionando.** |
 | 2 | Deploy da aplicação (compatível com os dois pipelines) | Vercel | Conversões abre normalmente; leads antigos continuam entrando pelo WAHA |
-| 3 | App, verificação do negócio, Tech Provider, App Review | Meta | Permissões dos grupos A e B concedidas |
-| 4 | Configuração do Embedded Signup com Coexistence | Meta | Você tem o Configuration ID |
-| 5 | Variáveis de ambiente, com `CONVERSIONS_DISPATCHER_ENABLED=false` | Vercel | Admin → Integração com o Meta sem aviso de pendência |
-| 6 | Webhook cadastrado, campo `messages` assinado | Meta | O desafio `hub.challenge` é aceito |
-| 7 | **Atribuição de anúncios** no WABA do cliente piloto | WhatsApp Manager | Toggle ligado |
-| 8 | Cliente **piloto** conecta pelo Embedded Signup | Dashboard | "Conectado" + "Rastreamento ativo"; `Coexistence: Ativo` no admin |
-| 9 | Confirmar que o número segue funcionando no app do celular | Celular | Conversas normais |
-| 10 | Teste real: clicar no anúncio e mandar a 1ª mensagem | Anúncio real | Cartão em **Novos leads**; o piloto vira `official_meta` sozinho no painel |
-| 11 | Conferir que o WAHA parou de captar **só** para o piloto | Admin | Piloto = "Meta oficial"; os demais = "WAHA (legado)" |
-| 12 | Test Events da Meta: conferir os 3 payloads | Gerenciador de Eventos | Sem valor, sem dívida, sem placa, sem observação |
-| 13 | **Ligar o envio**: `CONVERSIONS_DISPATCHER_ENABLED=true` (worker recorrente opcional, seção 8) | Vercel | `LeadSubmitted` chega no Dataset **daquele** cliente |
-| 14 | Conferir isolamento entre Datasets | Gerenciador de Eventos | Zero eventos cruzados |
-| 15 | **Migrar os demais clientes, aos poucos** | Dashboard | Cada um conecta e é promovido sozinho |
-| 16 | Só quando **todos** estiverem em `official_meta`: segunda migração de cleanup | Supabase | Remove `waha_ingest_lead` e o `leads_webhook_url` |
-| 17 | Desativar os workflows `[LEGADO]` no n8n | n8n | Leads seguem chegando pelo webhook oficial |
+| 3 | App, verificação do negócio, Tech Provider, App Review (incluindo o **App Review próprio** de `whatsapp_business_manage_events`) | Meta | Permissões dos grupos A, B e C concedidas |
+| 4 | **`public_profile` com Acesso Avançado** | Meta | Um usuário **sem função no app** abre o Embedded Signup sem ver "Recurso indisponível" |
+| 5 | Configuração do Embedded Signup com Coexistence, com o produto **Conversions API for Business Messaging (WhatsApp)** e a permissão `whatsapp_business_manage_events` | Meta | Você tem o Configuration ID (produção: `2381787565899161`) |
+| 6 | Variáveis de ambiente, com `CONVERSIONS_DISPATCHER_ENABLED=false` | Vercel | Admin → Integração com o Meta sem aviso de pendência |
+| 7 | Webhook cadastrado e, em **Webhooks → Whatsapp Business Account**, o campo **`messages` assinado** | Meta | O desafio `hub.challenge` é aceito e o admin mostra "Último webhook" depois de uma mensagem |
+| 8 | **Atribuição de anúncios** no WABA do cliente piloto | WhatsApp Manager | Toggle ligado |
+| 9 | Cliente **piloto** conecta pelo Embedded Signup | Dashboard | "Conectado" + "Rastreamento ativo"; `Coexistence: Ativo` no admin |
+| 10 | **Compartilhar o Dataset** (criado na BM do cliente) com a **conta de anúncios da agência** | Business Manager do cliente | Admin → diagnóstico: "Compartilhado com a agência"; o Dataset aparece na conta de anúncios para otimização |
+| 11 | Confirmar que o número segue funcionando no app do celular | Celular | Conversas normais |
+| 12 | Teste real: clicar no anúncio e mandar a 1ª mensagem | Anúncio real | Cartão em **Novos leads**; o piloto vira `official_meta` sozinho no painel |
+| 13 | Conferir que o WAHA parou de captar **só** para o piloto | Admin | Piloto = "Meta oficial"; os demais = "WAHA (legado)" |
+| 14 | Test Events da Meta: conferir os 3 payloads | Gerenciador de Eventos | Sem valor, sem dívida, sem placa, sem observação |
+| 15 | **Ligar o envio**: `CONVERSIONS_DISPATCHER_ENABLED=true` (worker recorrente opcional, seção 8) | Vercel | `LeadSubmitted` chega no Dataset **daquele** cliente |
+| 16 | Conferir isolamento entre Datasets | Gerenciador de Eventos | Zero eventos cruzados |
+| 17 | **Migrar os demais clientes, aos poucos** | Dashboard | Cada um conecta e é promovido sozinho |
+| 18 | Só quando **todos** estiverem em `official_meta`: segunda migração de cleanup | Supabase | Remove `waha_ingest_lead` e o `leads_webhook_url` |
+| 19 | Desativar os workflows `[LEGADO]` de Conversões no n8n | n8n | Leads seguem chegando pelo webhook oficial |
 
-Testes negativos que valem a pena no passo 10: mande uma mensagem **orgânica**
+Testes negativos que valem a pena no passo 12: mande uma mensagem **orgânica**
 de outro número e confirme que **não** cria cartão.
 
-O workflow de Atendimento IA do n8n **não** entra em nenhum passo: continua
-ativo do começo ao fim.
+O Atendimento IA não entra em nenhum passo: ele não usa mais o n8n (o WAHA
+chama o site direto) e não tem relação com Conversões.
 
 #### Rollback
 
@@ -461,7 +490,7 @@ Deu problema com um cliente? `admin_set_conversion_ingest_mode(<cliente>,
 'legacy_waha')` devolve a captação dele ao WAHA na hora. Nada precisa ser
 revertido no banco nem no deploy.
 
-#### Por que o envio fica desligado até o passo 13
+#### Por que o envio fica desligado até o passo 15
 
 Com `CONVERSIONS_DISPATCHER_ENABLED` diferente de `true`, a fila **acumula** os
 eventos com as datas originais e não envia nada. Isso permite migrar, publicar
@@ -478,7 +507,7 @@ rejuvenescido** — a data original é preservada.
 
 #### A segunda migração (cleanup)
 
-Só depois do passo 15. Ela deve:
+Só depois do passo 17 (todos os clientes migrados). Ela deve:
 
 - remover `public.waha_ingest_lead`;
 - remover `leads_webhook_url` de `integration_settings` do provedor `waha`;
