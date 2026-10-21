@@ -343,3 +343,13 @@ test('exportação mudou para Configurações; o endereço antigo redireciona', 
   const route = readFileSync('src/app/api/admin/leads-export/route.ts', 'utf8');
   assert.match(route, /matchesLeadSearch\(record, input\.search\)/);
 });
+
+test('seleção de clientes igual à de campanhas: todos marcados por padrão, busca e selecionar/limpar', () => {
+  const panel = readFileSync('src/components/admin/leads-export-panel.tsx', 'utf8');
+  assert.match(panel, /useState<string\[\]>\(\(\) => clients\.map\(\(client\) => client\.id\)\)/);
+  assert.match(panel, /Pesquisar cliente por nome/);
+  assert.match(panel, /"Limpar seleção" : "Selecionar todos"/);
+  // Todos marcados viram "sem filtro"; parte deles vira a lista de IDs.
+  assert.match(panel, /clientIds: allSelected \? null : selected/);
+  assert.doesNotMatch(panel, /allClients/);
+});
