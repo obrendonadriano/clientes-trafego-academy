@@ -57,8 +57,8 @@ const PRESETS: { label: string; range: () => [string, string] }[] = [
 export function LeadsExportPanel({ clients }: { clients: ExportClientOption[] }) {
   const [from, setFrom] = useState(() => brasiliaDay(-29));
   const [to, setTo] = useState(() => brasiliaDay());
-  const [allClients, setAllClients] = useState(true);
-  const [selected, setSelected] = useState<string[]>([]);
+  // Começa com todos os clientes marcados, como na seleção de campanhas.
+  const [selected, setSelected] = useState<string[]>(() => clients.map((client) => client.id));
   const [origin, setOrigin] = useState<"all" | LeadOrigin>("all");
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
@@ -69,6 +69,8 @@ export function LeadsExportPanel({ clients }: { clients: ExportClientOption[] })
     const term = query.trim().toLowerCase();
     return term ? clients.filter((client) => client.name.toLowerCase().includes(term)) : clients;
   }, [clients, query]);
+
+  const allSelected = clients.length > 0 && clients.every((client) => selected.includes(client.id));
 
   const toggle = (id: string) =>
     setSelected((current) =>
@@ -81,8 +83,8 @@ export function LeadsExportPanel({ clients }: { clients: ExportClientOption[] })
       setMessage({ tone: "error", text: "Escolha um período válido." });
       return;
     }
-    if (!allClients && selected.length === 0) {
-      setMessage({ tone: "error", text: "Escolha pelo menos um cliente ou marque Todos." });
+    if (selected.length === 0) {
+      setMessage({ tone: "error", text: "Selecione pelo menos um cliente." });
       return;
     }
 
@@ -94,7 +96,8 @@ export function LeadsExportPanel({ clients }: { clients: ExportClientOption[] })
         body: JSON.stringify({
           from,
           to,
-          clientIds: allClients ? null : selected,
+          // Todos marcados = sem filtro (inclui clientes novos do nicho).
+          clientIds: allSelected ? null : selected,
           origins: origin === "all" ? null : [origin],
           search: search.trim() || null,
         }),
@@ -210,46 +213,59 @@ export function LeadsExportPanel({ clients }: { clients: ExportClientOption[] })
           </p>
         </div>
 
-        <fieldset className="space-y-2">
+        <fieldset className="min-w-0 space-y-3">
           <legend className="text-sm font-medium">Clientes</legend>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={allClients}
-              onChange={(e) => setAllClients(e.target.checked)}
-            />
-            Todos os clientes ({clients.length})
-          </label>
-          {!allClients ? (
-            <div className="space-y-2 rounded-2xl border border-border/60 p-3">
-              <Input
-                type="search"
-                placeholder="Buscar cliente"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                aria-label="Buscar cliente"
-              />
-              <ul className="max-h-56 space-y-1 overflow-y-auto">
-                {visible.map((client) => (
-                  <li key={client.id}>
-                    <label className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2">
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(client.id)}
-                        onChange={() => toggle(client.id)}
-                      />
-                      <span className="min-w-0 flex-1 truncate">{client.name}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">{client.segment}</span>
-                    </label>
-                  </li>
-                ))}
-                {visible.length === 0 ? (
-                  <li className="px-2 py-1.5 text-sm text-muted-foreground">Nenhum cliente encontrado.</li>
-                ) : null}
-              </ul>
-              <p className="text-xs text-muted-foreground">{selected.length} selecionado(s)</p>
+          <Input
+            type="search"
+            placeholder="Pesquisar cliente por nome"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Pesquisar cliente"
+          />
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+            <span>
+              {selected.length} de {clients.length} cliente{clients.length === 1 ? "" : "s"}{" "}
+              selecionado{selected.length === 1 ? "" : "s"}
+            </span>
+            <button
+              type="button"
+              className="font-medium text-primary transition hover:opacity-80"
+              onClick={() => setSelected(allSelected ? [] : clients.map((client) => client.id))}
+            >
+              {allSelected ? "Limpar seleção" : "Selecionar todos"}
+            </button>
+          </div>
+          <div className="dashboard-row min-w-0 rounded-[1.35rem] border p-2">
+            <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
+              {visible.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border/70 px-4 py-6 text-sm text-muted-foreground">
+                  {clients.length === 0
+                    ? "Nenhum cliente dos nichos de quitação ou compra de veículos."
+                    : "Nenhum cliente encontrado com esse nome."}
+                </div>
+              ) : (
+                visible.map((client) => (
+                  <label
+                    key={client.id}
+                    className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border/70 bg-background/50 px-4 py-3 transition hover:border-primary/35 hover:bg-muted/70"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.includes(client.id)}
+                      onChange={() => toggle(client.id)}
+                      className="mt-1 size-4 rounded border-border"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="break-words font-medium text-foreground">{client.name}</p>
+                      {client.segment ? (
+                        <p className="break-words text-sm text-muted-foreground">{client.segment}</p>
+                      ) : null}
+                    </div>
+                  </label>
+                ))
+              )}
             </div>
-          ) : null}
+          </div>
         </fieldset>
 
         <div className="flex flex-wrap items-center gap-3">
