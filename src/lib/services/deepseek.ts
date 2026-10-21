@@ -10,7 +10,6 @@ import { withTransientRetry } from "@/lib/ai-agent/retry";
 const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 const DEEPSEEK_TIMEOUT_MS = 20_000;
 
-export { DEEPSEEK_MODELS } from "@/lib/services/deepseek-models";
 
 export type DeepseekRuntimeConfig = {
   model: string;
@@ -182,4 +181,52 @@ export async function generateDeepseekJson(
   } = {},
 ) {
   return withTransientRetry(() => generateDeepseekJsonOnce(messages, options));
+}
+
+/** Modelos que a conta do DeepSeek oferece hoje (GET /models). */
+export async function listDeepseekModels(apiKey: string): Promise<string[]> {
+  const response = await fetch(`${DEEPSEEK_BASE_URL}/models`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${apiKey}` },
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
+
+  if (!response.ok) {
+    throw new DeepseekError(mapDeepseekHttpError(response.status));
+  }
+
+  const payload = (await response.json()) as { data?: { id?: string }[] };
+  return [
+    ...new Set(
+      (payload.data ?? [])
+        .map((model) => model.id?.trim())
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ].sort();
+}
+
+/**
+ * Confere se o modelo funciona do jeito que o Atendimento IA usa: uma chamada
+ * mínima em modo JSON. Modelo que não responde JSON válido não é salvo.
+ */
+export async function probeDeepseekModel(config: DeepseekRuntimeConfig) {
+  const raw = await generateDeepseekJson(
+    [
+      { role: "system", content: 'Responda somente com o JSON {"ok": true}.' },
+      { role: "user", content: "Teste de configuração." },
+    ],
+    { temperature: 0, maxTokens: 30, timeoutMs: 20_000, config },
+  );
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new DeepseekError("O modelo não respondeu em JSON. Escolha outro modelo.");
+  }
+
+  if (!parsed || typeof parsed !== "object" || (parsed as { ok?: unknown }).ok !== true) {
+    throw new DeepseekError("O modelo respondeu fora do formato esperado. Escolha outro modelo.");
+  }
 }
