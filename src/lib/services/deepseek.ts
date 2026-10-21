@@ -168,7 +168,41 @@ async function generateDeepseekJsonOnce(
     throw new DeepseekError("O DeepSeek não retornou conteúdo.", true);
   }
 
-  return content;
+  return extractJsonText(content);
+}
+
+/**
+ * Modelos mais novos às vezes cercam o JSON: raciocínio em <think>…</think>,
+ * bloco ```json … ``` ou uma frase antes/depois. Devolve só o objeto JSON
+ * quando ele existe; senão, o texto original (quem chama decide o erro).
+ */
+export function extractJsonText(content: string) {
+  const text = content
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .trim();
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(text)?.[1]?.trim();
+  const candidates = [text, fenced].filter((value): value is string => Boolean(value));
+
+  for (const candidate of candidates) {
+    try {
+      JSON.parse(candidate);
+      return candidate;
+    } catch {
+      const start = candidate.indexOf("{");
+      const end = candidate.lastIndexOf("}");
+      if (start >= 0 && end > start) {
+        const slice = candidate.slice(start, end + 1);
+        try {
+          JSON.parse(slice);
+          return slice;
+        } catch {
+          // Segue para o próximo candidato.
+        }
+      }
+    }
+  }
+
+  return text || content;
 }
 
 export async function generateDeepseekJson(
@@ -216,14 +250,18 @@ export async function probeDeepseekModel(config: DeepseekRuntimeConfig) {
       { role: "system", content: 'Responda somente com o JSON {"ok": true}.' },
       { role: "user", content: "Teste de configuração." },
     ],
-    { temperature: 0, maxTokens: 30, timeoutMs: 20_000, config },
+    // Folga para modelos que "pensam" antes de responder.
+    { temperature: 0, maxTokens: 400, timeoutMs: 30_000, config },
   );
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new DeepseekError("O modelo não respondeu em JSON. Escolha outro modelo.");
+    const preview = raw.replace(/\s+/g, " ").slice(0, 80);
+    throw new DeepseekError(
+      `O modelo não respondeu em JSON (veio: "${preview}"). Escolha outro modelo.`,
+    );
   }
 
   if (!parsed || typeof parsed !== "object" || (parsed as { ok?: unknown }).ok !== true) {
