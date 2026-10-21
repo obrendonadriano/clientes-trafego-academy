@@ -1070,3 +1070,69 @@ test("banco aceita número de notificação de outro país e mantém os brasilei
     await db.close();
   }
 });
+
+test("modelo do DeepSeek: lista da conta, teste em JSON antes de salvar e chave intocada", async () => {
+  const calls = [];
+  let reply = '{"ok": true}';
+  const load = loader(
+    {
+      [resolve("src/lib/integrations.ts")]: { getIntegrationSettingByProvider: async () => null },
+      [resolve("src/lib/ai-agent/retry.ts")]: { withTransientRetry: (operation) => operation() },
+    },
+    async (url, init) => {
+      calls.push({ url: String(url), auth: init?.headers?.Authorization ?? new Headers(init?.headers).get("Authorization") });
+      if (String(url).endsWith("/models")) {
+        return Response.json({ data: [{ id: "deepseek-chat" }, { id: "deepseek-v4" }, { id: "deepseek-chat" }] });
+      }
+      return Response.json({ choices: [{ message: { content: reply } }] });
+    },
+  );
+  const deepseek = load("src/lib/services/deepseek.ts");
+  assert.deepEqual(await deepseek.listDeepseekModels("sk-test"), ["deepseek-chat", "deepseek-v4"]);
+  await deepseek.probeDeepseekModel({ apiKey: "sk-test", model: "deepseek-v4" });
+  const completion = calls.find((call) => !call.url.endsWith("/models"));
+  assert.ok(completion, "o teste chama o modelo de verdade");
+  reply = "texto solto";
+  await assert.rejects(deepseek.probeDeepseekModel({ apiKey: "sk-test", model: "deepseek-v4" }), /JSON/);
+  reply = '{"ok": false}';
+  await assert.rejects(deepseek.probeDeepseekModel({ apiKey: "sk-test", model: "deepseek-v4" }), /formato/);
+
+  // Salvar o modelo: só admin, valida na lista + teste, e só troca `model`.
+  const actions = readFileSync("src/app/admin/configuracoes/deepseek-actions.ts", "utf8");
+  assert.match(actions, /user\.role === "admin" && user\.active/);
+  assert.match(actions, /listDeepseekModels\(config\.apiKey\)/);
+  assert.match(actions, /probeDeepseekModel\(\{ apiKey: config\.apiKey, model \}\)/);
+  assert.match(actions, /\.\.\.\(\(existing\.data\?\.config \?\? \{\}\) as Record<string, string>\),\s*model,/);
+  assert.doesNotMatch(actions, /api_key\s*:/);
+  // A tela não recebe a chave: só o nome do modelo salvo.
+  const page = readFileSync("src/components/dashboard/admin-settings-page.tsx", "utf8");
+  assert.match(page, /<DeepseekModelPicker\s+savedModel=/);
+});
+
+test("resposta do DeepSeek: JSON extraído de <think>, bloco de código e texto em volta", async () => {
+  const replies = [
+    '<think>vou responder</think>{"ok": true}',
+    '```json\n{"ok": true}\n```',
+    'Claro! Aqui está: {"ok": true} Qualquer dúvida, avise.',
+    '{"ok": true}',
+  ];
+  for (const reply of replies) {
+    const load = loader(
+      {
+        [resolve("src/lib/integrations.ts")]: { getIntegrationSettingByProvider: async () => null },
+        [resolve("src/lib/ai-agent/retry.ts")]: { withTransientRetry: (operation) => operation() },
+      },
+      async () => Response.json({ choices: [{ message: { content: reply } }] }),
+    );
+    const deepseek = load("src/lib/services/deepseek.ts");
+    await deepseek.probeDeepseekModel({ apiKey: "sk-test", model: "deepseek-flash" });
+    const raw = await deepseek.generateDeepseekJson([{ role: "user", content: "x" }], {
+      config: { apiKey: "sk-test", model: "deepseek-flash" },
+    });
+    assert.deepEqual(JSON.parse(raw), { ok: true }, reply);
+  }
+  const { extractJsonText } = loader({
+    [resolve("src/lib/integrations.ts")]: { getIntegrationSettingByProvider: async () => null },
+  })("src/lib/services/deepseek.ts");
+  assert.equal(extractJsonText("sem json nenhum"), "sem json nenhum");
+});

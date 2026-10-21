@@ -14,8 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
-import { DEEPSEEK_MODELS } from "@/lib/services/deepseek-models";
+import { DeepseekModelPicker } from "@/components/admin/deepseek-model-picker";
 import type { IntegrationSetting, MetaAdAccount } from "@/lib/types";
 
 export type SettingsView = "integracoes" | "contas";
@@ -193,21 +192,7 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
 
           {integration.provider === "deepseek" ? (
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="deepseek_model">Modelo</Label>
-                <Select
-                  id="deepseek_model"
-                  name="config_model"
-                  defaultValue={integration.config.model ?? "deepseek-chat"}
-                >
-                  {DEEPSEEK_MODELS.map((model) => (
-                    <option key={model.value} value={model.value}>
-                      {model.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="space-y-2">
+              <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="deepseek_key">API Key</Label>
                 <Input
                   id="deepseek_key"
@@ -223,9 +208,10 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
                 />
               </div>
               <div className="rounded-2xl border border-border/60 bg-card px-4 py-3 text-sm text-muted-foreground md:col-span-2">
-                Este modelo conduz as conversas do Atendimento IA no WhatsApp
-                dos clientes com Plano Completo. A chave fica no servidor e
-                nunca vai para o navegador.
+                O DeepSeek interpreta as mensagens do Atendimento IA no
+                WhatsApp dos clientes com Plano Completo. A chave fica no
+                servidor e nunca vai para o navegador. O modelo é escolhido
+                logo abaixo, sem informar a chave de novo.
               </div>
             </div>
           ) : null}
@@ -368,6 +354,13 @@ function IntegrationCard({ integration }: { integration: IntegrationSetting }) {
 
         {integration.provider === "waha" && integration.enabled ? (
           <WahaWebhooksRefresh />
+        ) : null}
+
+        {integration.provider === "deepseek" &&
+        integration.config.api_key_configured === "true" ? (
+          <DeepseekModelPicker
+            savedModel={integration.config.model?.trim() || "deepseek-chat"}
+          />
         ) : null}
       </CardContent>
     </Card>
