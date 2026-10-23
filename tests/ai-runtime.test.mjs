@@ -185,6 +185,8 @@ async function runtime() {
     knowledge: {
       ...EMPTY_KNOWLEDGE,
       activation: { ...EMPTY_KNOWLEDGE.activation, enabled: false },
+      // Ordem antiga (uma pergunta por dado); o roteiro em etapas tem teste próprio.
+      script: { ...EMPTY_KNOWLEDGE.script, steps: null, welcome: "" },
     },
   };
   const all = async (query, args = []) => (await db.query(query, args)).rows;
@@ -209,6 +211,9 @@ async function runtime() {
     getAiAgentSettings: async () => settings,
     getClientPlan: async () => "complete",
     getClientSegment: async () => state.segment ?? "veiculo_atrasado",
+    getClientCompanyName: async () => state.company ?? null,
+    setConversationExtra: (client, id, extra) =>
+      db.query("update ai_conversations set extra_data=$3 where client_id=$1 and id=$2", [client, id, JSON.stringify(extra)]),
     setDisqualificationReason: (client, id, reason) =>
       db.query(
         "update ai_conversations set disqualification_reason=$3 where client_id=$1 and id=$2 and status='disqualified'",
@@ -482,6 +487,47 @@ test("Pipeline real com WAHA/DeepSeek simulados", async (t) => {
         assert.notEqual(fresh.id, before.id);
         assert.equal(fresh.last_question, null);
         assert.equal(fresh.status, "new");
+      } finally {
+        await r.db.close();
+      }
+    },
+  );
+  await t.test(
+    "roteiro padrão: boas-vindas e 1ª pergunta em dois balões; cidade gravada",
+    async () => {
+      const r = await runtime();
+      try {
+        r.settings.knowledge.script = EMPTY_KNOWLEDGE.script;
+        r.state.company = "Bergautocar";
+        await r.ingest("s1", "Olá! Quero fazer uma avaliação do meu veículo.");
+        await r.step();
+        for (let i = 0; i < 4; i += 1) {
+          await r.expireDelay();
+          await r.step();
+        }
+        assert.deepEqual(
+          r.state.sent.map((m) => m.text),
+          [
+            "👋 Olá! Seja bem-vindo à Bergautocar. Compramos veículos financiados, mesmo com parcelas atrasadas, RENAJUD ou busca e apreensão.",
+            "Qual é o seu nome?",
+          ],
+        );
+        assert.equal((await r.conversation()).last_question, "name");
+
+        // Responde a cidade quando ela é perguntada: vai para extra_data.
+        await r.db.query("update ai_conversations set name='Gil', financed=true, vehicle='Onix', vehicle_year=2021, bank='BV', last_question='city'");
+        r.state.responses = [
+          { facts: [], unknown_fields: [], intent: "qualification", human_requested: false, confidence: 0.9, faq_index: null },
+        ];
+        await r.ingest("s2", "Belo Horizonte");
+        await r.step();
+        for (let i = 0; i < 3; i += 1) {
+          await r.expireDelay();
+          await r.step();
+        }
+        const c = await r.conversation();
+        assert.equal(c.extra_data.city, "Belo Horizonte");
+        assert.match(r.state.sent.at(-1).text, /valor aproximado/);
       } finally {
         await r.db.close();
       }

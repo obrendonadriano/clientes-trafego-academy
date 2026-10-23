@@ -18,6 +18,14 @@ import {
   checkScriptInput,
   knowledgeSchema,
 } from "../src/lib/ai-agent/config.ts";
+
+// Os cenários abaixo cobrem o motor na ordem antiga (uma pergunta por dado,
+// sem boas-vindas), que continua valendo com o roteiro desligado. O roteiro
+// em etapas (padrão atual) tem testes próprios no fim do arquivo.
+const BASE_KNOWLEDGE = {
+  ...EMPTY_KNOWLEDGE,
+  script: { ...EMPTY_KNOWLEDGE.script, steps: null, welcome: "" },
+};
 import { parseIncomingEvent } from "../src/lib/ai-agent/event.ts";
 import { withTransientRetry } from "../src/lib/ai-agent/retry.ts";
 import { prepareTurnInput } from "../src/lib/ai-agent/media.ts";
@@ -85,7 +93,7 @@ const policy = (data = {}, more = {}) =>
   decidePolicy({
     facts: { ...EMPTY_FACTS },
     unknown: [],
-    knowledge: EMPTY_KNOWLEDGE,
+    knowledge: BASE_KNOWLEDGE,
     firstTurn: true,
     incoming: "",
     extraction: { ...blankExtraction(), ...data },
@@ -111,11 +119,11 @@ const text = (p) => p.candidates.flat().join(" ");
 
 test("mensagem fora do horário também não pode prometer aprovação", () => {
   assert.match(
-    offHoursReply("Seu carro está aprovado!", EMPTY_KNOWLEDGE),
+    offHoursReply("Seu carro está aprovado!", BASE_KNOWLEDGE),
     /fora do horário/,
   );
   assert.equal(
-    offHoursReply("Retornamos amanhã.", EMPTY_KNOWLEDGE),
+    offHoursReply("Retornamos amanhã.", BASE_KNOWLEDGE),
     "Retornamos amanhã.",
   );
 });
@@ -131,7 +139,7 @@ test("regras e escopo cadastrados são respostas autorizadas, sem substituir qua
       { intent },
       {
         knowledge: {
-          ...EMPTY_KNOWLEDGE,
+          ...BASE_KNOWLEDGE,
           [field]: ["Informação confirmada pela equipe."],
         },
       },
@@ -169,7 +177,7 @@ test("02 quitado encerra em silêncio, sem perguntar banco/dívida", () => {
   // Não é lead: nenhuma mensagem, nem pedido de atendimento humano.
   assert.deepEqual(p.candidates, [[]]);
   assert.equal(p.human, false);
-  assert.deepEqual(validateReply([], p, EMPTY_KNOWLEDGE), []);
+  assert.deepEqual(validateReply([], p, BASE_KNOWLEDGE), []);
 });
 for (const [number, field] of [
   ["03", "debt_amount"],
@@ -379,7 +387,7 @@ for (const [number, intent, probe] of [
       validateReply(
         ["Está aprovado! Pagaremos R$ 50.000."],
         p,
-        EMPTY_KNOWLEDGE,
+        BASE_KNOWLEDGE,
       ),
       p.candidates[0],
     );
@@ -427,10 +435,10 @@ test("documentos sem cadastro encaminha; base autorizada fornece resposta litera
   assert.match(text(p), /Não tenho essa informação confirmada/);
   const known = policy(
     { intent: "documents" },
-    { knowledge: { ...EMPTY_KNOWLEDGE, documents: ["Documento do veículo."] } },
+    { knowledge: { ...BASE_KNOWLEDGE, documents: ["Documento do veículo."] } },
   );
   assert.equal(known.human, false);
-  assert.deepEqual(validateReply(known.candidates[0], known, EMPTY_KNOWLEDGE), [
+  assert.deepEqual(validateReply(known.candidates[0], known, BASE_KNOWLEDGE), [
     "Documento do veículo.",
   ]);
 });
@@ -455,16 +463,16 @@ test("redator não insere banco/modelo/ano/preço, nem promessa de uma base mal 
     validateReply(
       ["Seu BMW 2025 do Bradesco está aprovado."],
       p,
-      EMPTY_KNOWLEDGE,
+      BASE_KNOWLEDGE,
     ),
     p.candidates[0],
   );
   const bad = policy(
     { intent: "documents" },
-    { knowledge: { ...EMPTY_KNOWLEDGE, documents: ["Compra garantida!"] } },
+    { knowledge: { ...BASE_KNOWLEDGE, documents: ["Compra garantida!"] } },
   );
   assert.match(
-    validateReply(bad.candidates[0], bad, EMPTY_KNOWLEDGE)[0],
+    validateReply(bad.candidates[0], bad, BASE_KNOWLEDGE)[0],
     /Não tenho/,
   );
 });
@@ -876,7 +884,7 @@ const customScript = {
   },
   replies: { ...DEFAULT_SCRIPT.replies, price: "Valor só depois da vistoria." },
 };
-const customKb = { ...EMPTY_KNOWLEDGE, script: customScript };
+const customKb = { ...BASE_KNOWLEDGE, script: customScript };
 
 test("roteiro: pergunta e respostas saem do texto configurado pelo cliente", () => {
   const first = policy({ intent: "greeting" }, { knowledge: customKb });
@@ -1051,8 +1059,8 @@ test("migration de números bloqueados: formato, único por cliente e só leitur
 // ---------------------------------------------------------------------------
 
 const withProfile = (profile) => ({
-  ...EMPTY_KNOWLEDGE,
-  profile: { ...EMPTY_KNOWLEDGE.profile, ...profile },
+  ...BASE_KNOWLEDGE,
+  profile: { ...BASE_KNOWLEDGE.profile, ...profile },
 });
 
 test("perfil padrão reproduz a regra original e não exige quiz", () => {
@@ -1135,7 +1143,7 @@ test("quem diz que não tem veículo é desqualificado em silêncio", () => {
 test("resumo do perfil descreve as regras aplicadas", async () => {
   const { describeProfile } = await import("../src/lib/ai-agent/profile-summary.ts");
   const lines = describeProfile({
-    ...EMPTY_KNOWLEDGE.profile,
+    ...BASE_KNOWLEDGE.profile,
     vehicleTypes: ["Carro", "Moto"],
     overduePolicy: "overdue_only",
     minOverdueInstallments: 3,
@@ -1363,9 +1371,9 @@ test("sem 'Entendi.' antes das perguntas; padrão antigo salvo também sai", () 
 test("idade: padrão de 10 anos; faixa de análise manual qualifica e marca; abaixo dela, silêncio", async () => {
   const { manualReviewYear, effectiveMinYear } = await import("../src/lib/ai-agent/policy.ts");
   const now = new Date().getFullYear();
-  const profile = { ...EMPTY_KNOWLEDGE.profile };
+  const profile = { ...BASE_KNOWLEDGE.profile };
   assert.equal(effectiveMinYear(profile), now - 10);
-  const lead = (year, kb = EMPTY_KNOWLEDGE) =>
+  const lead = (year, kb = BASE_KNOWLEDGE) =>
     policy(
       { facts: [] },
       {
@@ -1393,4 +1401,130 @@ test("idade: padrão de 10 anos; faixa de análise manual qualifica e marca; aba
   assert.equal(lead(2009, kb2015).status, "disqualified");
   // Faixa desligada (0): abaixo do mínimo sai direto.
   assert.equal(lead(2012, withProfile({ minVehicleYear: 2015, manualReviewYears: 0 })).status, "disqualified");
+});
+
+// ---------------------------------------------------------------------------
+// Roteiro em etapas (padrão para todos os clientes, modelo Bergautocar)
+// ---------------------------------------------------------------------------
+
+const ROTEIRO = EMPTY_KNOWLEDGE; // padrão já vem com boas-vindas e etapas
+const turn = (data, more) =>
+  decidePolicy({
+    facts: { ...EMPTY_FACTS },
+    unknown: [],
+    knowledge: ROTEIRO,
+    firstTurn: false,
+    incoming: "",
+    extraction: { ...blankExtraction(), ...data },
+    companyName: "Bergautocar",
+    ...more,
+  });
+
+test("roteiro padrão: boas-vindas com o nome da empresa e a 1ª pergunta em balões separados", () => {
+  const p = turn({}, { firstTurn: true, incoming: "Olá! Quero fazer uma avaliação do meu veículo." });
+  assert.deepEqual(p.candidates, [[
+    "👋 Olá! Seja bem-vindo à Bergautocar. Compramos veículos financiados, mesmo com parcelas atrasadas, RENAJUD ou busca e apreensão.",
+    "Qual é o seu nome?",
+  ]]);
+  assert.equal(p.askedKey, "name");
+  assert.deepEqual(validateReply(p.candidates[0], p, ROTEIRO), p.candidates[0]);
+  // Sem nome de empresa: a frase continua natural.
+  const sem = decidePolicy({
+    facts: { ...EMPTY_FACTS }, unknown: [], knowledge: ROTEIRO, firstTurn: true,
+    incoming: "Olá", extraction: blankExtraction(),
+  });
+  assert.match(sem.candidates[0][0], /^👋 Olá! Seja bem-vindo\. Compramos/);
+});
+
+test("roteiro padrão: nome, financiamento, modelo e ano juntos, banco, cidade, dívida e atraso", () => {
+  let facts = { ...EMPTY_FACTS };
+  let unknown = [];
+  let last = "name";
+  const step = (incoming, extracted = []) => {
+    const p = turn({ facts: extracted }, { incoming, facts, unknown, lastQuestion: last });
+    facts = p.facts;
+    unknown = p.unknownFields;
+    last = p.askedKey;
+    return p;
+  };
+  let p = step("Gil");
+  assert.equal(p.facts.name, "Gil");
+  assert.deepEqual(p.candidates, [["O veículo ainda está financiado?"]]);
+  p = step("Sim");
+  assert.deepEqual(p.candidates, [["Qual é o modelo e ano do veículo?"]]);
+  assert.equal(p.askedKey, "vehicle+vehicle_year");
+  // Respondeu só o modelo: pergunta só o ano.
+  p = step("Onix", [fact("vehicle", "Onix", "Onix")]);
+  assert.deepEqual(p.candidates, [["Qual é o ano dele?"]]);
+  p = step("2021");
+  assert.equal(p.facts.vehicle_year, 2021);
+  assert.deepEqual(p.candidates, [["Qual é o banco do financiamento?"]]);
+  p = step("BV");
+  assert.deepEqual(p.candidates, [["Em qual cidade o veículo se encontra?"]]);
+  p = step("Belo Horizonte");
+  assert.equal(p.facts.city, "Belo Horizonte");
+  assert.deepEqual(p.candidates, [[
+    "Você sabe o valor aproximado que ainda falta pagar e quantas parcelas estão em atraso?",
+  ]]);
+  p = step("uns 30 mil e 2 parcelas atrasadas", [
+    fact("debt_amount", 30000, "30 mil"),
+    fact("overdue_installments_count", 2, "2 parcelas"),
+  ]);
+  assert.equal(p.facts.has_overdue_installments, true);
+  assert.equal(p.status, "qualified");
+  assert.deepEqual(p.candidates, [[DEFAULT_SCRIPT.replies.qualified]]);
+});
+
+test("roteiro padrão: nome e cidade são opcionais; sem resposta a IA segue", () => {
+  const p = turn({}, { incoming: "prefiro não dizer", lastQuestion: "name" });
+  assert.ok(p.unknownFields.includes("name"));
+  assert.deepEqual(p.candidates, [["O veículo ainda está financiado?"]]);
+  const q = turn({}, {
+    incoming: "?", lastQuestion: "city",
+    facts: { ...EMPTY_FACTS, name: "Gil", financed: true, vehicle: "Onix", vehicle_year: 2021, bank: "BV" },
+  });
+  assert.ok(q.unknownFields.includes("city"));
+  assert.match(q.candidates[0][0], /valor aproximado/);
+  // Cumprimento não vira nome.
+  const r = turn({}, { incoming: "oi tudo bem", lastQuestion: "name" });
+  assert.equal(r.facts.name, null);
+});
+
+test("não qualificado: silêncio por padrão; com a mensagem ligada, texto com nome e empresa", () => {
+  const quitado = { facts: [fact("financed", false, "quitado")] };
+  const silent = turn(quitado, { incoming: "já está quitado", lastQuestion: "financed", facts: { ...EMPTY_FACTS, name: "Gil Souza" } });
+  assert.deepEqual(silent.candidates, [[]]);
+  const on = {
+    ...ROTEIRO,
+    script: { ...ROTEIRO.script, notQualified: { ...ROTEIRO.script.notQualified, enabled: true } },
+  };
+  const p = turn(quitado, { incoming: "já está quitado", lastQuestion: "financed", knowledge: on, facts: { ...EMPTY_FACTS, name: "Gil Souza" } });
+  const [text] = p.candidates[0];
+  assert.match(text, /^Olá, Gil! Agradecemos muito o seu contato e a confiança na Bergautocar\./);
+  assert.match(text, /pode indicar a Bergautocar\./);
+  assert.deepEqual(validateReply(p.candidates[0], p, on), p.candidates[0]);
+  // Sem nome do lead: "Olá!".
+  const anon = turn(quitado, { incoming: "já está quitado", lastQuestion: "financed", knowledge: on });
+  assert.match(anon.candidates[0][0], /^Olá! Agradecemos/);
+});
+
+test("roteiro: salvar valida etapas; roteiro antigo salvo ganha o padrão novo", () => {
+  assert.equal(checkScriptInput(DEFAULT_SCRIPT), null);
+  const withSteps = (steps) => ({ ...DEFAULT_SCRIPT, steps });
+  assert.match(checkScriptInput(withSteps([{ fields: ["vehicle"], text: "Modelo?" }])), /Financiamento/);
+  assert.match(
+    checkScriptInput(withSteps([
+      { fields: ["financed"], text: "Financiado?" },
+      { fields: ["vehicle", "financed"], text: "Modelo?" },
+    ])),
+    /mais de uma pergunta/,
+  );
+  assert.match(checkScriptInput(withSteps([{ fields: ["financed", "vehicle"], text: "Financiado? E o modelo?" }])), /um ponto de interrogação/);
+  // Roteiro salvo antes desta versão (sem etapas): recebe o padrão.
+  const old = knowledgeSchema.parse({ script: { greeting: "Olá!", questions: {}, replies: {} } }).script;
+  assert.deepEqual(old.steps, DEFAULT_SCRIPT.steps);
+  assert.equal(old.welcome, DEFAULT_SCRIPT.welcome);
+  assert.equal(old.notQualified.enabled, false);
+  // Quem escolheu a ordem antiga (null) continua nela.
+  assert.equal(knowledgeSchema.parse({ script: { steps: null } }).script.steps, null);
 });

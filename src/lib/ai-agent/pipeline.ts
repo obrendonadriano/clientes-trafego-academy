@@ -27,6 +27,7 @@ import {
   getAiAgentSettings,
   getClientPlan,
   getClientSegment,
+  setConversationExtra,
   setDisqualificationReason,
   findConversation,
   findConversationById,
@@ -362,7 +363,8 @@ export async function advanceConversation(input: {
         nextField:
           !decision.human && CLOSING_REASONS.has(decision.reason)
             ? ATTENDANCE_CLOSED
-            : decision.nextField,
+            : // Pergunta que pediu vários dados: "vehicle+vehicle_year".
+              decision.askedKey ?? decision.nextField,
         changedFields: decision.changedFields,
         messages: result.messages.map((body, i) => ({
           body,
@@ -373,6 +375,17 @@ export async function advanceConversation(input: {
         runId: randomUUID(),
         startedAt,
       });
+      // Cidade não tem coluna própria: vai para extra_data da conversa.
+      if (decision.changedFields.includes("city") && typeof decision.facts.city === "string") {
+        try {
+          await setConversationExtra(owner.clientId, conversation.id, {
+            ...(conversation.extra_data ?? {}),
+            city: decision.facts.city,
+          });
+        } catch {
+          console.warn("[ia] city_unavailable");
+        }
+      }
       // A transição grava um motivo genérico; aqui fica o motivo real
       // (quitado, sem veículo, critério do perfil) para o painel.
       if (decision.disqualification) {

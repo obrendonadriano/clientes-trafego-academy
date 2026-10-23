@@ -1,8 +1,9 @@
 import { z } from "zod";
-import type { AiKnowledge, AiProfile, OptionalQuestion } from "./config";
+import type { AiKnowledge, AiProfile, AiScript, OptionalQuestion } from "./config";
 
 export const FIELDS = [
   "name",
+  "city",
   "vehicle",
   "vehicle_year",
   "financed",
@@ -175,7 +176,48 @@ export type PolicyDecision = {
   changedFields: Field[];
   rejectedFields: Field[];
   disqualification: DisqualificationReason | null;
+  // Dados pedidos na pergunta enviada ("vehicle+vehicle_year"). Vai para
+  // last_question para a próxima resposta ser lida no contexto certo.
+  askedKey: string | null;
 };
+
+type RuntimeStep = { fields: Field[]; text: string };
+
+/**
+ * Etapas na ordem do roteiro do cliente. Sem roteiro montado, uma pergunta por
+ * dado na ordem padrão. Dado obrigatório que o roteiro não pergunta entra no
+ * fim, com a pergunta individual.
+ */
+function scriptSteps(script: AiScript, required: Field[]): RuntimeStep[] {
+  const questions = script.questions as Record<string, string>;
+  const steps: RuntimeStep[] = script.steps
+    ? script.steps.map((step) => ({ fields: [...step.fields] as Field[], text: step.text }))
+    : [];
+  const covered = new Set(steps.flatMap((step) => step.fields));
+  for (const field of required) {
+    if (field === "overdue_installments_count" || covered.has(field)) continue;
+    steps.push({ fields: [field], text: questions[field] ?? "" });
+    covered.add(field);
+  }
+  return steps;
+}
+
+/**
+ * "[nome]" vira o primeiro nome do lead e "{empresa}" o nome da empresa do
+ * cliente. Sem o dado, o marcador some com a palavra de ligação
+ * (", [nome]", "à {empresa}") para a frase continuar natural.
+ */
+function fillPlaceholders(text: string, name: unknown, company: string | null | undefined) {
+  const lead = typeof name === "string" ? name.trim().split(/\s+/)[0] : "";
+  const firm = (company ?? "").trim();
+  let result = lead
+    ? text.replace(/\[nome\]|\{nome\}/gi, lead)
+    : text.replace(/,?\s*(?:\[nome\]|\{nome\})/gi, "");
+  result = firm
+    ? result.replace(/\{empresa\}|\[empresa\]/gi, firm)
+    : result.replace(/\s*(?:(?:à|a|na|da|de|pela|com a)\s+)?(?:\{empresa\}|\[empresa\])/gi, "");
+  return result.replace(/\s+([!?.,])/g, "$1");
+}
 const fold = (s: string) =>
   s
     .normalize("NFD")
@@ -352,7 +394,10 @@ function readAmount(text: string): number | null {
 }
 
 /** Nome curto respondido direto: "Bv", "no Itaú", "é um Onix 2020". */
-function readShortText(text: string, field: "bank" | "vehicle"): string | null {
+function readShortText(
+  text: string,
+  field: "bank" | "vehicle" | "city" | "name",
+): string | null {
   const trimmed = text.trim().replace(/[.!]+$/, "");
   if (!trimmed || trimmed.includes("?") || trimmed.length > 60) return null;
   if (yesNo(trimmed) !== null || saysUnknown(trimmed)) return null;
@@ -360,11 +405,42 @@ function readShortText(text: string, field: "bank" | "vehicle"): string | null {
     .replace(
       field === "bank"
         ? /^(?:(?:e|é|eh|foi|pelo|pela|no|na|o|a)\s+)*/i
-        : /^(?:(?:e|é|eh|meu carro e|meu carro é|o carro e|o carro é|tenho|um|uma)\s+)*/i,
+        : field === "city"
+          ? /^(?:(?:e|é|eh|em|na|no|de|fica em|esta em|está em|ta em|tá em|cidade de|aqui em)\s+)*/i
+          : field === "name"
+            ? /^(?:(?:meu nome e|meu nome é|me chamo|eu sou o|eu sou a|sou o|sou a|sou|e o|é o|e a|é a|pode me chamar de)\s+)*/i
+            : /^(?:(?:e|é|eh|meu carro e|meu carro é|o carro e|o carro é|tenho|um|uma)\s+)*/i,
       "",
     )
     .trim();
+  if (
+    field === "name" &&
+    (/\d/.test(cleaned) ||
+      cleaned.split(/\s+/).length > 4 ||
+      /^(?:oi|ola|bom dia|boa tarde|boa noite|tudo bem|e ai|opa|prefiro nao|nao quero)\b/.test(plain(cleaned)))
+  )
+    return null;
   return cleaned.length >= 2 && cleaned.split(/\s+/).length <= 5 ? cleaned : null;
+}
+
+/**
+ * Etapa que pede vários dados numa pergunta ("modelo e ano", "valor e
+ * parcelas em atraso"): só leituras que não confundem um dado com outro.
+ * Nome, banco, modelo e cidade ficam com o modelo.
+ */
+function combinedAnswer(field: Field, text: string): Facts[Field] | null {
+  switch (field) {
+    case "financed":
+      return readFinanced(text, false);
+    case "vehicle_year":
+      return readYear(text);
+    case "debt_amount":
+      return readAmount(text);
+    case "has_overdue_installments":
+      return readOverdue(text);
+    default:
+      return null;
+  }
 }
 
 /** Resposta direta ao campo perguntado, sem depender do modelo. */
@@ -386,6 +462,8 @@ function directAnswer(
       return readAmount(text);
     case "bank":
     case "vehicle":
+    case "city":
+    case "name":
       return readShortText(text, field);
     default:
       return null;
@@ -440,7 +518,7 @@ function validValue(
     /^(sim|nao)[.!\s]*$/.test(source)
   )
     return value === source.startsWith("sim");
-  if (["name", "vehicle", "bank"].includes(field))
+  if (["name", "vehicle", "bank", "city"].includes(field))
     return (
       typeof value === "string" &&
       value.trim().length >= 2 &&
@@ -510,6 +588,8 @@ export function decidePolicy(input: {
   media?: string;
   // Só mídia, sem texto no turno. Ausente = comportamento antigo (só mídia).
   mediaOnly?: boolean;
+  // Nome da empresa do cliente para "{empresa}" nas mensagens do roteiro.
+  companyName?: string | null;
 }): PolicyDecision {
   const { extraction: e, incoming, knowledge: kb } = input;
   const script = kb.script;
@@ -560,27 +640,32 @@ export function decidePolicy(input: {
   // Rede de segurança: resposta direta à pergunta feita ("sim", "tá pago",
   // "22", "100 pau", "tudo em dia", "Bv", "não sei") vale mesmo se o modelo
   // não extrair. Só para conversa de qualificação, nunca para outra intenção.
-  const pending = FIELDS.includes(input.lastQuestion as Field)
-    ? (input.lastQuestion as Field)
-    : null;
-  if (
-    !injected &&
-    pending &&
-    facts[pending] === null &&
-    !changedFields.includes(pending) &&
-    !unknown.has(pending) &&
-    // Resposta curta costuma vir classificada como cumprimento ou fora do
-    // assunto; pedido de preço, equipe etc. nunca vira dado.
-    (e.intent === "qualification" ||
-      e.intent === "off_topic" ||
-      (e.intent === "greeting" && pending !== "bank" && pending !== "vehicle"))
-  ) {
-    const answer = directAnswer(pending, incoming);
+  // A pergunta pode ter pedido vários dados ("vehicle+vehicle_year").
+  const askedLast = (input.lastQuestion ?? "")
+    .split("+")
+    .filter((field): field is Field => FIELDS.includes(field as Field));
+  const single = askedLast.length === 1;
+  for (const pending of askedLast) {
+    if (
+      injected ||
+      facts[pending] !== null ||
+      changedFields.includes(pending) ||
+      unknown.has(pending) ||
+      // Resposta curta costuma vir classificada como cumprimento ou fora do
+      // assunto; pedido de preço, equipe etc. nunca vira dado.
+      !(
+        e.intent === "qualification" ||
+        e.intent === "off_topic" ||
+        (e.intent === "greeting" && !["bank", "vehicle", "name", "city"].includes(pending))
+      )
+    )
+      continue;
+    const answer = single ? directAnswer(pending, incoming) : combinedAnswer(pending, incoming);
     if (answer === "unknown") {
       unknown.add(pending);
     } else if (
       answer !== null &&
-      validValue(pending, answer, incoming, pending)
+      validValue(pending, answer, incoming, single ? pending : null)
     ) {
       facts[pending] = answer;
       unknown.delete(pending);
@@ -592,7 +677,7 @@ export function decidePolicy(input: {
     !injected &&
     facts.has_overdue_installments === true &&
     facts.overdue_installments_count === null &&
-    (pending === "has_overdue_installments" ||
+    (askedLast.includes("has_overdue_installments") ||
       changedFields.includes("has_overdue_installments"))
   ) {
     const count = readCount(incoming);
@@ -600,6 +685,14 @@ export function decidePolicy(input: {
       facts.overdue_installments_count = count;
       changedFields.push("overdue_installments_count");
     }
+  }
+  // "Quantas parcelas em atraso?" -> "2" ou "nenhuma" também responde se há atraso.
+  if (
+    facts.has_overdue_installments === null &&
+    typeof facts.overdue_installments_count === "number"
+  ) {
+    facts.has_overdue_installments = facts.overdue_installments_count > 0;
+    changedFields.push("has_overdue_installments");
   }
   if (facts.has_overdue_installments === false) {
     facts.overdue_installments_count = 0;
@@ -612,11 +705,34 @@ export function decidePolicy(input: {
   for (const field of OPTIONAL_QUESTION_ORDER) if (asked[field]) required.push(field);
   if (asked.has_overdue_installments && facts.has_overdue_installments === true)
     required.push("overdue_installments_count");
-  const missing = required.filter(
-    (field) =>
-      facts[field] === null &&
-      (!unknown.has(field) || field === "financed" || field === "vehicle"),
-  );
+  // Dado opcional do roteiro (nome, cidade...) perguntado e sem resposta:
+  // segue adiante em vez de insistir.
+  for (const field of askedLast)
+    if (!required.includes(field) && facts[field] === null && !changedFields.includes(field))
+      unknown.add(field);
+  const pendingField = (field: Field) =>
+    facts[field] === null &&
+    (!unknown.has(field) || field === "financed" || field === "vehicle");
+  let target: (RuntimeStep & { pend: Field[] }) | null = null;
+  for (const step of scriptSteps(script, required)) {
+    const fields = step.fields.flatMap((field): Field[] =>
+      field === "has_overdue_installments" && required.includes("overdue_installments_count")
+        ? [field, "overdue_installments_count"]
+        : [field],
+    );
+    const pend = fields.filter(pendingField);
+    if (pend.length) {
+      target = { fields, text: step.text, pend };
+      break;
+    }
+  }
+  const missing = target ? target.pend : [];
+  const questions = script.questions as Record<string, string>;
+  // Nada respondido da etapa: o texto dela. Respondeu parte: só o que falta.
+  const questionText = (step: NonNullable<typeof target>) =>
+    step.pend.length === 1 && step.pend.length < step.fields.length
+      ? questions[step.pend[0]] || step.text
+      : step.text || questions[step.pend[0]] || "";
   const disqualification: DisqualificationReason | null =
     facts.financed === false
       ? "not_financed"
@@ -663,8 +779,8 @@ export function decidePolicy(input: {
     } else {
       // Foto do carro, documento: agradece e segue com o que estava pendente,
       // sem passar para a equipe e sem afirmar o que tem na imagem.
-      const followUp = nextField
-        ? script.questions[nextField as keyof typeof script.questions]
+      const followUp = nextField && target
+        ? questionText(target)
         : status === "qualified"
           ? says.qualified
           : "";
@@ -732,24 +848,23 @@ export function decidePolicy(input: {
     reply = says.requiredUnknown;
     reason = "required_unknown";
     nextField = null;
-  } else if (nextField) {
-    if (input.lastQuestion === nextField && changedFields.length === 0) {
+  } else if (nextField && target) {
+    if (askedLast.includes(nextField) && changedFields.length === 0) {
       // Não entendeu a resposta: avisa e repete a pergunta, em vez de
       // ficar "aguardando" sem dizer o que falta. Um "oi" no meio da
       // conversa é só cumprimento: cumprimenta de volta e repete.
       const prefix = e.intent === "greeting" ? script.greeting : says.waiting;
-      reply = [prefix, script.questions[nextField as keyof typeof script.questions]]
-        .filter(Boolean)
-        .join(" ");
+      reply = [prefix, questionText(target)].filter(Boolean).join(" ");
     } else {
+      // Com boas-vindas própria, a saudação curta não se repete.
       const prefix = input.firstTurn
-        ? script.greeting
+        ? script.welcome
+          ? ""
+          : script.greeting
         : changedFields.length
           ? script.acknowledge
           : "";
-      reply = [prefix, script.questions[nextField as keyof typeof script.questions]]
-        .filter(Boolean)
-        .join(" ");
+      reply = [prefix, questionText(target)].filter(Boolean).join(" ");
     }
   }
   // Foto junto com texto: o texto foi tratado normalmente; o agradecimento
@@ -762,10 +877,21 @@ export function decidePolicy(input: {
   )
     reply = `${says.media} ${reply}`;
   // Uma única opção: o texto sai do roteiro do cliente, nunca escrito pelo modelo.
+  const notQualified = script.notQualified;
+  const company = input.companyName ?? kb.company;
+  const main = fillPlaceholders(
+    reply || "Recebi sua mensagem. Vou deixar a equipe conferir seu caso.",
+    facts.name,
+    company,
+  );
   const candidates =
     status === "disqualified"
-      ? [[]]
-      : [[reply || "Recebi sua mensagem. Vou deixar a equipe conferir seu caso."]];
+      ? notQualified?.enabled && notQualified.text.trim()
+        ? [[fillPlaceholders(notQualified.text, facts.name, company)]]
+        : [[]]
+      : input.firstTurn && script.welcome && !human
+        ? [[fillPlaceholders(script.welcome, facts.name, company), main]]
+        : [[main]];
   return {
     facts,
     unknownFields: [...unknown],
@@ -777,6 +903,7 @@ export function decidePolicy(input: {
     changedFields,
     rejectedFields,
     disqualification,
+    askedKey: nextField && target ? target.pend.join("+") : null,
   };
 }
 
@@ -801,8 +928,9 @@ export function validateReply(
   const content = fold(messages.join(" "));
   if (
     messages.length > 2 ||
-    messages.some((s) => s.length > 550) ||
-    (content.match(/\?/g)?.length ?? 0) > 1 ||
+    messages.some((s) => s.length > 1500) ||
+    // Uma pergunta por balão (boas-vindas + 1ª pergunta são dois balões).
+    messages.some((s) => (s.match(/\?/g)?.length ?? 0) > 1) ||
     /(?:garantimos|garantid[oa]|aprovado|aprovacao garantida|quitamos sua divida|impedimos.{0,20}apreensao|sou (?:um )?humano)/.test(
       content,
     ) ||

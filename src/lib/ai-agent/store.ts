@@ -197,6 +197,23 @@ export async function deleteConversation(
   }
 }
 
+/** Dados extras da conversa (ex.: cidade), sem coluna própria. */
+export async function setConversationExtra(
+  clientId: string,
+  conversationId: string,
+  extra: Record<string, unknown>,
+) {
+  const { error } = await aiAdminClient()
+    .from("ai_conversations")
+    .update({ extra_data: extra })
+    .eq("client_id", clientId)
+    .eq("id", conversationId);
+
+  if (error) {
+    throw new AiAgentError("Não foi possível salvar os dados extras.");
+  }
+}
+
 /** Motivo legível da desqualificação, exibido no painel de leads. */
 export async function setDisqualificationReason(
   clientId: string,

@@ -5,7 +5,6 @@ import {
   BellRing,
   Bot,
   CheckCircle2,
-  MessageSquareText,
   PlugZap,
   RotateCcw,
   SendHorizonal,
@@ -14,9 +13,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import {
-  restoreAiScriptAction,
   saveAiAdvancedSettingsAction,
-  saveAiScriptAction,
   saveNotificationNumberAction,
   testNotificationNumberAction,
   toggleAiAgentAction,
@@ -24,6 +21,7 @@ import {
 } from "@/app/dashboard/atendimento-ia/actions";
 import { AiLeadsPanel } from "@/components/ai-agent/ai-leads-panel";
 import { AiSetupWizard } from "@/components/ai-agent/ai-setup-wizard";
+import { AiScriptEditor } from "@/components/ai-agent/ai-script-editor";
 import { describeProfile } from "@/lib/ai-agent/profile-summary";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,7 +38,6 @@ import { FormPendingButton } from "@/components/ui/form-pending-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { formatBrazilianWhatsapp } from "@/lib/ai-agent/shared";
 import {
@@ -48,12 +45,6 @@ import {
   formatWhatsappNumber,
   maskWhatsappInput,
 } from "@/lib/phone";
-import {
-  SCRIPT_QUESTIONS,
-  SCRIPT_REPLIES,
-  type ScriptQuestion,
-  type ScriptReply,
-} from "@/lib/ai-agent/config";
 import type { AiAgentPageData } from "@/lib/data/ai-agent";
 import { cn } from "@/lib/utils";
 
@@ -107,7 +98,7 @@ export function AiAgentPage({
           data={data}
           onRedo={interactive ? () => setRedoing(true) : undefined}
         />
-        <ScriptCard data={data} />
+        <AiScriptEditor script={data.settings.knowledge.script} />
         <AiKnowledgeSettings settings={data.settings} />
         <AiBlockedNumbersCard numbers={data.blockedNumbers} />
         <AiLeadsPanel
@@ -415,146 +406,6 @@ function ProfileSummaryCard({
             {profile.notes}
           </p>
         ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Card 3 — Mensagens do atendimento (roteiro)
-// ---------------------------------------------------------------------------
-
-function ScriptCard({ data }: { data: AiAgentPageData }) {
-  const [saveState, saveAction] = useActionState(
-    saveAiScriptAction,
-    initialState,
-  );
-  const [restoreState, restoreAction] = useActionState(
-    restoreAiScriptAction,
-    initialState,
-  );
-
-  useActionToast(saveState);
-  useActionToast(restoreState);
-
-  const script = data.settings.knowledge.script;
-  // `key` recarrega os campos com o valor do servidor depois de salvar/restaurar.
-  const scriptKey = JSON.stringify(script).length + script.greeting;
-
-  return (
-    <Card className="min-w-0">
-      <CardHeader className="flex items-center gap-3">
-        <div className="rounded-2xl bg-primary/12 p-3 text-primary">
-          <MessageSquareText className="size-5" strokeWidth={1.75} />
-        </div>
-        <div>
-          <CardTitle className="font-display text-xl">
-            Mensagens do atendimento
-          </CardTitle>
-          <p className="mt-1 text-sm text-muted-foreground">
-            A IA só entende o que o lead escreveu e escolhe qual destas
-            mensagens enviar. O texto que sai no WhatsApp é sempre o seu.
-          </p>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        <form key={scriptKey} action={saveAction} className="space-y-5">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="script-greeting">Saudação (1ª mensagem)</Label>
-              <Input
-                id="script-greeting"
-                name="greeting"
-                defaultValue={script.greeting}
-                maxLength={80}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="script-acknowledge">
-                Confirmação ao receber um dado{" "}
-                <span className="text-muted-foreground">(opcional)</span>
-              </Label>
-              <Input
-                id="script-acknowledge"
-                name="acknowledge"
-                defaultValue={script.acknowledge}
-                maxLength={80}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground sm:col-span-2">
-              Vão antes da pergunta, na mesma mensagem. Sem ponto de
-              interrogação. Deixe a confirmação em branco para a IA perguntar
-              direto, sem “Entendi.” a cada resposta.
-            </p>
-          </div>
-
-          <fieldset className="space-y-3">
-            <legend className="text-sm font-medium">
-              Perguntas de qualificação, na ordem em que são feitas
-            </legend>
-            {Object.entries(SCRIPT_QUESTIONS).map(([key, label], index) => (
-              <div className="space-y-1.5" key={key}>
-                <Label htmlFor={`script-q-${key}`} className="text-xs">
-                  {index + 1}. {label}
-                </Label>
-                <Input
-                  id={`script-q-${key}`}
-                  name={`q_${key}`}
-                  defaultValue={script.questions[key as ScriptQuestion]}
-                  maxLength={500}
-                  required
-                />
-              </div>
-            ))}
-          </fieldset>
-
-          <details className="rounded-xl border p-4">
-            <summary className="cursor-pointer text-sm font-medium">
-              Respostas para cada situação
-            </summary>
-            <div className="mt-4 space-y-3">
-              {Object.entries(SCRIPT_REPLIES).map(([key, label]) => (
-                <div className="space-y-1.5" key={key}>
-                  <Label htmlFor={`script-r-${key}`} className="text-xs">
-                    {label}
-                  </Label>
-                  <Textarea
-                    id={`script-r-${key}`}
-                    name={`r_${key}`}
-                    defaultValue={script.replies[key as ScriptReply]}
-                    maxLength={500}
-                    required
-                    className="min-h-16"
-                  />
-                </div>
-              ))}
-            </div>
-          </details>
-
-          <p className="text-xs text-muted-foreground">
-            Uma pergunta por mensagem. Promessas como aprovação ou quitação
-            garantida são recusadas ao salvar.
-          </p>
-
-          <FormPendingButton
-            type="submit"
-            idleLabel="Salvar mensagens"
-            pendingLabel="Salvando..."
-          />
-        </form>
-
-        <form action={restoreAction}>
-          <FormPendingButton
-            type="submit"
-            variant="outline"
-            idleLabel="Restaurar mensagens padrão"
-            pendingLabel="Restaurando..."
-          >
-            <RotateCcw className="mr-2 size-4" />
-            Restaurar mensagens padrão
-          </FormPendingButton>
-        </form>
       </CardContent>
     </Card>
   );
