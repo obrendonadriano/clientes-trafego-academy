@@ -13,6 +13,7 @@ export const SCRIPT_QUESTIONS = {
   debt_amount: "Valor que falta pagar",
   has_overdue_installments: "Parcelas em dia ou atrasadas",
   overdue_installments_count: "Quantidade de parcelas atrasadas",
+  remaining_installments: "Parcelas que faltam para quitar",
   city: "Cidade do veículo",
 } as const;
 export type ScriptQuestion = keyof typeof SCRIPT_QUESTIONS;
@@ -27,6 +28,7 @@ export const STEP_FIELDS = [
   "bank",
   "city",
   "debt_amount",
+  "remaining_installments",
   "has_overdue_installments",
 ] as const;
 export type StepField = (typeof STEP_FIELDS)[number];
@@ -38,6 +40,7 @@ export const STEP_FIELD_LABELS: Record<StepField, string> = {
   bank: "Banco",
   city: "Cidade",
   debt_amount: "Valor da dívida",
+  remaining_installments: "Parcelas restantes",
   has_overdue_installments: "Parcelas em atraso",
 };
 export type ScriptStep = { fields: StepField[]; text: string };
@@ -70,6 +73,7 @@ export const DEFAULT_SCRIPT = {
     has_overdue_installments:
       "As parcelas estão em dia ou há alguma atrasada?",
     overdue_installments_count: "Quantas parcelas estão atrasadas?",
+    remaining_installments: "Quantas parcelas faltam para quitar?",
     city: "Em qual cidade o veículo se encontra?",
   } satisfies Record<ScriptQuestion, string>,
   // Primeira mensagem da conversa, em balão separado, antes da 1ª pergunta.
@@ -85,8 +89,8 @@ export const DEFAULT_SCRIPT = {
     { fields: ["bank"], text: "Qual é o banco do financiamento?" },
     { fields: ["city"], text: "Em qual cidade o veículo se encontra?" },
     {
-      fields: ["debt_amount", "has_overdue_installments"],
-      text: "Você sabe o valor aproximado que ainda falta pagar e quantas parcelas estão em atraso?",
+      fields: ["debt_amount", "remaining_installments", "has_overdue_installments"],
+      text: "Você sabe o valor aproximado que ainda falta pagar, quantas parcelas faltam para quitar e quantas estão em atraso?",
     },
   ] as ScriptStep[] | null,
   // Mensagem para quem não se encaixa (quitado, sem veículo, fora dos

@@ -375,15 +375,23 @@ export async function advanceConversation(input: {
         runId: randomUUID(),
         startedAt,
       });
-      // Cidade não tem coluna própria: vai para extra_data da conversa.
-      if (decision.changedFields.includes("city") && typeof decision.facts.city === "string") {
+      // Cidade e parcelas restantes não têm coluna própria: extra_data.
+      const extra: Record<string, unknown> = {};
+      if (decision.changedFields.includes("city") && typeof decision.facts.city === "string")
+        extra.city = decision.facts.city;
+      if (
+        decision.changedFields.includes("remaining_installments") &&
+        typeof decision.facts.remaining_installments === "number"
+      )
+        extra.remaining_installments = decision.facts.remaining_installments;
+      if (Object.keys(extra).length) {
         try {
           await setConversationExtra(owner.clientId, conversation.id, {
             ...(conversation.extra_data ?? {}),
-            city: decision.facts.city,
+            ...extra,
           });
         } catch {
-          console.warn("[ia] city_unavailable");
+          console.warn("[ia] extra_data_unavailable");
         }
       }
       // A transição grava um motivo genérico; aqui fica o motivo real

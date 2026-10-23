@@ -1464,13 +1464,17 @@ test("roteiro padrão: nome, financiamento, modelo e ano juntos, banco, cidade, 
   p = step("Belo Horizonte");
   assert.equal(p.facts.city, "Belo Horizonte");
   assert.deepEqual(p.candidates, [[
-    "Você sabe o valor aproximado que ainda falta pagar e quantas parcelas estão em atraso?",
+    "Você sabe o valor aproximado que ainda falta pagar, quantas parcelas faltam para quitar e quantas estão em atraso?",
   ]]);
+  // Respondeu valor e atraso, mas não quantas faltam: pergunta só isso, uma vez.
   p = step("uns 30 mil e 2 parcelas atrasadas", [
     fact("debt_amount", 30000, "30 mil"),
     fact("overdue_installments_count", 2, "2 parcelas"),
   ]);
   assert.equal(p.facts.has_overdue_installments, true);
+  assert.deepEqual(p.candidates, [["Quantas parcelas faltam para quitar?"]]);
+  p = step("faltam 18");
+  assert.equal(p.facts.remaining_installments, 18);
   assert.equal(p.status, "qualified");
   assert.deepEqual(p.candidates, [[DEFAULT_SCRIPT.replies.qualified]]);
 });
@@ -1527,4 +1531,27 @@ test("roteiro: salvar valida etapas; roteiro antigo salvo ganha o padrão novo",
   assert.equal(old.notQualified.enabled, false);
   // Quem escolheu a ordem antiga (null) continua nela.
   assert.equal(knowledgeSchema.parse({ script: { steps: null } }).script.steps, null);
+});
+
+test("parcelas restantes: tudo numa resposta só e opcional sem travar", () => {
+  const known = { ...EMPTY_FACTS, name: "Gil", financed: true, vehicle: "Onix", vehicle_year: 2021, bank: "BV", city: "BH" };
+  const all = turn(
+    {
+      facts: [
+        fact("debt_amount", 30000, "30 mil"),
+        fact("remaining_installments", 18, "faltam 18"),
+        fact("has_overdue_installments", false, "tudo em dia"),
+      ],
+    },
+    { incoming: "30 mil, faltam 18 e tá tudo em dia", lastQuestion: "debt_amount+remaining_installments+has_overdue_installments", facts: known },
+  );
+  assert.equal(all.facts.remaining_installments, 18);
+  assert.equal(all.status, "qualified");
+  // Perguntado sozinho e sem resposta: segue e qualifica.
+  const skip = turn({}, {
+    incoming: "não sei dizer", lastQuestion: "remaining_installments",
+    facts: { ...known, debt_amount: 30000, has_overdue_installments: false, overdue_installments_count: 0 },
+  });
+  assert.ok(skip.unknownFields.includes("remaining_installments"));
+  assert.equal(skip.status, "qualified");
 });

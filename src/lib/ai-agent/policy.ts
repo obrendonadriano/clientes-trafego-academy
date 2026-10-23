@@ -11,6 +11,7 @@ export const FIELDS = [
   "debt_amount",
   "has_overdue_installments",
   "overdue_installments_count",
+  "remaining_installments",
 ] as const;
 export type Field = (typeof FIELDS)[number];
 export type Facts = Record<Field, string | number | boolean | null>;
@@ -455,6 +456,7 @@ function directAnswer(
     case "has_overdue_installments":
       return readOverdue(text);
     case "overdue_installments_count":
+    case "remaining_installments":
       return readCount(text);
     case "vehicle_year":
       return readYear(text);
@@ -479,6 +481,7 @@ const NUMBER_FIELDS: Field[] = [
   "vehicle_year",
   "debt_amount",
   "overdue_installments_count",
+  "remaining_installments",
 ];
 function coerceValue(field: Field, value: Facts[Field]): Facts[Field] {
   if (typeof value !== "string") return value;
@@ -538,7 +541,7 @@ function validValue(
       value <= new Date().getFullYear() + 2 &&
       yearsIn(evidence).includes(value)
     );
-  if (field === "overdue_installments_count")
+  if (field === "overdue_installments_count" || field === "remaining_installments")
     return (
       Number.isInteger(value) &&
       value <= 999 &&
@@ -707,8 +710,16 @@ export function decidePolicy(input: {
     required.push("overdue_installments_count");
   // Dado opcional do roteiro (nome, cidade...) perguntado e sem resposta:
   // segue adiante em vez de insistir.
+  // Numa pergunta com vários dados respondida só em parte, o opcional que
+  // faltou ainda é perguntado uma vez sozinho.
+  const answeredPart = askedLast.length > 1 && askedLast.some((field) => changedFields.includes(field));
   for (const field of askedLast)
-    if (!required.includes(field) && facts[field] === null && !changedFields.includes(field))
+    if (
+      !answeredPart &&
+      !required.includes(field) &&
+      facts[field] === null &&
+      !changedFields.includes(field)
+    )
       unknown.add(field);
   const pendingField = (field: Field) =>
     facts[field] === null &&
