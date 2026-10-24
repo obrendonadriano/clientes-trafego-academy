@@ -1,6 +1,7 @@
 import "server-only";
 
 import { wahaFetchJson, type WahaCredentials } from "@/lib/waha";
+import { chatCandidates } from "./event";
 
 // O WhatsApp passou a identificar muitos contatos por um id interno
 // ("123456789@lid") em vez do telefone ("5531999999999@c.us"). A IA trabalha
@@ -41,10 +42,13 @@ export async function resolveLidPayload(
   const payload = record(root.payload);
   const fromMe = payload.fromMe === true;
   const field = fromMe ? "to" : "from";
-  const chat = text(payload[field]);
+  // O contato pode vir em `to`/`from`, em _data.Info.Chat ou no ID.
+  const candidates = chatCandidates(payload, fromMe);
+  if (candidates.some((value) => /^\d{10,15}@c\.us$/.test(value))) return body;
+  const chat = candidates.find((value) => value.endsWith("@lid")) ?? "";
   const session = text(root.session);
 
-  if (!chat.endsWith("@lid") || !session) return body;
+  if (!chat || !session) return body;
 
   let phoneChat = phoneFromPayload(payload, fromMe);
 

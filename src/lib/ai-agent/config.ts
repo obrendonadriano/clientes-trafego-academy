@@ -5,6 +5,7 @@ const lines = z.array(z.string().trim().min(1).max(500)).max(30).default([]);
 // Roteiro: a IA só classifica a mensagem; o texto enviado é sempre um destes,
 // escrito pelo cliente. A ordem das perguntas segue a política de qualificação.
 export const SCRIPT_QUESTIONS = {
+  name: "Nome do lead",
   financed: "Veículo ainda financiado?",
   vehicle: "Modelo do veículo",
   vehicle_year: "Ano do veículo",
@@ -12,8 +13,38 @@ export const SCRIPT_QUESTIONS = {
   debt_amount: "Valor que falta pagar",
   has_overdue_installments: "Parcelas em dia ou atrasadas",
   overdue_installments_count: "Quantidade de parcelas atrasadas",
+  remaining_installments: "Parcelas que faltam para quitar",
+  city: "Cidade do veículo",
 } as const;
 export type ScriptQuestion = keyof typeof SCRIPT_QUESTIONS;
+
+// Dados que uma etapa do roteiro pode pedir. A quantidade de parcelas
+// atrasadas entra junto de "parcelas em dia ou atrasadas".
+export const STEP_FIELDS = [
+  "name",
+  "financed",
+  "vehicle",
+  "vehicle_year",
+  "bank",
+  "city",
+  "debt_amount",
+  "remaining_installments",
+  "has_overdue_installments",
+] as const;
+export type StepField = (typeof STEP_FIELDS)[number];
+export const STEP_FIELD_LABELS: Record<StepField, string> = {
+  name: "Nome",
+  financed: "Financiamento",
+  vehicle: "Modelo",
+  vehicle_year: "Ano",
+  bank: "Banco",
+  city: "Cidade",
+  debt_amount: "Valor da dívida",
+  remaining_installments: "Parcelas restantes",
+  has_overdue_installments: "Parcelas em atraso",
+};
+export type ScriptStep = { fields: StepField[]; text: string };
+export const MAX_SCRIPT_STEPS = 15;
 export const SCRIPT_REPLIES = {
   qualified: "Lead qualificado (todos os dados coletados)",
   price: "Pergunta sobre preço ou valor",
@@ -33,6 +64,7 @@ export const DEFAULT_SCRIPT = {
   // Vazio: a próxima pergunta vai direto, sem "Entendi." toda hora.
   acknowledge: "",
   questions: {
+    name: "Qual é o seu nome?",
     financed: "O veículo ainda está financiado?",
     vehicle: "Qual é o modelo do veículo?",
     vehicle_year: "Qual é o ano dele?",
@@ -41,7 +73,33 @@ export const DEFAULT_SCRIPT = {
     has_overdue_installments:
       "As parcelas estão em dia ou há alguma atrasada?",
     overdue_installments_count: "Quantas parcelas estão atrasadas?",
+    remaining_installments: "Quantas parcelas faltam para quitar?",
+    city: "Em qual cidade o veículo se encontra?",
   } satisfies Record<ScriptQuestion, string>,
+  // Primeira mensagem da conversa, em balão separado, antes da 1ª pergunta.
+  // {empresa} vira o nome da empresa do cliente.
+  welcome:
+    "👋 Olá! Seja bem-vindo à {empresa}. Compramos veículos financiados, mesmo com parcelas atrasadas, RENAJUD ou busca e apreensão.",
+  // Roteiro em etapas, na ordem do cliente. null = uma pergunta por dado na
+  // ordem antiga.
+  steps: [
+    { fields: ["name"], text: "Qual é o seu nome?" },
+    { fields: ["financed"], text: "O veículo ainda está financiado?" },
+    { fields: ["vehicle", "vehicle_year"], text: "Qual é o modelo e ano do veículo?" },
+    { fields: ["bank"], text: "Qual é o banco do financiamento?" },
+    { fields: ["city"], text: "Em qual cidade o veículo se encontra?" },
+    {
+      fields: ["debt_amount", "remaining_installments", "has_overdue_installments"],
+      text: "Você sabe o valor aproximado que ainda falta pagar, quantas parcelas faltam para quitar e quantas estão em atraso?",
+    },
+  ] as ScriptStep[] | null,
+  // Mensagem para quem não se encaixa (quitado, sem veículo, fora dos
+  // critérios). Vem preenchida, mas desligada: a IA fica em silêncio até o
+  // cliente ligar.
+  notQualified: {
+    enabled: false,
+    text: "Olá, [nome]! Agradecemos muito o seu contato e a confiança na {empresa}. 🙏\n\nApós analisar o seu caso, infelizmente não conseguimos prosseguir com a negociação neste momento. Isso acontece porque trabalhamos exclusivamente com veículos com prestações atrasadas ou risco de busca e apreensão.\n\nNosso modelo funciona assim:\n🚗 Compramos o financiamento do veículo\n💰 Quitamos a dívida com o banco\n✅ O cliente limpa o nome sem pagar mais nada\n\nSe você conhecer alguém que esteja com carro ou moto com prestações atrasadas ou em risco de busca e apreensão, pode indicar a {empresa}. Resolvemos o problema de forma rápida, sigilosa e sem burocracia.\n\nQualquer dúvida, estamos à disposição. Tudo de bom! 🍀",
+  },
   replies: {
     qualified:
       "Maravilha! Vou passar para a nossa equipe terminar a negociação aqui com você. Aguarde um instante, por gentileza.",
@@ -112,12 +170,39 @@ function dropLegacyReplies(value: unknown) {
   return { ...script, replies, ...(legacyAck ? { acknowledge: "" } : {}) };
 }
 
+const stepSchema = z.object({
+  fields: z.array(z.enum(STEP_FIELDS)).min(1).max(STEP_FIELDS.length),
+  text: z.string().trim().min(1).max(500),
+});
+
 export const scriptSchema = z
   .preprocess(dropLegacyReplies, z.object({
     greeting: prefixText(DEFAULT_SCRIPT.greeting),
     acknowledge: prefixText(DEFAULT_SCRIPT.acknowledge),
     questions: textGroup(DEFAULT_SCRIPT.questions),
     replies: textGroup(DEFAULT_SCRIPT.replies),
+    // Campo ausente (roteiro salvo antes desta versão) recebe o padrão;
+    // valor inválido volta ao padrão também.
+    welcome: z
+      .string()
+      .trim()
+      .max(1000)
+      .default(DEFAULT_SCRIPT.welcome)
+      .catch(DEFAULT_SCRIPT.welcome),
+    steps: z
+      .array(stepSchema)
+      .min(1)
+      .max(MAX_SCRIPT_STEPS)
+      .nullable()
+      .default(() => DEFAULT_SCRIPT.steps)
+      .catch(() => DEFAULT_SCRIPT.steps),
+    notQualified: z
+      .object({
+        enabled: z.boolean().catch(false),
+        text: z.string().trim().max(1500).catch(DEFAULT_SCRIPT.notQualified.text),
+      })
+      .default(() => DEFAULT_SCRIPT.notQualified)
+      .catch(() => DEFAULT_SCRIPT.notQualified),
   }))
   .catch(() => DEFAULT_SCRIPT);
 
@@ -139,6 +224,46 @@ export function checkScriptInput(script: AiScript): string | null {
   for (const prefix of [script.greeting, script.acknowledge]) {
     if (prefix.length > 80 || prefix.includes("?"))
       return "Saudação e confirmação: até 80 caracteres e sem ponto de interrogação.";
+  }
+  const longTexts: [string, string, number][] = [
+    ["Boas-vindas", script.welcome ?? "", 1000],
+    [
+      "Mensagem de não qualificação",
+      script.notQualified?.enabled ? script.notQualified.text : "",
+      1500,
+    ],
+  ];
+  for (const [label, text, max] of longTexts) {
+    if (text.length > max) return `${label}: até ${max} caracteres.`;
+    if ((text.match(/\?/g)?.length ?? 0) > 1)
+      return `${label}: use no máximo uma pergunta.`;
+    if (FORBIDDEN_CLAIM.test(fold(text)))
+      return `${label}: tem promessa ou afirmação não permitida.`;
+  }
+  if (script.notQualified?.enabled && !script.notQualified.text.trim())
+    return "Escreva a mensagem de não qualificação ou desligue o envio.";
+  if (script.steps) {
+    if (!script.steps.length || script.steps.length > MAX_SCRIPT_STEPS)
+      return `O roteiro precisa de 1 a ${MAX_SCRIPT_STEPS} perguntas.`;
+    const seen = new Set<string>();
+    for (const [index, step] of script.steps.entries()) {
+      if (!step.fields.length)
+        return `Pergunta ${index + 1}: marque pelo menos um dado que ela pede.`;
+      for (const field of step.fields) {
+        if (seen.has(field))
+          return `O dado "${STEP_FIELD_LABELS[field]}" aparece em mais de uma pergunta.`;
+        seen.add(field);
+      }
+      if (!step.text.trim() || step.text.length > 500)
+        return `Pergunta ${index + 1}: escreva o texto (até 500 caracteres).`;
+      if ((step.text.match(/\?/g)?.length ?? 0) > 1)
+        return `Pergunta ${index + 1}: use no máximo um ponto de interrogação.`;
+      if (FORBIDDEN_CLAIM.test(fold(step.text)))
+        return `Pergunta ${index + 1}: tem promessa ou afirmação não permitida.`;
+    }
+    for (const required of ["financed", "vehicle"] as const)
+      if (!seen.has(required))
+        return `O roteiro precisa perguntar "${STEP_FIELD_LABELS[required]}".`;
   }
   const texts = [
     ...Object.values(script.questions),

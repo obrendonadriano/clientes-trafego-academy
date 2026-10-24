@@ -197,6 +197,57 @@ export async function deleteConversation(
   }
 }
 
+/**
+ * Conversas paradas: mensagem recebida (ou resposta na fila) e nenhum
+ * avanço há mais de `olderThanMs`. A varredura do webhook retoma estas.
+ */
+export async function listStalledConversations(clientId: string, olderThanMs = 60_000) {
+  const before = new Date(Date.now() - olderThanMs).toISOString();
+  const { data, error } = await aiAdminClient()
+    .from("ai_conversations")
+    .select("id, chat_id, extra_data, processing_state")
+    .eq("client_id", clientId)
+    .eq("human_takeover", false)
+    .in("processing_state", ["debouncing", "generating", "typing"])
+    .lt("last_inbound_at", before)
+    .limit(20);
+
+  if (error || !data?.length) return [];
+
+  const rows = data as {
+    id: string;
+    chat_id: string;
+    extra_data: Record<string, unknown> | null;
+    processing_state: string;
+  }[];
+  const { data: pending } = await aiAdminClient()
+    .from("ai_messages")
+    .select("conversation_id")
+    .in("conversation_id", rows.map((row) => row.id))
+    .in("status", ["received", "queued", "typing"]);
+  const withWork = new Set(
+    ((pending as { conversation_id: string }[] | null) ?? []).map((row) => row.conversation_id),
+  );
+  return rows.filter((row) => withWork.has(row.id));
+}
+
+/** Dados extras da conversa (ex.: cidade), sem coluna própria. */
+export async function setConversationExtra(
+  clientId: string,
+  conversationId: string,
+  extra: Record<string, unknown>,
+) {
+  const { error } = await aiAdminClient()
+    .from("ai_conversations")
+    .update({ extra_data: extra })
+    .eq("client_id", clientId)
+    .eq("id", conversationId);
+
+  if (error) {
+    throw new AiAgentError("Não foi possível salvar os dados extras.");
+  }
+}
+
 /** Motivo legível da desqualificação, exibido no painel de leads. */
 export async function setDisqualificationReason(
   clientId: string,

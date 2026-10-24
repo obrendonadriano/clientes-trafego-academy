@@ -34,6 +34,8 @@ import {
   updateBlockedNumber,
 } from "@/lib/ai-agent/blocked";
 import {
+  STEP_FIELDS,
+  type StepField,
   DEFAULT_ACTIVATION,
   DEFAULT_PROFILE,
   MAX_ACTIVATION_PHRASES,
@@ -537,6 +539,28 @@ export async function saveAiScheduleAction(
 // Roteiro de mensagens (a IA só escolhe qual delas enviar)
 // ---------------------------------------------------------------------------
 
+/** Roteiro em etapas, enviado pela tela como JSON. Vazio = ordem padrão. */
+function readSteps(raw: FormDataEntryValue | null): AiScript["steps"] {
+  const text = String(raw ?? "").trim();
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (!Array.isArray(parsed) || !parsed.length) return null;
+    return parsed.map((step) => {
+      const value = (step ?? {}) as { fields?: unknown; text?: unknown };
+      return {
+        fields: (Array.isArray(value.fields) ? value.fields : []).filter(
+          (field): field is StepField =>
+            typeof field === "string" && (STEP_FIELDS as readonly string[]).includes(field),
+        ),
+        text: String(value.text ?? "").trim(),
+      };
+    });
+  } catch {
+    return null;
+  }
+}
+
 export async function saveAiScriptAction(
   _previous: AiAgentActionState,
   formData: FormData,
@@ -553,6 +577,12 @@ export async function saveAiScriptAction(
       replies: Object.fromEntries(
         Object.keys(SCRIPT_REPLIES).map((key) => [key, read(`r_${key}`)]),
       ) as AiScript["replies"],
+      welcome: read("welcome"),
+      steps: readSteps(formData.get("steps")),
+      notQualified: {
+        enabled: formData.get("notQualifiedEnabled") === "on",
+        text: read("notQualifiedText"),
+      },
     };
     const problem = checkScriptInput(script);
     if (problem) return { error: problem };

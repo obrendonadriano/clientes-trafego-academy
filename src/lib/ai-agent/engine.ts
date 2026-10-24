@@ -4,7 +4,11 @@ import {
   getDeepseekRuntimeConfig,
 } from "@/lib/services/deepseek";
 import { formatBrazilianWhatsapp, type AiAgentSettings } from "./shared";
-import { type ConversationRow, getRecentMessages } from "./store";
+import {
+  type ConversationRow,
+  getClientCompanyName,
+  getRecentMessages,
+} from "./store";
 import {
   extractionSchema,
   decidePolicy,
@@ -41,7 +45,18 @@ export async function runConversationTurn(input: {
   const history = await getRecentMessages(conversation.id, 12);
   const facts: Facts = { ...EMPTY_FACTS };
   for (const field of FIELDS) {
-    const value = conversation[field];
+    // Cidade e parcelas restantes não têm coluna própria: ficam em extra_data.
+    const extra = conversation.extra_data ?? {};
+    const value =
+      field === "city"
+        ? typeof extra.city === "string"
+          ? extra.city
+          : null
+        : field === "remaining_installments"
+          ? typeof extra.remaining_installments === "number"
+            ? extra.remaining_installments
+            : null
+          : conversation[field];
     facts[field] =
       field === "debt_amount" && value !== null ? Number(value) : value;
   }
@@ -66,7 +81,8 @@ O lead escreve em português informal do Brasil, com gíria, abreviação (vc, t
 - has_overdue_installments=false: "tudo em dia", "certinho", "nenhuma atrasada". true: "2 atrasadas", "tô devendo 3", "atrasei uma" (e overdue_installments_count quando houver número).
 Nunca produza resposta nem status de lead. Formato JSON exato:
 {"facts":[{"field":"vehicle","value":"Corolla","evidence":"Corolla","correction":false}],"unknown_fields":[{"field":"bank","evidence":"não sei o banco"}],"intent":"qualification","human_requested":false,"confidence":0.95,"faq_index":null}
-Campos: ${FIELDS.join(", ")}. Intents: qualification,greeting,documents,price,approval,company,hours,regions,bot,human,off_topic,buys,does_not_buy,rules,facts,no_vehicle.
+Campos: ${FIELDS.join(", ")}. city = cidade onde o veículo está. remaining_installments = quantas parcelas FALTAM para quitar o financiamento (número); não confunda com overdue_installments_count, que são as parcelas ATRASADAS. last_question pode trazer vários campos separados por "+" quando a pergunta pediu mais de um dado (ex.: "vehicle+vehicle_year" para "modelo e ano"); extraia todos os que a resposta trouxer.
+Intents: qualification,greeting,documents,price,approval,company,hours,regions,bot,human,off_topic,buys,does_not_buy,rules,facts,no_vehicle.
 no_vehicle: a pessoa diz explicitamente que não tem veículo (ex.: "não tenho carro", "ainda vou comprar"). Veículo quitado não é no_vehicle: use o fato financed=false.
 buys/does_not_buy indicam perguntas sobre o que a empresa compra; rules são condições comerciais gerais; facts são outras informações cadastradas. Nunca extraia fatos do lead a partir da base da empresa.`,
         },
@@ -103,6 +119,10 @@ buys/does_not_buy indicam perguntas sobre o que a empresa compra; rules são con
     lastQuestion: conversation.last_question,
     media,
     mediaOnly: media !== "text" && !hasText,
+    // "{empresa}": nome nas informações da IA ou, sem ele, o do cadastro.
+    companyName:
+      settings.knowledge.company?.trim() ||
+      (await getClientCompanyName(settings.clientId).catch(() => null)),
   });
   // A IA só interpreta (extração acima). O texto enviado é o do roteiro que a
   // política escolheu; não há segunda chamada ao modelo para redigir.
@@ -166,6 +186,9 @@ export function buildQualifiedLeadNotification(
     `WhatsApp: ${phone}`,
     "",
     `🚗 Veículo: ${orNotInformed(conversation.vehicle)}`,
+    ...(typeof conversation.extra_data?.city === "string" && conversation.extra_data.city
+      ? [`📍 Cidade: ${conversation.extra_data.city}`]
+      : []),
     `📅 Ano: ${orNotInformed(conversation.vehicle_year)}`,
     `🏦 Banco: ${orNotInformed(conversation.bank)}`,
     `💰 Dívida aproximada: ${formatCurrencyBRL(
@@ -173,6 +196,9 @@ export function buildQualifiedLeadNotification(
         ? null
         : Number(conversation.debt_amount),
     )}`,
+    ...(typeof conversation.extra_data?.remaining_installments === "number"
+      ? [`📆 Parcelas restantes: ${conversation.extra_data.remaining_installments}`]
+      : []),
     `⚠️ Parcelas atrasadas: ${overdue}`,
   );
 

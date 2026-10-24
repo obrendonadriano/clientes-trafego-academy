@@ -185,6 +185,8 @@ async function runtime() {
     knowledge: {
       ...EMPTY_KNOWLEDGE,
       activation: { ...EMPTY_KNOWLEDGE.activation, enabled: false },
+      // Ordem antiga (uma pergunta por dado); o roteiro em etapas tem teste próprio.
+      script: { ...EMPTY_KNOWLEDGE.script, steps: null, welcome: "" },
     },
   };
   const all = async (query, args = []) => (await db.query(query, args)).rows;
@@ -209,6 +211,19 @@ async function runtime() {
     getAiAgentSettings: async () => settings,
     getClientPlan: async () => "complete",
     getClientSegment: async () => state.segment ?? "veiculo_atrasado",
+    getClientCompanyName: async () => state.company ?? null,
+    // Mesmo filtro da store: parada há mais de 1 min com mensagem pendente.
+    listStalledConversations: (client) =>
+      all(
+        `select c.id, c.chat_id, c.extra_data, c.processing_state from ai_conversations c
+          where c.client_id=$1 and not c.human_takeover
+            and c.processing_state in ('debouncing','generating','typing')
+            and c.last_inbound_at < now()-interval '60 seconds'
+            and exists (select 1 from ai_messages m where m.conversation_id=c.id and m.status in ('received','queued','typing'))`,
+        [client],
+      ),
+    setConversationExtra: (client, id, extra) =>
+      db.query("update ai_conversations set extra_data=$3 where client_id=$1 and id=$2", [client, id, JSON.stringify(extra)]),
     setDisqualificationReason: (client, id, reason) =>
       db.query(
         "update ai_conversations set disqualification_reason=$3 where client_id=$1 and id=$2 and status='disqualified'",
@@ -365,6 +380,7 @@ async function runtime() {
     messages,
     expireDelay,
     tx,
+    pipeline,
     client: A,
   };
 }
@@ -482,6 +498,47 @@ test("Pipeline real com WAHA/DeepSeek simulados", async (t) => {
         assert.notEqual(fresh.id, before.id);
         assert.equal(fresh.last_question, null);
         assert.equal(fresh.status, "new");
+      } finally {
+        await r.db.close();
+      }
+    },
+  );
+  await t.test(
+    "roteiro padrão: boas-vindas e 1ª pergunta em dois balões; cidade gravada",
+    async () => {
+      const r = await runtime();
+      try {
+        r.settings.knowledge.script = EMPTY_KNOWLEDGE.script;
+        r.state.company = "Bergautocar";
+        await r.ingest("s1", "Olá! Quero fazer uma avaliação do meu veículo.");
+        await r.step();
+        for (let i = 0; i < 4; i += 1) {
+          await r.expireDelay();
+          await r.step();
+        }
+        assert.deepEqual(
+          r.state.sent.map((m) => m.text),
+          [
+            "👋 Olá! Seja bem-vindo à Bergautocar. Compramos veículos financiados, mesmo com parcelas atrasadas, RENAJUD ou busca e apreensão.",
+            "Qual é o seu nome?",
+          ],
+        );
+        assert.equal((await r.conversation()).last_question, "name");
+
+        // Responde a cidade quando ela é perguntada: vai para extra_data.
+        await r.db.query("update ai_conversations set name='Gil', financed=true, vehicle='Onix', vehicle_year=2021, bank='BV', last_question='city'");
+        r.state.responses = [
+          { facts: [], unknown_fields: [], intent: "qualification", human_requested: false, confidence: 0.9, faq_index: null },
+        ];
+        await r.ingest("s2", "Belo Horizonte");
+        await r.step();
+        for (let i = 0; i < 3; i += 1) {
+          await r.expireDelay();
+          await r.step();
+        }
+        const c = await r.conversation();
+        assert.equal(c.extra_data.city, "Belo Horizonte");
+        assert.match(r.state.sent.at(-1).text, /valor aproximado/);
       } finally {
         await r.db.close();
       }
@@ -719,38 +776,132 @@ test("Pipeline real com WAHA/DeepSeek simulados", async (t) => {
       }
     },
   );
-  for (const failure of ["timeout", 429, 401, "invalid-json"])
+  const failWith = (failure) =>
+    failure === "timeout"
+      ? [
+          new DOMException("timeout", "TimeoutError"),
+          new DOMException("timeout", "TimeoutError"),
+          new DOMException("timeout", "TimeoutError"),
+        ]
+      : failure === "invalid-json"
+        ? ["{wrong"]
+        : [failure, failure, failure];
+  const retryOf = async (r) => (await r.conversation()).extra_data?.ai_retry ?? null;
+  // Simula a passagem do intervalo de espera.
+  const elapse = (r) =>
+    r.db.query(
+      "update ai_conversations set extra_data=jsonb_set(extra_data,'{ai_retry,next_at}',to_jsonb((now()-interval '1 second')::text))",
+    );
+  await t.test(
+    "401: falha sem nova tentativa preserva inbound e encerra digitando",
+    async () => {
+      const r = await runtime();
+      try {
+        await r.ingest("a");
+        r.state.responses = failWith(401);
+        await r.step();
+        const c = await r.conversation();
+        assert.equal(c.processing_state, "error");
+        assert.equal(c.human_takeover, true);
+        assert.equal((await r.messages())[0].status, "processing_failed");
+        assert.equal(r.state.presence.at(-1), false);
+        assert.equal(r.state.requests.length, 1);
+      } finally {
+        await r.db.close();
+      }
+    },
+  );
+  for (const failure of ["timeout", 429, "invalid-json"])
     await t.test(
-      `${failure}: falha visível preserva inbound e encerra digitando`,
+      `${failure}: entra na fila, espera e responde na nova tentativa`,
       async () => {
         const r = await runtime();
         try {
           await r.ingest("a");
-          r.state.responses =
-            failure === "timeout"
-              ? [
-                  new DOMException("timeout", "TimeoutError"),
-                  new DOMException("timeout", "TimeoutError"),
-                  new DOMException("timeout", "TimeoutError"),
-                ]
-              : failure === "invalid-json"
-                ? ["{wrong"]
-                : [failure, failure, failure];
+          r.state.responses = failWith(failure);
           await r.step();
-          const c = await r.conversation();
-          assert.equal(c.processing_state, "error");
-          assert.equal(c.human_takeover, true);
-          assert.equal((await r.messages())[0].status, "processing_failed");
+          let c = await r.conversation();
+          assert.equal(c.human_takeover, false);
+          assert.notEqual(c.processing_state, "error");
+          assert.equal((await r.messages())[0].status, "received");
           assert.equal(r.state.presence.at(-1), false);
-          assert.equal(
-            r.state.requests.length,
-            [401, "invalid-json"].includes(failure) ? 1 : 3,
-          );
+          const retry = await retryOf(r);
+          assert.equal(retry.count, 1);
+          assert.equal(retry.waiting, true);
+          assert.ok(Date.parse(retry.next_at) > Date.now() + 50_000);
+
+          // Antes do intervalo: só espera, sem chamar o modelo.
+          const requests = r.state.requests.length;
+          const waiting = await r.step();
+          assert.equal(waiting.acao, "aguardar");
+          assert.equal(waiting.esperarMs, 30_000);
+          assert.equal(r.state.requests.length, requests);
+
+          // Passou o intervalo: tenta de novo, responde e limpa a fila.
+          await elapse(r);
+          await r.step();
+          assert.equal((await r.messages())[0].status, "processed");
+          assert.equal((await r.messages()).filter((m) => m.status === "queued").length, 1);
+          c = await r.conversation();
+          assert.equal(c.human_takeover, false);
+          assert.equal(await retryOf(r), null);
         } finally {
           await r.db.close();
         }
       },
     );
+  await t.test(
+    "tentativas esgotadas: passa para a equipe com o erro visível",
+    async () => {
+      const r = await runtime();
+      try {
+        await r.ingest("a");
+        for (let attempt = 1; attempt <= 3; attempt += 1) {
+          r.state.responses = failWith(429);
+          await r.step();
+          assert.equal((await retryOf(r)).count, attempt);
+          assert.equal((await r.conversation()).human_takeover, false);
+          await elapse(r);
+        }
+        r.state.responses = failWith(429);
+        await r.step();
+        const c = await r.conversation();
+        assert.equal(c.processing_state, "error");
+        assert.equal(c.human_takeover, true);
+        assert.equal((await r.messages())[0].status, "processing_failed");
+      } finally {
+        await r.db.close();
+      }
+    },
+  );
+  await t.test(
+    "varredura retoma conversa parada e respeita o intervalo",
+    async () => {
+      const r = await runtime();
+      try {
+        // Mensagem gravada, mas o passo seguinte nunca rodou.
+        await r.ingest("a");
+        assert.deepEqual(await r.pipeline.findStalledChats("test"), []);
+        await r.db.query(
+          "update ai_conversations set last_inbound_at=now()-interval '5 minutes'",
+        );
+        r.pipeline.resetSweepThrottle();
+        assert.deepEqual(await r.pipeline.findStalledChats("test"), ["5511999999999@c.us"]);
+        const retry = await retryOf(r);
+        assert.equal(retry.count, 1);
+        assert.equal(retry.waiting, false);
+        // Logo depois: não retoma de novo (intervalo e limite por sessão).
+        r.pipeline.resetSweepThrottle();
+        assert.deepEqual(await r.pipeline.findStalledChats("test"), []);
+        // A retomada responde normalmente e limpa o registro.
+        await r.step();
+        assert.equal((await r.messages()).filter((m) => m.status === "queued").length, 1);
+        assert.equal(await retryOf(r), null);
+      } finally {
+        await r.db.close();
+      }
+    },
+  );
   await t.test(
     "transiente recuperado usa a mesma entrada e não produz duplicata",
     async () => {
@@ -980,6 +1131,30 @@ test("contato @lid vira o telefone real antes da leitura", async () => {
   assert.equal(parseIncomingEvent(await resolveLidPayload(body("123@lid"), credentials)), null);
   const plain = body("5511912345678@c.us");
   assert.equal(await resolveLidPayload(plain, credentials), plain);
+
+
+  // Resposta da equipe pelo celular (fromMe) sem "to": o chat vem do
+  // Info.Chat ou do próprio ID da mensagem, para a IA pausar.
+  const echo = (payload) => ({ event: "message.any", session: "s", payload });
+  const viaInfo = parseIncomingEvent(
+    echo({
+      id: "m2",
+      fromMe: true,
+      body: "Oi, aqui é da equipe",
+      _data: { Info: { Chat: "5511912345678@s.whatsapp.net", IsFromMe: true } },
+    }),
+  );
+  assert.equal(viaInfo.chatId, "5511912345678@c.us");
+  assert.equal(viaInfo.fromMe, true);
+  const viaId = parseIncomingEvent(
+    echo({ id: "true_5511912345678@c.us_3EB0ABC", fromMe: true, body: "ok" }),
+  );
+  assert.equal(viaId.chatId, "5511912345678@c.us");
+  // Grupo continua fora.
+  assert.equal(
+    parseIncomingEvent(echo({ id: "m3", fromMe: true, to: "120363@g.us", body: "x" })),
+    null,
+  );
 });
 
 test("notificação marca o lead para análise manual quando o veículo está abaixo do mínimo", () => {

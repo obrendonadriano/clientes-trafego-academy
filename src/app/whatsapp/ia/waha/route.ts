@@ -3,6 +3,7 @@ import { z } from "zod";
 import { AI_WEBHOOK_PATH, appUrl } from "@/lib/app-url";
 import {
   authenticateAiWebhook,
+  findStalledChats,
   ingestInboundEvent,
   parseIncomingEvent,
 } from "@/lib/ai-agent/pipeline";
@@ -37,6 +38,11 @@ function describeUnparsed(body: unknown) {
     evento: typeof root.event === "string" ? root.event : null,
     sufixoChat: chat.includes("@") ? chat.slice(chat.indexOf("@")) : null,
     temSessao: typeof root.session === "string",
+    // Só os nomes dos campos, para saber onde o WAHA pôs o chat.
+    campos: Object.keys(payload).slice(0, 30),
+    camposInfo: Object.keys(
+      ((payload._data as Record<string, unknown> | undefined)?.Info ?? {}) as object,
+    ).slice(0, 30),
   };
 }
 
@@ -46,38 +52,60 @@ export async function POST(request: Request) {
     const body: unknown = await request.json();
     const selfUrl = appUrl(request, AI_WEBHOOK_PATH);
 
-    const startLoop = (
+    const runLoop = (
       step: Awaited<ReturnType<typeof ingestInboundEvent>>,
       hop: number,
     ) =>
-      after(() =>
-        runConversationLoop(step, {
-          hop,
-          // Passou do orçamento desta função: segue numa nova invocação.
-          continueAt: async (next, nextHop) => {
-            const response = await fetch(selfUrl, {
-              method: "POST",
-              headers: {
-                "content-type": "application/json",
-                "x-trafegoacademy-secret": config.webhookSecret,
+      runConversationLoop(step, {
+        hop,
+        // Passou do orçamento desta função: segue numa nova invocação.
+        continueAt: async (next, nextHop) => {
+          const response = await fetch(selfUrl, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-trafegoacademy-secret": config.webhookSecret,
+            },
+            body: JSON.stringify({
+              continuar: {
+                sessionName: next.sessionName,
+                chatId: next.chatId,
+                esperarMs: next.esperarMs,
+                hop: nextHop,
               },
-              body: JSON.stringify({
-                continuar: {
-                  sessionName: next.sessionName,
-                  chatId: next.chatId,
-                  esperarMs: next.esperarMs,
-                  hop: nextHop,
-                },
-              }),
+            }),
+          });
+          if (!response.ok) {
+            console.error("[ia/waha] continuação recusada", {
+              status: response.status,
             });
-            if (!response.ok) {
-              console.error("[ia/waha] continuação recusada", {
-                status: response.status,
-              });
-            }
-          },
-        }),
-      );
+          }
+        },
+      });
+    const startLoop = (
+      step: Awaited<ReturnType<typeof ingestInboundEvent>>,
+      hop: number,
+    ) => after(() => runLoop(step, hop));
+
+    // Rede de segurança: a cada webhook desta sessão (no máximo a cada 30 s),
+    // retoma conversas que ficaram sem resposta por erro ou função encerrada.
+    const sweep = (sessionName: unknown) => {
+      if (typeof sessionName !== "string" || !sessionName) return;
+      after(async () => {
+        try {
+          const chats = await findStalledChats(sessionName);
+          await Promise.all(
+            chats.map((chatId) =>
+              runLoop({ acao: "aguardar", sessionName, chatId, esperarMs: 0 }, 0),
+            ),
+          );
+        } catch (error) {
+          console.error("[ia/waha] varredura falhou", {
+            message: error instanceof Error ? error.message : "erro desconhecido",
+          });
+        }
+      });
+    };
 
     const continuation =
       body && typeof body === "object" && "continuar" in body
@@ -90,8 +118,11 @@ export async function POST(request: Request) {
       }
       const { hop, ...step } = continuation.data;
       startLoop({ acao: "aguardar", ...step }, hop);
+      sweep(step.sessionName);
       return Response.json({ ok: true }, { status: 202 });
     }
+
+    sweep((body as { session?: unknown } | null)?.session);
 
     // Contato identificado por @lid vira o telefone real antes da leitura.
     const event = parseIncomingEvent(await resolveLidPayload(body, config));
