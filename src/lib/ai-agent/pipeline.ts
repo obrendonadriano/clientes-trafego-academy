@@ -21,12 +21,14 @@ import {
   offHoursReply,
 } from "./policy";
 import { hasAiAttendanceSegment } from "@/lib/segments";
+import { DeepseekError } from "@/lib/services/deepseek";
 import {
   AiAgentError,
   findSessionOwner,
   getAiAgentSettings,
   getClientPlan,
   getClientSegment,
+  listStalledConversations,
   setConversationExtra,
   setDisqualificationReason,
   findConversation,
@@ -41,6 +43,89 @@ export const ATTENDANCE_CLOSED = "closed";
 // Quitado/fora do perfil não recebe mensagem, então só o qualificado encerra
 // por aqui; o desqualificado é encerrado pelo próprio status.
 const CLOSING_REASONS = new Set(["policy_qualified"]);
+
+// ---------------------------------------------------------------------------
+// Fila de nova tentativa
+// ---------------------------------------------------------------------------
+// Erro temporário (DeepSeek fora, limite, rede, resposta ilegível) ou passo
+// que nunca rodou (função encerrada): a mensagem fica "received" e a conversa
+// é retomada depois, em 1, 3 e 10 minutos. Esgotadas as tentativas, passa
+// para a equipe com o erro visível. O controle fica em extra_data.ai_retry.
+export const RETRY_BACKOFF_MS = [60_000, 180_000, 600_000];
+
+export type RetryState = {
+  count: number;
+  next_at: string | null;
+  reason: string | null;
+  /** true: errou e espera next_at para tentar de novo. */
+  waiting: boolean;
+};
+
+export function readRetry(extra: Record<string, unknown> | null | undefined): RetryState {
+  const raw = (extra?.ai_retry ?? {}) as Partial<RetryState>;
+  return {
+    count: typeof raw.count === "number" && raw.count >= 0 ? raw.count : 0,
+    next_at: typeof raw.next_at === "string" ? raw.next_at : null,
+    reason: typeof raw.reason === "string" ? raw.reason : null,
+    waiting: raw.waiting === true,
+  };
+}
+
+function backoffFor(count: number) {
+  return RETRY_BACKOFF_MS[Math.min(count, RETRY_BACKOFF_MS.length - 1)];
+}
+
+/** Chave inválida, sem saldo, configuração: esperar não resolve. */
+function isRetryableTurnError(error: unknown) {
+  if (error instanceof DeepseekError) return error.retryable;
+  return true;
+}
+
+// Uma varredura por sessão a cada 30 s por instância: o webhook do WAHA chega
+// várias vezes por minuto (grupos, status) e não precisa consultar sempre.
+const sweptAt = new Map<string, number>();
+/** Só para testes. */
+export function resetSweepThrottle() {
+  sweptAt.clear();
+}
+
+/**
+ * Conversas paradas deste WhatsApp que já podem ser retomadas. Cada retomada
+ * conta uma tentativa; a próxima fica agendada caso esta também pare.
+ */
+export async function findStalledChats(sessionName: string): Promise<string[]> {
+  const now = Date.now();
+  if (now - (sweptAt.get(sessionName) ?? 0) < 30_000) return [];
+  sweptAt.set(sessionName, now);
+
+  const owner = await findSessionOwner(sessionName);
+  if (!owner || owner.status !== "WORKING") return [];
+  const settings = await getAiAgentSettings(owner.clientId);
+  if (!settings?.enabled) return [];
+
+  const chats: string[] = [];
+  for (const row of await listStalledConversations(owner.clientId)) {
+    const retry = readRetry(row.extra_data);
+    if (retry.next_at && Date.parse(retry.next_at) > now) continue;
+    // Esperando nova tentativa e a função morreu: só retoma (a tentativa já
+    // foi contada). Parada sem erro (passo que nunca rodou): conta uma.
+    await setConversationExtra(owner.clientId, row.id, {
+      ...(row.extra_data ?? {}),
+      ai_retry: {
+        count: retry.waiting ? retry.count : retry.count + 1,
+        next_at: new Date(now + backoffFor(retry.count)).toISOString(),
+        reason: retry.reason ?? "parada",
+        waiting: false,
+      },
+    });
+    console.warn("[ia] retomando conversa parada", {
+      tentativa: retry.count + 1,
+      motivo: retry.reason ?? "parada",
+    });
+    chats.push(row.chat_id);
+  }
+  return chats;
+}
 
 /** Encerrado e sem "Retomar IA" depois da mensagem final. */
 function isAttendanceClosed(conversation: {
@@ -206,6 +291,7 @@ export async function advanceConversation(input: {
   try {
     const conversation = await findConversationById(owner.clientId, initial.id);
     if (!conversation || conversation.human_takeover) return end();
+    const retry = readRetry(conversation.extra_data);
     // Bloqueado no meio da conversa: cancela o que estava na fila e consome
     // as mensagens recebidas sem responder.
     if (await isNumberBlocked(owner.clientId, number)) {
@@ -338,6 +424,18 @@ export async function advanceConversation(input: {
       });
       return wait(sessionName, chatId, 500);
     }
+    // Erro anterior: espera o intervalo antes de tentar de novo.
+    if (retry.waiting && retry.next_at) {
+      const remaining = Date.parse(retry.next_at) - Date.now();
+      if (remaining > 0) return wait(sessionName, chatId, Math.min(remaining, 30_000));
+    }
+    // Tentativas esgotadas: para de insistir e passa para a equipe.
+    if (retry.count > RETRY_BACKOFF_MS.length) {
+      console.warn("[ia] tentativas esgotadas", { motivo: retry.reason });
+      await tx("fail");
+      await typing(sessionName, chatId, false);
+      return end();
+    }
     if (!(await tx("generating")).ok) return wait(sessionName, chatId, 500);
     if (settings.typingEnabled) await typing(sessionName, chatId, true);
     try {
@@ -384,12 +482,16 @@ export async function advanceConversation(input: {
         typeof decision.facts.remaining_installments === "number"
       )
         extra.remaining_installments = decision.facts.remaining_installments;
-      if (Object.keys(extra).length) {
+      // Resposta pronta: some o registro de tentativas.
+      const hadRetry = Boolean(conversation.extra_data && "ai_retry" in conversation.extra_data);
+      if (Object.keys(extra).length || hadRetry) {
+        const next: Record<string, unknown> = {
+          ...(conversation.extra_data ?? {}),
+          ...extra,
+        };
+        delete next.ai_retry;
         try {
-          await setConversationExtra(owner.clientId, conversation.id, {
-            ...(conversation.extra_data ?? {}),
-            ...extra,
-          });
+          await setConversationExtra(owner.clientId, conversation.id, next);
         } catch {
           console.warn("[ia] extra_data_unavailable");
         }
@@ -407,8 +509,28 @@ export async function advanceConversation(input: {
           console.warn("[ia] disqualification_reason_unavailable");
         }
       }
-    } catch {
-      await tx("fail");
+    } catch (error) {
+      const reason = error instanceof Error ? error.message.slice(0, 120) : "erro desconhecido";
+      // Erro temporário: a mensagem continua "received" e entra na fila.
+      if (isRetryableTurnError(error) && retry.count < RETRY_BACKOFF_MS.length) {
+        try {
+          await setConversationExtra(owner.clientId, conversation.id, {
+            ...(conversation.extra_data ?? {}),
+            ai_retry: {
+              count: retry.count + 1,
+              next_at: new Date(Date.now() + backoffFor(retry.count)).toISOString(),
+              reason,
+              waiting: true,
+            },
+          });
+          console.warn("[ia] nova tentativa agendada", { tentativa: retry.count + 1, motivo: reason });
+        } catch {
+          await tx("fail");
+        }
+      } else {
+        console.error("[ia] falha sem nova tentativa", { motivo: reason });
+        await tx("fail");
+      }
     } finally {
       await typing(sessionName, chatId, false);
     }

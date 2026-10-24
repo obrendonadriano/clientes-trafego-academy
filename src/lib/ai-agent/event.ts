@@ -12,6 +12,32 @@ export type IncomingEvent = {
 const record = (v: unknown): Record<string, unknown> =>
   v && typeof v === "object" ? (v as Record<string, unknown>) : {};
 const text = (v: unknown) => (typeof v === "string" ? v : "");
+
+/** "5511...@s.whatsapp.net" (GOWS interno) vira "5511...@c.us". */
+const asChat = (v: unknown) =>
+  text(v).replace(/^(\d{10,15})@s\.whatsapp\.net$/, "$1@c.us");
+
+/**
+ * Onde o contato pode vir. Mensagem enviada pelo próprio celular (fromMe)
+ * nem sempre traz `to`: o GOWS manda o chat em _data.Info.Chat e o ID da
+ * mensagem embute o contato ("true_5511...@c.us_ABC").
+ */
+export function chatCandidates(payload: Record<string, unknown>, fromMe: boolean) {
+  const data = record(payload._data);
+  const info = record(data.Info);
+  const key = record(data.key);
+  const id = payload.id;
+  const idText = text(id) || text(record(id)._serialized);
+  const fromId = /^(?:true|false)_([^_]+)_/.exec(idText)?.[1] ?? "";
+  return (
+    fromMe
+      ? [payload.to, info.Chat, key.remoteJid, fromId, info.RecipientAlt]
+      : [payload.from, info.Chat, key.remoteJid, fromId, info.SenderAlt]
+  )
+    .map(asChat)
+    .filter(Boolean);
+}
+
 export function parseIncomingEvent(input: unknown): IncomingEvent | null {
   const root = record(input),
     payload = root.payload ? record(root.payload) : root,
@@ -19,7 +45,12 @@ export function parseIncomingEvent(input: unknown): IncomingEvent | null {
   if (root.event && !["message", "message.any"].includes(text(root.event)))
     return null;
   const fromMe = payload.fromMe === true || data.fromMe === true;
-  const chatId = text(root.chatId) || text(fromMe ? payload.to : payload.from);
+  const candidates = chatCandidates(payload, fromMe);
+  // Grupo (@g.us), canal e status nunca viram conversa.
+  const isGroup = candidates.some((chat) => /@(g\.us|newsletter|broadcast)$/.test(chat));
+  const chatId =
+    text(root.chatId) ||
+    (isGroup ? "" : candidates.find((chat) => /^\d{10,15}@c\.us$/.test(chat)) ?? "");
   const sessionName = text(root.sessionName) || text(root.session);
   const id = payload.id ?? root.messageId;
   const messageId =
