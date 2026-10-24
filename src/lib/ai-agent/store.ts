@@ -203,6 +203,8 @@ export async function deleteConversation(
  */
 export async function listStalledConversations(clientId: string, olderThanMs = 60_000) {
   const before = new Date(Date.now() - olderThanMs).toISOString();
+  // Mais de 24 h sem resposta: não retoma do nada; fica para a equipe.
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await aiAdminClient()
     .from("ai_conversations")
     .select("id, chat_id, extra_data, processing_state")
@@ -210,6 +212,7 @@ export async function listStalledConversations(clientId: string, olderThanMs = 6
     .eq("human_takeover", false)
     .in("processing_state", ["debouncing", "generating", "typing"])
     .lt("last_inbound_at", before)
+    .gt("last_inbound_at", since)
     .limit(20);
 
   if (error || !data?.length) return [];
