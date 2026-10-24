@@ -739,11 +739,15 @@ export function decidePolicy(input: {
   }
   const missing = target ? target.pend : [];
   const questions = script.questions as Record<string, string>;
-  // Nada respondido da etapa: o texto dela. Respondeu parte: só o que falta.
+  // Nada respondido da etapa: o texto dela. Respondeu parte: pergunta o que
+  // falta, um dado por vez (repetir a pergunta inteira parece que a IA não
+  // entendeu o que o lead já disse).
+  const partial = (step: NonNullable<typeof target>) =>
+    step.pend.length < step.fields.length && Boolean(questions[step.pend[0]]);
   const questionText = (step: NonNullable<typeof target>) =>
-    step.pend.length === 1 && step.pend.length < step.fields.length
-      ? questions[step.pend[0]] || step.text
-      : step.text || questions[step.pend[0]] || "";
+    partial(step) ? questions[step.pend[0]] : step.text || questions[step.pend[0]] || "";
+  const askedFields = (step: NonNullable<typeof target>) =>
+    partial(step) ? [step.pend[0]] : step.pend;
   const disqualification: DisqualificationReason | null =
     facts.financed === false
       ? "not_financed"
@@ -914,7 +918,7 @@ export function decidePolicy(input: {
     changedFields,
     rejectedFields,
     disqualification,
-    askedKey: nextField && target ? target.pend.join("+") : null,
+    askedKey: nextField && target ? askedFields(target).join("+") : null,
   };
 }
 

@@ -1555,3 +1555,28 @@ test("parcelas restantes: tudo numa resposta só e opcional sem travar", () => {
   assert.ok(skip.unknownFields.includes("remaining_installments"));
   assert.equal(skip.status, "qualified");
 });
+
+test("pergunta com vários dados respondida só no valor: pergunta o que falta, um por vez", () => {
+  // Caso real: "Deve ser uns 7 mil" repetia a pergunta inteira.
+  let facts = { ...EMPTY_FACTS, name: "André", financed: true, vehicle: "Onix", vehicle_year: 2021, bank: "BV", city: "Duque de Caxias" };
+  let unknown = [];
+  let last = "debt_amount+remaining_installments+has_overdue_installments";
+  const step = (incoming, extracted = []) => {
+    const p = turn({ facts: extracted }, { incoming, facts, unknown, lastQuestion: last });
+    facts = p.facts;
+    unknown = p.unknownFields;
+    last = p.askedKey;
+    return p;
+  };
+  let p = step("Deve ser uns 7 mil");
+  assert.equal(p.facts.debt_amount, 7000);
+  assert.deepEqual(p.candidates, [["Quantas parcelas faltam para quitar?"]]);
+  assert.equal(p.askedKey, "remaining_installments");
+  p = step("faltam 12");
+  assert.equal(p.facts.remaining_installments, 12);
+  assert.deepEqual(p.candidates, [[DEFAULT_SCRIPT.questions.has_overdue_installments]]);
+  assert.equal(p.askedKey, "has_overdue_installments");
+  p = step("tudo em dia");
+  assert.equal(p.facts.has_overdue_installments, false);
+  assert.equal(p.status, "qualified");
+});
