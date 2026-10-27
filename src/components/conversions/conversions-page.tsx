@@ -79,6 +79,12 @@ export function ConversionsPage({
     else dialogRef.current?.close();
   }, [costLead]);
 
+  // A conta do cliente não lê a tabela de clientes (RLS), então o modelo que
+  // vem em cada cartão pode faltar. Fora da visão mista do admin, vale o
+  // modelo do quadro, que o servidor resolve com segurança.
+  const goalOf = (lead: ConversionLead): ConversionGoalType =>
+    goalType === "mixed" ? lead.goalType : goalType;
+
   const totals: Record<FunnelStage, number> = {
     pendente: data.summary.pending,
     qualificado: data.summary.qualified,
@@ -100,7 +106,7 @@ export function ConversionsPage({
 
     // Quem VENDE precisa informar o valor para concluir: sem receita não há
     // venda a registrar, e o evento não faria sentido.
-    if (stage === "fechado" && goalCopy(lead.goalType).requiresValue) {
+    if (stage === "fechado" && goalCopy(goalOf(lead)).requiresValue) {
       setCostValue(lead.value ? String(lead.value).replace(".", ",") : "");
       setCostLead(lead);
       return;
@@ -109,12 +115,18 @@ export function ConversionsPage({
     startTransition(async () => {
       try {
         const result = await moveLeadsAction([lead.id], stage);
+        // O banco exige o valor (venda): abre o campo em vez de só avisar.
+        if (stage === "fechado" && result.error && /valor da venda/i.test(result.error)) {
+          setCostValue("");
+          setCostLead(lead);
+          return;
+        }
         showToast({
           message:
             result.error ??
             // O fechamento fala a língua do negócio do cliente.
             (stage === "fechado"
-              ? goalCopy(lead.goalType).movedMessage
+              ? goalCopy(goalOf(lead)).movedMessage
               : (result.success ?? "Etapa atualizada.")),
           tone: result.error ? "erro" : undefined,
         });
@@ -154,7 +166,7 @@ export function ConversionsPage({
           return;
         }
         setCostLead(null);
-        showToast({ message: goalCopy(costLead.goalType).movedMessage });
+        showToast({ message: goalCopy(goalOf(costLead)).movedMessage });
       } catch {
         showToast({
           message:
@@ -170,7 +182,7 @@ export function ConversionsPage({
   );
   // O modal fala a língua do cliente dono do cartão que está aberto.
   const costCopy = goalCopy(
-    costLead?.goalType ?? (goalType === "mixed" ? "vehicle_acquisition" : goalType),
+    costLead ? goalOf(costLead) : goalType === "mixed" ? "vehicle_acquisition" : goalType,
   );
 
   return (
@@ -420,7 +432,7 @@ export function ConversionsPage({
                     {lead.qualification === "fechado" ? (
                       <p className="mt-3 text-sm font-medium">
                         {lead.value !== null ? (
-                          `${goalCopy(lead.goalType).valuePrefix}: ${money.format(lead.value)}`
+                          `${goalCopy(goalOf(lead)).valuePrefix}: ${money.format(lead.value)}`
                         ) : (
                           <button
                             type="button"
@@ -431,7 +443,7 @@ export function ConversionsPage({
                             }}
                             className="text-xs font-normal text-primary underline-offset-4 hover:underline"
                           >
-                            {goalCopy(lead.goalType).registerValueCta}
+                            {goalCopy(goalOf(lead)).registerValueCta}
                           </button>
                         )}
                       </p>
@@ -464,7 +476,7 @@ export function ConversionsPage({
                       >
                         {FUNNEL_STAGES.map((s) => (
                           <option key={s.key} value={s.key}>
-                            {stageLabel(s.key, lead.goalType)}
+                            {stageLabel(s.key, goalOf(lead))}
                           </option>
                         ))}
                       </select>
