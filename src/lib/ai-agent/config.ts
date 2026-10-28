@@ -171,7 +171,8 @@ function dropLegacyReplies(value: unknown) {
 }
 
 const stepSchema = z.object({
-  fields: z.array(z.enum(STEP_FIELDS)).min(1).max(STEP_FIELDS.length),
+  // Sem dado marcado = pergunta livre: a resposta é guardada como veio.
+  fields: z.array(z.enum(STEP_FIELDS)).max(STEP_FIELDS.length),
   text: z.string().trim().min(1).max(500),
 });
 
@@ -246,9 +247,14 @@ export function checkScriptInput(script: AiScript): string | null {
     if (!script.steps.length || script.steps.length > MAX_SCRIPT_STEPS)
       return `O roteiro precisa de 1 a ${MAX_SCRIPT_STEPS} perguntas.`;
     const seen = new Set<string>();
+    const freeTexts = new Set<string>();
     for (const [index, step] of script.steps.entries()) {
-      if (!step.fields.length)
-        return `Pergunta ${index + 1}: marque pelo menos um dado que ela pede.`;
+      if (!step.fields.length) {
+        const key = fold(step.text).trim();
+        if (key && freeTexts.has(key))
+          return `Pergunta ${index + 1}: já existe uma pergunta livre com esse texto.`;
+        freeTexts.add(key);
+      }
       for (const field of step.fields) {
         if (seen.has(field))
           return `O dado "${STEP_FIELD_LABELS[field]}" aparece em mais de uma pergunta.`;

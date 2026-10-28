@@ -16,6 +16,9 @@ import {
   EMPTY_FACTS,
   FIELDS,
   isInjection,
+  CUSTOM_KEY_PREFIX,
+  readCustomAnswers,
+  readCustomAnswerEntries,
   type Extraction,
   type Facts,
 } from "./policy";
@@ -81,7 +84,7 @@ O lead escreve em português informal do Brasil, com gíria, abreviação (vc, t
 - has_overdue_installments=false: "tudo em dia", "certinho", "nenhuma atrasada". true: "2 atrasadas", "tô devendo 3", "atrasei uma" (e overdue_installments_count quando houver número).
 Nunca produza resposta nem status de lead. Formato JSON exato:
 {"facts":[{"field":"vehicle","value":"Corolla","evidence":"Corolla","correction":false}],"unknown_fields":[{"field":"bank","evidence":"não sei o banco"}],"intent":"qualification","human_requested":false,"confidence":0.95,"faq_index":null}
-Campos: ${FIELDS.join(", ")}. city = cidade onde o veículo está. remaining_installments = quantas parcelas FALTAM para quitar o financiamento (número); não confunda com overdue_installments_count, que são as parcelas ATRASADAS. last_question pode trazer vários campos separados por "+" quando a pergunta pediu mais de um dado (ex.: "vehicle+vehicle_year" para "modelo e ano"); extraia todos os que a resposta trouxer.
+Campos: ${FIELDS.join(", ")}. city = cidade onde o veículo está. remaining_installments = quantas parcelas FALTAM para quitar o financiamento (número); não confunda com overdue_installments_count, que são as parcelas ATRASADAS. last_question pode trazer vários campos separados por "+" quando a pergunta pediu mais de um dado (ex.: "vehicle+vehicle_year" para "modelo e ano"); extraia todos os que a resposta trouxer. last_question "pergunta_livre" = o roteiro fez uma pergunta aberta do cliente: a resposta, mesmo fora dos campos acima, é intent qualification (não off_topic); extraia só fatos que ela trouxer de fato.
 Intents: qualification,greeting,documents,price,approval,company,hours,regions,bot,human,off_topic,buys,does_not_buy,rules,facts,no_vehicle.
 no_vehicle: a pessoa diz explicitamente que não tem veículo (ex.: "não tenho carro", "ainda vou comprar"). Veículo quitado não é no_vehicle: use o fato financed=false.
 buys/does_not_buy indicam perguntas sobre o que a empresa compra; rules são condições comerciais gerais; facts são outras informações cadastradas. Nunca extraia fatos do lead a partir da base da empresa.`,
@@ -94,7 +97,9 @@ buys/does_not_buy indicam perguntas sobre o que a empresa compra; rules são con
             last_question:
               conversation.last_question === "closed"
                 ? null
-                : conversation.last_question,
+                : conversation.last_question?.startsWith(CUSTOM_KEY_PREFIX)
+                  ? "pergunta_livre"
+                  : conversation.last_question,
             history: history.map((m) => ({
               sender: m.sender_type,
               text: m.body,
@@ -117,6 +122,7 @@ buys/does_not_buy indicam perguntas sobre o que a empresa compra; rules são con
     knowledge: settings.knowledge,
     firstTurn: history.length === 0,
     lastQuestion: conversation.last_question,
+    customAnswers: readCustomAnswers(conversation.extra_data),
     media,
     mediaOnly: media !== "text" && !hasText,
     // "{empresa}": nome nas informações da IA ou, sem ele, o do cadastro.
@@ -201,6 +207,13 @@ export function buildQualifiedLeadNotification(
       : []),
     `⚠️ Parcelas atrasadas: ${overdue}`,
   );
+
+  // Perguntas livres do roteiro, na ordem em que foram respondidas.
+  const answers = Object.values(readCustomAnswerEntries(conversation.extra_data));
+  if (answers.length) {
+    lines.push("");
+    for (const item of answers) lines.push(`❓ ${item.question}`, `➡️ ${item.answer}`);
+  }
 
   if (conversation.has_overdue_installments) {
     lines.push(

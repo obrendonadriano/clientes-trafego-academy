@@ -1180,6 +1180,14 @@ test("notificação marca o lead para análise manual quando o veículo está ab
   assert.match(review, /Veículo 2012, abaixo do seu ano mínimo \(2015\)/);
   assert.match(review, /pode ser uma oportunidade/);
   assert.match(review, /🚗 Veículo: Onix/);
+  // Respostas das perguntas livres vão no fim da notificação.
+  const withAnswers = buildQualifiedLeadNotification({
+    ...conversation,
+    extra_data: {
+      answers: { livre_abc: { question: "Melhor horário?", answer: "De manhã" } },
+    },
+  });
+  assert.match(withAnswers, /❓ Melhor horário\?\n➡️ De manhã/);
 });
 
 test("número de notificação: Brasil pelo DDD, outros países pelo código", () => {

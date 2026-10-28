@@ -180,9 +180,47 @@ export type PolicyDecision = {
   // Dados pedidos na pergunta enviada ("vehicle+vehicle_year"). Vai para
   // last_question para a próxima resposta ser lida no contexto certo.
   askedKey: string | null;
+  // Resposta a uma pergunta livre do roteiro (sem dado marcado).
+  customAnswered: { key: string; question: string; answer: string } | null;
 };
 
-type RuntimeStep = { fields: Field[]; text: string };
+// Pergunta livre (sem dado marcado): a chave vem do texto, então mudar a
+// ordem não mistura respostas; mudar o texto faz a pergunta de novo.
+export const CUSTOM_KEY_PREFIX = "livre_";
+export function customStepKey(text: string) {
+  let hash = 5381;
+  for (const char of fold(text).trim()) hash = ((hash * 33) ^ char.charCodeAt(0)) >>> 0;
+  return `${CUSTOM_KEY_PREFIX}${hash.toString(36)}`;
+}
+
+type RuntimeStep = { fields: Field[]; text: string; key?: string };
+
+type CustomAnswer = { question: string; answer: string };
+
+/** extra_data.answers: { chave: { question, answer } }, ignorando lixo. */
+export function readCustomAnswerEntries(
+  extra: Record<string, unknown> | null | undefined,
+): Record<string, CustomAnswer> {
+  const raw = extra?.answers;
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, CustomAnswer> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const item = value as Partial<CustomAnswer> | null;
+    if (
+      key.startsWith(CUSTOM_KEY_PREFIX) &&
+      typeof item?.question === "string" &&
+      typeof item.answer === "string"
+    )
+      out[key] = { question: item.question, answer: item.answer };
+  }
+  return out;
+}
+
+export function readCustomAnswers(extra: Record<string, unknown> | null | undefined) {
+  return Object.fromEntries(
+    Object.entries(readCustomAnswerEntries(extra)).map(([key, item]) => [key, item.answer]),
+  );
+}
 
 /**
  * Etapas na ordem do roteiro do cliente. Sem roteiro montado, uma pergunta por
@@ -192,7 +230,11 @@ type RuntimeStep = { fields: Field[]; text: string };
 function scriptSteps(script: AiScript, required: Field[]): RuntimeStep[] {
   const questions = script.questions as Record<string, string>;
   const steps: RuntimeStep[] = script.steps
-    ? script.steps.map((step) => ({ fields: [...step.fields] as Field[], text: step.text }))
+    ? script.steps.map((step) =>
+        step.fields.length
+          ? { fields: [...step.fields] as Field[], text: step.text }
+          : { fields: [], text: step.text, key: customStepKey(step.text) },
+      )
     : [];
   const covered = new Set(steps.flatMap((step) => step.fields));
   for (const field of required) {
@@ -593,6 +635,8 @@ export function decidePolicy(input: {
   mediaOnly?: boolean;
   // Nome da empresa do cliente para "{empresa}" nas mensagens do roteiro.
   companyName?: string | null;
+  // Respostas já dadas às perguntas livres, por chave.
+  customAnswers?: Record<string, string>;
 }): PolicyDecision {
   const { extraction: e, incoming, knowledge: kb } = input;
   const script = kb.script;
@@ -724,8 +768,35 @@ export function decidePolicy(input: {
   const pendingField = (field: Field) =>
     facts[field] === null &&
     (!unknown.has(field) || field === "financed" || field === "vehicle");
+  // Resposta à pergunta livre feita por último: guarda o texto como veio e
+  // segue o roteiro. Pedido de preço, equipe etc. não conta como resposta.
+  const runtimeSteps = scriptSteps(script, required);
+  const customAnswers = { ...(input.customAnswers ?? {}) };
+  let customAnswered: PolicyDecision["customAnswered"] = null;
+  const lastCustom = runtimeSteps.find(
+    (step) => step.key && step.key === input.lastQuestion,
+  );
+  const answerText = incoming.trim().slice(0, 300);
+  if (
+    lastCustom?.key &&
+    customAnswers[lastCustom.key] === undefined &&
+    answerText &&
+    !injected &&
+    !e.human_requested &&
+    !["human", "price", "approval", "bot"].includes(e.intent)
+  ) {
+    customAnswers[lastCustom.key] = answerText;
+    customAnswered = { key: lastCustom.key, question: lastCustom.text, answer: answerText };
+  }
   let target: (RuntimeStep & { pend: Field[] }) | null = null;
-  for (const step of scriptSteps(script, required)) {
+  for (const step of runtimeSteps) {
+    if (step.key) {
+      if (customAnswers[step.key] === undefined) {
+        target = { ...step, pend: [] };
+        break;
+      }
+      continue;
+    }
     const fields = step.fields.flatMap((field): Field[] =>
       field === "has_overdue_installments" && required.includes("overdue_installments_count")
         ? [field, "overdue_installments_count"]
@@ -756,7 +827,7 @@ export function decidePolicy(input: {
         : profileRejection(facts, profile);
   const status = disqualification
     ? "disqualified"
-    : facts.financed === true && Boolean(facts.vehicle) && missing.length === 0
+    : facts.financed === true && Boolean(facts.vehicle) && missing.length === 0 && !target?.key
       ? "qualified"
       : "qualifying";
   let human =
@@ -772,6 +843,7 @@ export function decidePolicy(input: {
     : human
       ? "human_requested"
       : "qualification";
+  let askedCustom = false;
   let nextField: Field | null =
     status === "qualifying" ? (missing[0] ?? null) : null;
   let reply = "";
@@ -794,7 +866,8 @@ export function decidePolicy(input: {
     } else {
       // Foto do carro, documento: agradece e segue com o que estava pendente,
       // sem passar para a equipe e sem afirmar o que tem na imagem.
-      const followUp = nextField && target
+      if (target?.key && !nextField) askedCustom = true;
+      const followUp = (nextField || target?.key) && target
         ? questionText(target)
         : status === "qualified"
           ? says.qualified
@@ -855,7 +928,7 @@ export function decidePolicy(input: {
   } else if (status === "qualified") {
     reply = says.qualified;
     reason = "policy_qualified";
-  } else if (e.intent === "off_topic") {
+  } else if (e.intent === "off_topic" && !customAnswered) {
     reply = says.offTopic;
     nextField = null;
   } else if (nextField && unknown.has(nextField)) {
@@ -863,8 +936,9 @@ export function decidePolicy(input: {
     reply = says.requiredUnknown;
     reason = "required_unknown";
     nextField = null;
-  } else if (nextField && target) {
-    if (askedLast.includes(nextField) && changedFields.length === 0) {
+  } else if ((nextField || target?.key) && target) {
+    if (target.key) askedCustom = true;
+    if (nextField && askedLast.includes(nextField) && changedFields.length === 0) {
       // Não entendeu a resposta: avisa e repete a pergunta, em vez de
       // ficar "aguardando" sem dizer o que falta. Um "oi" no meio da
       // conversa é só cumprimento: cumprimenta de volta e repete.
@@ -876,7 +950,7 @@ export function decidePolicy(input: {
         ? script.welcome
           ? ""
           : script.greeting
-        : changedFields.length
+        : changedFields.length || customAnswered
           ? script.acknowledge
           : "";
       reply = [prefix, questionText(target)].filter(Boolean).join(" ");
@@ -918,7 +992,14 @@ export function decidePolicy(input: {
     changedFields,
     rejectedFields,
     disqualification,
-    askedKey: nextField && target ? askedFields(target).join("+") : null,
+    askedKey: target?.key
+      ? askedCustom
+        ? target.key
+        : null
+      : nextField && target
+        ? askedFields(target).join("+")
+        : null,
+    customAnswered,
   };
 }
 

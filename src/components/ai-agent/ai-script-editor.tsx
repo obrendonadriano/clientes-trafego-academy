@@ -128,7 +128,14 @@ export function AiScriptEditor({ script }: { script: AiScript }) {
               {steps.map((step, index) => (
                 <li key={step.id} className="space-y-2 rounded-2xl border border-border/60 bg-card p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-primary">Pergunta {index + 1}</span>
+                    <span className="flex items-center gap-2 text-xs font-semibold text-primary">
+                      Pergunta {index + 1}
+                      {step.fields.length === 0 ? (
+                        <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground">
+                          Pergunta livre
+                        </span>
+                      ) : null}
+                    </span>
                     <span className="flex items-center gap-1">
                       <Button type="button" variant="outline" size="icon" className="size-8" aria-label="Subir pergunta" disabled={index === 0} onClick={() => move(index, -1)}>
                         <ArrowUp className="size-4" />
@@ -198,7 +205,9 @@ export function AiScriptEditor({ script }: { script: AiScript }) {
             <p className="text-xs leading-5 text-muted-foreground">
               Marque quais dados cada pergunta pede. Se o lead responder só parte
               (ex.: o modelo sem o ano), a IA pergunta só o que faltou. Nome e
-              cidade são opcionais: sem resposta, a IA segue em frente.
+              cidade são opcionais: sem resposta, a IA segue em frente. Sem
+              nenhum dado marcado, é uma pergunta livre: a IA faz a pergunta,
+              guarda a resposta como veio e ela aparece na notificação do lead.
             </p>
             <input
               type="hidden"

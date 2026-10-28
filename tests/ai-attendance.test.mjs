@@ -1580,3 +1580,67 @@ test("pergunta com vários dados respondida só no valor: pergunta o que falta, 
   assert.equal(p.facts.has_overdue_installments, false);
   assert.equal(p.status, "qualified");
 });
+
+test("pergunta livre (sem dado marcado): pergunta, guarda a resposta e segue", () => {
+  const free = "Qual é a melhor forma de te contatar?";
+  const kb = {
+    ...ROTEIRO,
+    script: {
+      ...ROTEIRO.script,
+      steps: [...DEFAULT_SCRIPT.steps, { fields: [], text: free }],
+    },
+  };
+  // Salvar aceita a pergunta sem dado; duas iguais, não.
+  assert.equal(checkScriptInput(kb.script), null);
+  assert.match(
+    checkScriptInput({ ...kb.script, steps: [...kb.script.steps, { fields: [], text: free }] }),
+    /pergunta livre com esse texto/,
+  );
+  assert.ok(knowledgeSchema.parse({ script: kb.script }).script.steps.at(-1).fields.length === 0);
+
+  const done = {
+    ...EMPTY_FACTS, name: "Gil", financed: true, vehicle: "Onix", vehicle_year: 2021,
+    bank: "BV", city: "BH", debt_amount: 30000, remaining_installments: 18,
+    has_overdue_installments: false, overdue_installments_count: 0,
+  };
+  // Com os dados completos, ainda falta a pergunta livre: não qualifica antes.
+  const ask = turn(
+    { facts: [fact("has_overdue_installments", false, "tudo em dia")] },
+    {
+      incoming: "tudo em dia",
+      lastQuestion: "has_overdue_installments",
+      knowledge: kb,
+      facts: { ...done, has_overdue_installments: null, overdue_installments_count: null },
+    },
+  );
+  assert.equal(ask.status, "qualifying");
+  assert.deepEqual(ask.candidates, [[free]]);
+  assert.match(ask.askedKey, /^livre_/);
+
+  // Qualquer resposta vale, mesmo classificada fora do assunto.
+  const answer = turn(
+    { intent: "off_topic" },
+    { incoming: "Pode ser por ligação de manhã", lastQuestion: ask.askedKey, knowledge: kb, facts: done },
+  );
+  assert.deepEqual(answer.customAnswered, {
+    key: ask.askedKey,
+    question: free,
+    answer: "Pode ser por ligação de manhã",
+  });
+  assert.equal(answer.status, "qualified");
+  assert.deepEqual(answer.candidates, [[DEFAULT_SCRIPT.replies.qualified]]);
+
+  // Já respondida (extra_data.answers): não pergunta de novo.
+  const again = turn({}, {
+    incoming: "oi", lastQuestion: "has_overdue_installments", knowledge: kb, facts: done,
+    customAnswers: { [ask.askedKey]: "ligação" },
+  });
+  assert.equal(again.status, "qualified");
+
+  // Pedido de preço não conta como resposta.
+  const price = turn(
+    { intent: "price" },
+    { incoming: "quanto vocês pagam?", lastQuestion: ask.askedKey, knowledge: kb, facts: done },
+  );
+  assert.equal(price.customAnswered, null);
+});

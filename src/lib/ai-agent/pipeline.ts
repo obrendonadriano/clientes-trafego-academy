@@ -482,6 +482,15 @@ export async function advanceConversation(input: {
         typeof decision.facts.remaining_installments === "number"
       )
         extra.remaining_installments = decision.facts.remaining_installments;
+      // Resposta a pergunta livre do roteiro: junta às anteriores.
+      if (decision.customAnswered) {
+        const { key, question, answer } = decision.customAnswered;
+        const previous = conversation.extra_data?.answers;
+        extra.answers = {
+          ...(previous && typeof previous === "object" ? previous : {}),
+          [key]: { question, answer },
+        };
+      }
       // Resposta pronta: some o registro de tentativas.
       const hadRetry = Boolean(conversation.extra_data && "ai_retry" in conversation.extra_data);
       if (Object.keys(extra).length || hadRetry) {
