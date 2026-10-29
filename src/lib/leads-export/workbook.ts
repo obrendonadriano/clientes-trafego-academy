@@ -15,6 +15,7 @@ const WIDTHS: Record<(typeof LEADS_COLUMNS)[number], number> = {
   "Data/Hora": 17,
   Nome: 26,
   Telefone: 17,
+  "Status do lead": 26,
   Plataforma: 12,
   Banco: 18,
   "Valor da parcela": 22,

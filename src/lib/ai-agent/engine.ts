@@ -78,7 +78,7 @@ Se a mensagem nova for resposta curta à pergunta last_question (ex.: "sim", "n�
 Valores: booleanos como true/false (nunca texto), anos e quantias como número.
 Se um dado corrigir outro, correction=true. Normalize números brasileiros. Se disser que não sabe, use unknown_fields.
 O lead escreve em português informal do Brasil, com gíria, abreviação (vc, tb, q, ss, n, blz), erro de digitação e sem acento. Exemplos:
-- financed=true: "sim", "ss", "tô pagando", "ainda devo", "tá alienado", "pago boleto/carnê". financed=false: "tá pago", "quitei", "já paguei tudo", "comprei à vista".
+- financed=true: "sim", "ss", "tô pagando", "ainda devo", "tá alienado", "pago boleto/carnê". financed=false: "tá pago", "quitei", "já paguei tudo", "comprei à vista". Ainda devendo com o carro de garantia é financed=true, mesmo que comece com "não": "não, tem um fiduciário (empréstimo), faltam 3 mil", "alienado", "já paguei a maior parte".
 - vehicle_year: "22" = 2022, "2019/2020" ou "19/20" = 2020 (ano modelo).
 - debt_amount: "100k", "100 mil", "100 pau", "cem mil" = 100000; "1,2 mi" = 1200000.
 - has_overdue_installments=false: "tudo em dia", "certinho", "nenhuma atrasada". true: "2 atrasadas", "tô devendo 3", "atrasei uma" (e overdue_installments_count quando houver número).

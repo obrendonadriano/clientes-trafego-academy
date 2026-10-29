@@ -112,6 +112,35 @@ function orNotInformed(value: unknown) {
   return String(value);
 }
 
+// Na lista, dado vazio vira "—" (curto) para tudo caber na largura.
+function dash(value: unknown) {
+  return value === null || value === undefined || value === "" ? "—" : String(value);
+}
+
+function vehicleText(item: AiConversationSummary) {
+  if (!item.vehicle && !item.vehicleYear) return "—";
+  return [item.vehicle, item.vehicleYear].filter(Boolean).join(" · ");
+}
+
+function debtText(value: number | null) {
+  return value === null ? "—" : formatCurrency(value);
+}
+
+function overdueText(item: AiConversationSummary) {
+  if (item.hasOverdueInstallments === null) return "—";
+  if (!item.hasOverdueInstallments) return "Não";
+  return item.overdueInstallmentsCount ? `Sim (${item.overdueInstallmentsCount})` : "Sim";
+}
+
+function CardField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="truncate text-foreground">{value}</dd>
+    </div>
+  );
+}
+
 const FILTERS: { key: AiLeadStatus | "todos"; label: string }[] = [
   { key: "todos", label: "Todos" },
   { key: "qualified", label: "Qualificados" },
@@ -192,8 +221,9 @@ export function AiLeadsPanel({
           </p>
         ) : (
           <>
-            {/* Celular: cartões. Desktop: tabela. */}
-            <ul className="space-y-2 lg:hidden">
+            {/* Até telas médias: cartões com todos os dados. Desktop largo:
+                tabela compacta que cabe sem rolagem lateral. */}
+            <ul className="grid gap-2 md:grid-cols-2 xl:hidden">
               {visible.map((item) => (
                 <li key={item.id} className="relative">
                   {interactive ? (
@@ -207,7 +237,7 @@ export function AiLeadsPanel({
                     type="button"
                     disabled={!interactive}
                     onClick={() => setSelected(item.id)}
-                    className="w-full rounded-2xl border border-border/60 bg-background/60 p-4 text-left transition enabled:hover:border-primary/30 disabled:cursor-not-allowed"
+                    className="h-full w-full rounded-2xl border border-border/60 bg-background/60 p-4 text-left transition enabled:hover:border-primary/30 disabled:cursor-not-allowed"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -215,10 +245,11 @@ export function AiLeadsPanel({
                           {item.name || "Sem nome"}
                         </p>
                         <p className="mt-0.5 text-xs text-muted-foreground">
-                          {formatBrazilianWhatsapp(item.whatsappNumber)}
+                          {formatBrazilianWhatsapp(item.whatsappNumber)} ·{" "}
+                          {formatDateTime(item.createdAt)}
                         </p>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
+                      <div className="flex shrink-0 flex-col items-end gap-1">
                         <Badge variant={STATUS_VARIANT[item.status]}>
                           {AI_LEAD_STATUS_LABELS[item.status]}
                         </Badge>
@@ -226,29 +257,29 @@ export function AiLeadsPanel({
                       </div>
                     </div>
                     <ProcessingStatus conversation={item} />
-                    <p className="mt-3 text-sm text-muted-foreground">
-                      {orNotInformed(item.vehicle)}
-                      {item.vehicleYear ? ` · ${item.vehicleYear}` : ""}
-                    </p>
+                    <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 pr-8 text-sm">
+                      <CardField label="Veículo" value={vehicleText(item)} />
+                      <CardField label="Banco" value={dash(item.bank)} />
+                      <CardField label="Dívida" value={debtText(item.debtAmount)} />
+                      <CardField label="Atrasadas" value={overdueText(item)} />
+                    </dl>
                   </button>
                 </li>
               ))}
             </ul>
 
-            <div className="hidden overflow-x-auto lg:block">
-              <table className="w-full min-w-[60rem] border-separate border-spacing-y-1.5 text-sm">
+            <div className="hidden xl:block">
+              <table className="w-full table-auto border-separate border-spacing-y-1.5 text-sm">
                 <thead>
                   <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="px-3 pb-1 font-medium">Nome</th>
-                    <th className="px-3 pb-1 font-medium">Telefone</th>
+                    <th className="px-3 pb-1 font-medium">Lead</th>
                     <th className="px-3 pb-1 font-medium">Veículo</th>
-                    <th className="px-3 pb-1 font-medium">Ano</th>
                     <th className="px-3 pb-1 font-medium">Banco</th>
                     <th className="px-3 pb-1 font-medium">Dívida</th>
                     <th className="px-3 pb-1 font-medium">Atrasadas</th>
                     <th className="px-3 pb-1 font-medium">Data</th>
                     <th className="px-3 pb-1 font-medium">Status</th>
-                    <th className="px-3 pb-1 font-medium">
+                    <th className="w-10 px-1 pb-1 font-medium">
                       <span className="sr-only">Ações</span>
                     </th>
                   </tr>
@@ -267,33 +298,24 @@ export function AiLeadsPanel({
                       className={cn(
                         "bg-background/60 [&>td]:border-y [&>td]:border-border/60 [&>td]:px-3 [&>td]:py-3",
                         "[&>td:first-child]:rounded-l-2xl [&>td:first-child]:border-l",
-                        "[&>td:last-child]:rounded-r-2xl [&>td:last-child]:border-r",
+                        "[&>td:last-child]:rounded-r-2xl [&>td:last-child]:border-r [&>td:last-child]:px-1",
                         interactive &&
                           "cursor-pointer transition hover:bg-accent/60",
                       )}
                     >
-                      <td className="font-medium text-foreground">
-                        {item.name || "Sem nome"}
-                      </td>
-                      <td className="text-muted-foreground">
-                        {formatBrazilianWhatsapp(item.whatsappNumber)}
-                      </td>
-                      <td>{orNotInformed(item.vehicle)}</td>
-                      <td>{orNotInformed(item.vehicleYear)}</td>
-                      <td>{orNotInformed(item.bank)}</td>
-                      <td>{formatCurrency(item.debtAmount)}</td>
                       <td>
-                        {item.hasOverdueInstallments === null
-                          ? "Não informado"
-                          : item.hasOverdueInstallments
-                            ? `Sim${
-                                item.overdueInstallmentsCount
-                                  ? ` (${item.overdueInstallmentsCount})`
-                                  : ""
-                              }`
-                            : "Não"}
+                        <span className="block font-medium text-foreground">
+                          {item.name || "Sem nome"}
+                        </span>
+                        <span className="block whitespace-nowrap text-xs text-muted-foreground">
+                          {formatBrazilianWhatsapp(item.whatsappNumber)}
+                        </span>
                       </td>
-                      <td className="text-muted-foreground">
+                      <td>{vehicleText(item)}</td>
+                      <td>{dash(item.bank)}</td>
+                      <td className="whitespace-nowrap">{debtText(item.debtAmount)}</td>
+                      <td className="whitespace-nowrap">{overdueText(item)}</td>
+                      <td className="whitespace-nowrap text-muted-foreground">
                         {formatDateTime(item.createdAt)}
                       </td>
                       <td>
@@ -305,7 +327,7 @@ export function AiLeadsPanel({
                         </div>
                         <ProcessingStatus conversation={item} />
                       </td>
-                      <td className="w-12 text-right">
+                      <td className="text-right">
                         {interactive ? (
                           <DeleteLeadButton
                             conversation={item}

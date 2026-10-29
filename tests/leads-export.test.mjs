@@ -167,7 +167,7 @@ test('planilha: cabeçalho #1F4E78 Arial branco, linha congelada, filtro e Resum
   assert.equal(leads.rowCount, 4);
   // Lead da IA sem campanha: célula realmente vazia.
   assert.equal(leads.getRow(4).getCell(3).value, null);
-  assert.ok(leads.getColumn(17).width >= 40);
+  assert.ok(leads.getColumn(18).width >= 40);
 
   const summary = book.getWorksheet('Resumo');
   assert.deepEqual(summary.getRow(1).values.slice(1), ['Cliente', 'Origem', 'Campanha', 'Anúncio', 'Leads', '% do total']);
@@ -203,12 +203,13 @@ async function database() {
     create role anon; create role authenticated; create role service_role bypassrls;
     create schema private; create schema auth;
     create function auth.uid() returns uuid language sql stable as $$ select (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid $$;
-    create table public.clients(id uuid primary key, nome_empresa text, segmento text);
+    create table public.clients(id uuid primary key, nome_empresa text, segmento text, conversion_goal_type text not null default 'vehicle_acquisition');
     create table public.users(id uuid primary key default gen_random_uuid(), auth_user_id uuid, client_id uuid, role text, ativo boolean default true);
     create table public.conversion_leads(id uuid primary key default gen_random_uuid(), client_id uuid, telefone text, nome text,
-      ad_source_id text, wa_message_id text, phone_number_id text, waha_event_id text, criado_em timestamptz default now());
+      ad_source_id text, wa_message_id text, phone_number_id text, waha_event_id text, qualificacao text not null default 'pendente', criado_em timestamptz default now());
     create table public.ai_conversations(id uuid primary key default gen_random_uuid(), client_id uuid, whatsapp_number text, name text,
-      whatsapp_display_name text, bank text, financed boolean, has_overdue_installments boolean, overdue_installments_count integer, criado_em timestamptz default now());
+      whatsapp_display_name text, bank text, financed boolean, has_overdue_installments boolean, overdue_installments_count integer,
+      status text not null default 'new', human_takeover boolean not null default false, disqualification_reason text, criado_em timestamptz default now());
     create table public.meta_ad_level_metrics(level text, external_id text, name text, adset_name text, campaign_name text, date date);
     grant usage on schema public, private, auth to authenticated, service_role, anon;
     insert into clients values ('${A}','Quita Já','veiculo_quitacao'),('${B}','Berg Auto Car','veiculo_atrasado'),('${C}','Loja Eventos','eventos');
@@ -225,6 +226,7 @@ async function database() {
       ('ad','120211','Anuncio 07 (antigo)','Conjunto velho','x','2026-09-01');
   `);
   await db.exec(readFileSync('supabase/migrations/20261021120000_admin_unified_leads_export.sql', 'utf8'));
+  await db.exec(readFileSync('supabase/migrations/20261029120000_export_lead_status.sql', 'utf8'));
   return db;
 }
 
@@ -289,6 +291,23 @@ test('exportação: 4 origens, só os dois nichos, período, filtros, nomes do a
     assert.equal(coex.adset_name, 'Conjunto A');
     assert.equal(coex.campaign_name, '1020 - Campanha [12-08]');
     assert.equal(rows.find((r) => r.origin === 'Atendimento IA').lead_name, 'Dani');
+    // Status do lead: etapa do kanban e resultado da IA.
+    assert.deepEqual(rows.map((r) => format.leadStatusLabel(r)), ['', 'Em qualificação', 'Novo lead', 'Novo lead']);
+    await db.exec(`reset role;
+      update ai_conversations set status='disqualified', disqualification_reason='Veículo quitado.';
+      update conversion_leads set qualificacao='fechado';
+      update clients set conversion_goal_type='sale' where nome_empresa='Quita Já';`);
+    await as(db, ADMIN);
+    const labels = Object.fromEntries((await exportRows(db)).rows.map((r) => [r.origin, format.leadStatusLabel(r)]));
+    assert.equal(labels['Atendimento IA'], 'Desqualificado (Veículo quitado)');
+    assert.equal(labels['Coexistência'], 'Venda realizada');
+    assert.equal(labels['WAHA (legado)'], 'Veículo comprado');
+    await db.exec(`reset role; update ai_conversations set status='qualifying', human_takeover=true;`);
+    await as(db, ADMIN);
+    assert.equal(
+      format.leadStatusLabel((await exportRows(db, `, null, array['Atendimento IA']`)).rows[0]),
+      'Atendimento humano',
+    );
     // Cliente de outro nicho e lead fora do período não aparecem.
     assert.ok(!rows.some((r) => r.client_name === 'Loja Eventos' || r.lead_name === 'Velho'));
 

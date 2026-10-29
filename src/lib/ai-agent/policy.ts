@@ -305,14 +305,19 @@ function saysUnknown(text: string) {
   );
 }
 
+// Ainda deve algo com o carro de garantia, mesmo dizendo "não é financiado":
+// "tem um fiduciário (empréstimo), faltam 3 mil", "falta pagar 5 parcelas".
+const STILL_OWES =
+  /(?<!nao (?:tem |tenho |esta |ta |e |eh )?(?:mais )?(?:nenhum |nenhuma )?)(?:fiduci|alienad|emprestimo)|refinanc|com garantia|em garantia|faltam? (?:pagar |so |uns |umas |mais |ainda )*(?:\d|um |uma |dois |duas |tres |pouco)|faltando (?:pagar |so )*\d|ainda devo|devo ainda|(?<!nao )(?:to|estou) devendo|paguei (?:a maior parte|metade|quase tudo|parte)/;
 const PAID_OFF =
-  /quit(?:ad|ei|ou|amos)|(?:ta|esta|ja|tudo) pago|ja paguei|paguei tudo|terminei de pagar|acabei de pagar|nao devo|nao to devendo|sem divida|a vista|sem financ|nao (?:e|esta|ta|tem|tenho|eh)? ?(?:mais )?financ/;
+  /quit(?:ad|ei|ou|amos)|(?:ta|esta|ja|tudo) pago|ja paguei(?! (?:a maior parte|metade|quase|parte|\d))|paguei tudo|terminei de pagar|acabei de pagar|nao devo|nao to devendo|sem divida|a vista|sem financ|nao (?:e|esta|ta|tem|tenho|eh)? ?(?:mais )?(?:financ|alienad)/;
 const STILL_PAYING =
   /financ|alienad|prestac|parcel|(?:to|tou|estou) pagando|pagando ainda|ainda (?:pago|devo|to pagando|estou pagando)|devo ainda|carne|boleto/;
 
 /** Financiado? "tô pagando" = sim; "tá pago", "quitei" = não. */
 function readFinanced(text: string, allowYesNo: boolean): boolean | null {
   const source = plain(text);
+  if (STILL_OWES.test(source)) return true;
   if (PAID_OFF.test(source)) return false;
   if (STILL_PAYING.test(source)) return true;
   return allowYesNo ? yesNo(text) : null;
@@ -718,6 +723,12 @@ export function decidePolicy(input: {
       unknown.delete(pending);
       changedFields.push(pending);
     }
+  }
+  // "Não, mas tem um fiduciário e faltam 3 mil": ainda deve com o carro de
+  // garantia, então não é quitado (o modelo às vezes fica só com o "não").
+  if (facts.financed === false && !injected && STILL_OWES.test(plain(incoming))) {
+    facts.financed = true;
+    if (!changedFields.includes("financed")) changedFields.push("financed");
   }
   // "2 atrasadas" responde a situação e a quantidade de uma vez.
   if (

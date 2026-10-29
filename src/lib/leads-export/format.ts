@@ -19,6 +19,7 @@ export const LEADS_COLUMNS = [
   "Data/Hora",
   "Nome",
   "Telefone",
+  "Status do lead",
   "Plataforma",
   "Banco",
   "Valor da parcela",
@@ -59,7 +60,48 @@ export type UnifiedLeadRecord = {
   ai_financed: boolean | null;
   ai_has_overdue: boolean | null;
   ai_overdue_count: number | null;
+  // Ausentes antes da migração 20261029120000: a coluna sai vazia.
+  lead_status?: string | null;
+  goal_type?: string | null;
+  ai_disqualification?: string | null;
 };
+
+/**
+ * Qualificado ou não, na língua do painel. Conversões: etapa do kanban.
+ * Atendimento IA: resultado da IA (com o motivo, quando desqualificado).
+ */
+export function leadStatusLabel(record: UnifiedLeadRecord): string {
+  const status = text(record.lead_status);
+  if (record.origin === "Atendimento IA") {
+    switch (status) {
+      case "qualified":
+        return "Qualificado";
+      case "disqualified": {
+        const reason = text(record.ai_disqualification).replace(/[.\s]+$/, "");
+        return reason ? `Desqualificado (${reason})` : "Desqualificado";
+      }
+      case "human":
+        return "Atendimento humano";
+      case "new":
+      case "qualifying":
+        return "Em qualificação";
+      default:
+        return "";
+    }
+  }
+  switch (status) {
+    case "pendente":
+      return "Novo lead";
+    case "qualificado":
+      return "Qualificado";
+    case "fechado":
+      return record.goal_type === "sale" ? "Venda realizada" : "Veículo comprado";
+    case "desqualificado":
+      return "Desqualificado";
+    default:
+      return "";
+  }
+}
 
 const text = (value: unknown) =>
   value === null || value === undefined ? "" : String(value).trim();
@@ -186,6 +228,7 @@ export function buildExportRows(records: UnifiedLeadRecord[]): ExportRow[] {
         "Data/Hora": formatDateTimeBR(record.entered_at),
         Nome: text(record.lead_name),
         Telefone: phone,
+        "Status do lead": leadStatusLabel(record),
         Plataforma: platformLabel(record.platform),
         Banco: cleanAnswer(record.bank),
         "Valor da parcela": cleanAnswer(record.installment_value),

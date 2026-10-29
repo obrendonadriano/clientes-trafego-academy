@@ -1644,3 +1644,24 @@ test("pergunta livre (sem dado marcado): pergunta, guarda a resposta e segue", (
   );
   assert.equal(price.customAnswered, null);
 });
+
+test("financiado: 'não, mas tem fiduciário e faltam 3 mil' não é quitado", () => {
+  // Caso real (Berg): o "não" no começo desqualificava o lead.
+  const msg = "Não . Tem um fidunciario nele ( empréstimo ) já paguei a maior parte faltam 3 mil ( orçamento )";
+  // Modelo só com o "não" e sem extrair nada: os dois viram financiado.
+  for (const facts of [[fact("financed", false, "Não")], []]) {
+    const p = turn({ facts, intent: "qualification" }, { incoming: msg, lastQuestion: "financed" });
+    assert.equal(p.facts.financed, true);
+    assert.notEqual(p.status, "disqualified");
+  }
+  // Quitado de verdade continua desqualificando.
+  for (const quitado of ["Quitado", "Não é financiado", "Negativo quitado", "já paguei tudo", "não, não tô devendo nada", "não tá mais alienado"]) {
+    const p = turn({}, { incoming: quitado, lastQuestion: "financed" });
+    assert.equal(p.facts.financed, false, quitado);
+    assert.equal(p.status, "disqualified", quitado);
+  }
+  // Outras formas de ainda dever.
+  for (const devendo of ["não, é um empréstimo com o carro em garantia", "falta pagar 5 parcelas", "tá alienado ainda"]) {
+    assert.equal(turn({}, { incoming: devendo, lastQuestion: "financed" }).facts.financed, true, devendo);
+  }
+});
