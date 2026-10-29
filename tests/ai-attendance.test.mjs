@@ -9,6 +9,7 @@ import {
   extractionSchema,
   EMPTY_FACTS,
   offHoursReply,
+  openCustomQuestions,
 } from "../src/lib/ai-agent/policy.ts";
 import {
   EMPTY_KNOWLEDGE,
@@ -960,6 +961,11 @@ test("frase de ativação ignora acento, caixa, pontuação e emoji", async () =
   assert.equal(DEFAULT_ACTIVATION.enabled, true);
   assert.equal(phrase, "Olá! Quero fazer uma avaliação do meu veículo.");
   assert.equal(second, "Olá! Tenho um veículo e gostaria de solicitar uma análise.");
+  // As mensagens prontas do anúncio (Brasil e Portugal) já vêm cadastradas.
+  assert.deepEqual(DEFAULT_ACTIVATION.phrases.slice(2), [
+    "Olá! Posso ter mais informações sobre isso?",
+    "Olá! Posso saber mais informações sobre isto?",
+  ]);
   assert.equal(
     matchesActivationPhrase(
       "ola, tenho um veiculo e gostaria de solicitar uma analise!",
@@ -1643,6 +1649,81 @@ test("pergunta livre (sem dado marcado): pergunta, guarda a resposta e segue", (
     { incoming: "quanto vocês pagam?", lastQuestion: ask.askedKey, knowledge: kb, facts: done },
   );
   assert.equal(price.customAnswered, null);
+});
+
+test("pergunta livre já respondida num formulário não é perguntada de novo", () => {
+  // Caso real (Berg): o lead mandou um formulário com parcelas, valor e
+  // atrasadas, e a IA perguntou tudo de novo.
+  const atrasadas = "Quantas parcelas estão atrasadas?";
+  const valor = "Qual é o valor das Parcelas?";
+  const entrada = "Quanto você deu de entrada?";
+  const kb = {
+    ...ROTEIRO,
+    script: {
+      ...ROTEIRO.script,
+      steps: [
+        ...DEFAULT_SCRIPT.steps,
+        { fields: [], text: entrada },
+        { fields: [], text: atrasadas },
+        { fields: [], text: valor },
+      ],
+    },
+  };
+  const form = "*Para agilizar* 🔵 Quantas estão em atraso:  1 🔵 Valor da parcela: 1.890";
+  const done = {
+    ...EMPTY_FACTS, name: "Wallace", financed: true, vehicle: "Amarok", vehicle_year: 2011,
+    bank: "Creditas", city: "Curitiba", debt_amount: 30000, remaining_installments: 58,
+    has_overdue_installments: true, overdue_installments_count: 1,
+  };
+  const keyOf = (text) => openCustomQuestions(kb.script, {}).find((q) => q.question === text).key;
+  // Resposta da entrada; o extrator acha as outras duas no formulário anterior.
+  const p = turn(
+    {
+      free_answers: [
+        { key: keyOf(atrasadas), answer: "1", evidence: "Quantas estão em atraso:  1" },
+        { key: keyOf(valor), answer: "1.890", evidence: "Valor da parcela: 1.890" },
+        // Citação que o lead não escreveu: descartada.
+        { key: keyOf(entrada), answer: "10 mil", evidence: "dei 10 mil de entrada" },
+      ],
+    },
+    { incoming: "Nada de entrada", lastQuestion: keyOf(entrada), knowledge: kb, facts: done, leadHistory: [form] },
+  );
+  assert.equal(p.customAnswered.answer, "Nada de entrada");
+  assert.deepEqual(p.customFilled.map((x) => [x.question, x.answer]), [[atrasadas, "1"], [valor, "1.890"]]);
+  assert.equal(p.status, "qualified");
+
+  // "Dá uma olhada aí em cima": vale o dado que ele já tinha mandado.
+  const up = turn(
+    { free_answers: [{ key: keyOf(valor), answer: "1.890", evidence: "Valor da parcela: 1.890" }] },
+    {
+      incoming: "Da uma olhadinha aí em cima", lastQuestion: keyOf(valor), knowledge: kb, facts: done,
+      leadHistory: [form], customAnswers: { [keyOf(entrada)]: "nada", [keyOf(atrasadas)]: "1" },
+    },
+  );
+  assert.equal(up.customAnswered.answer, "1.890");
+  // Só as perguntas sem resposta vão para o extrator.
+  assert.deepEqual(
+    openCustomQuestions(kb.script, { [keyOf(entrada)]: "nada" }).map((q) => q.question),
+    [atrasadas, valor],
+  );
+});
+
+test("'falo com robô?' responde e retoma a pergunta; 'ok' depois não repete", () => {
+  // Caso real (Berg): o "ok" virou outra resposta de robô e a conversa travou.
+  const bot = turn(
+    { intent: "bot" },
+    { incoming: "Eu falo com robô?", lastQuestion: "bank", facts: { ...EMPTY_FACTS, financed: true, vehicle: "Onix", vehicle_year: 2020 } },
+  );
+  const text = bot.candidates[0].join(" ");
+  assert.ok(text.includes(DEFAULT_SCRIPT.replies.bot), text);
+  // Volta para a pergunta que estava pendente.
+  assert.ok(bot.askedKey, text);
+  assert.ok(text.length > DEFAULT_SCRIPT.replies.bot.length, text);
+  const ok = turn(
+    { intent: "bot" },
+    { incoming: "Ok", lastQuestion: "bank", facts: { ...EMPTY_FACTS, financed: true, vehicle: "Onix", vehicle_year: 2020 } },
+  );
+  assert.ok(!ok.candidates[0].join(" ").includes(DEFAULT_SCRIPT.replies.bot));
 });
 
 test("financiado: 'não, mas tem fiduciário e faltam 3 mil' não é quitado", () => {

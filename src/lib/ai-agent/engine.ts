@@ -19,6 +19,7 @@ import {
   CUSTOM_KEY_PREFIX,
   readCustomAnswers,
   readCustomAnswerEntries,
+  openCustomQuestions,
   type Extraction,
   type Facts,
 } from "./policy";
@@ -33,6 +34,7 @@ const EMPTY_EXTRACTION: Extraction = {
   human_requested: false,
   confidence: 1,
   faq_index: null,
+  free_answers: [],
 };
 
 export async function runConversationTurn(input: {
@@ -63,6 +65,11 @@ export async function runConversationTurn(input: {
     facts[field] =
       field === "debt_amount" && value !== null ? Number(value) : value;
   }
+  const customAnswers = readCustomAnswers(conversation.extra_data);
+  const freeQuestions = openCustomQuestions(settings.knowledge.script, customAnswers);
+  const leadHistory = history
+    .filter((m) => m.direction === "inbound" && m.body)
+    .map((m) => m.body as string);
   const config = await getDeepseekRuntimeConfig();
   let extraction: Extraction = { ...EMPTY_EXTRACTION };
   if (hasText && !isInjection(incoming)) {
@@ -87,7 +94,8 @@ Nunca produza resposta nem status de lead. Formato JSON exato:
 Campos: ${FIELDS.join(", ")}. city = cidade onde o veículo está. remaining_installments = quantas parcelas FALTAM para quitar o financiamento (número); não confunda com overdue_installments_count, que são as parcelas ATRASADAS. last_question pode trazer vários campos separados por "+" quando a pergunta pediu mais de um dado (ex.: "vehicle+vehicle_year" para "modelo e ano"); extraia todos os que a resposta trouxer. last_question "pergunta_livre" = o roteiro fez uma pergunta aberta do cliente: a resposta, mesmo fora dos campos acima, é intent qualification (não off_topic); extraia só fatos que ela trouxer de fato.
 Intents: qualification,greeting,documents,price,approval,company,hours,regions,bot,human,off_topic,buys,does_not_buy,rules,facts,no_vehicle.
 no_vehicle: a pessoa diz explicitamente que não tem veículo (ex.: "não tenho carro", "ainda vou comprar"). Veículo quitado não é no_vehicle: use o fato financed=false.
-buys/does_not_buy indicam perguntas sobre o que a empresa compra; rules são condições comerciais gerais; facts são outras informações cadastradas. Nunca extraia fatos do lead a partir da base da empresa.`,
+buys/does_not_buy indicam perguntas sobre o que a empresa compra; rules são condições comerciais gerais; facts são outras informações cadastradas. Nunca extraia fatos do lead a partir da base da empresa.
+free_questions = perguntas abertas do roteiro ainda sem resposta. Se o LEAD já respondeu alguma delas na mensagem nova OU em mensagens anteriores dele no history (ex.: um formulário preenchido com "Valor da parcela: 1500", "Quantas estão em atraso: 1"), devolva em free_answers {"key","answer","evidence"}: answer curto com o dado, evidence = trecho literal da mensagem do lead. Também extraia os fatos dos campos acima que o formulário trouxer. Se o lead disser "olha aí em cima", procure a resposta nas mensagens anteriores dele. Só o que estiver explícito; na dúvida, não inclua. Inclua "free_answers":[] no JSON.`,
         },
         {
           role: "user",
@@ -106,6 +114,7 @@ buys/does_not_buy indicam perguntas sobre o que a empresa compra; rules são con
             })),
             new_message: incoming,
             faq: settings.knowledge.faq.map((f) => f.question),
+            free_questions: freeQuestions,
           }),
         },
       ],
@@ -122,7 +131,8 @@ buys/does_not_buy indicam perguntas sobre o que a empresa compra; rules são con
     knowledge: settings.knowledge,
     firstTurn: history.length === 0,
     lastQuestion: conversation.last_question,
-    customAnswers: readCustomAnswers(conversation.extra_data),
+    customAnswers,
+    leadHistory,
     media,
     mediaOnly: media !== "text" && !hasText,
     // "{empresa}": nome nas informações da IA ou, sem ele, o do cadastro.

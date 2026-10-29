@@ -294,6 +294,8 @@ export const DEFAULT_ACTIVATION = {
   phrases: [
     "Olá! Quero fazer uma avaliação do meu veículo.",
     "Olá! Tenho um veículo e gostaria de solicitar uma análise.",
+    "Olá! Posso ter mais informações sobre isso?",
+    "Olá! Posso saber mais informações sobre isto?",
   ],
 };
 export type AiActivation = typeof DEFAULT_ACTIVATION;

@@ -483,13 +483,18 @@ export async function advanceConversation(input: {
         typeof decision.facts.remaining_installments === "number"
       )
         extra.remaining_installments = decision.facts.remaining_installments;
-      // Resposta a pergunta livre do roteiro: junta às anteriores.
-      if (decision.customAnswered) {
-        const { key, question, answer } = decision.customAnswered;
+      // Respostas a perguntas livres do roteiro: junta às anteriores.
+      const filled = [
+        ...(decision.customAnswered ? [decision.customAnswered] : []),
+        ...(decision.customFilled ?? []),
+      ];
+      if (filled.length) {
         const previous = conversation.extra_data?.answers;
         extra.answers = {
           ...(previous && typeof previous === "object" ? previous : {}),
-          [key]: { question, answer },
+          ...Object.fromEntries(
+            filled.map(({ key, question, answer }) => [key, { question, answer }]),
+          ),
         };
       }
       // Resposta pronta: some o registro de tentativas.

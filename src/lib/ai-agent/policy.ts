@@ -61,6 +61,20 @@ export const extractionSchema = z
     human_requested: z.boolean(),
     confidence: z.number().min(0).max(1),
     faq_index: z.number().int().min(0).max(29).nullable(),
+    // Perguntas livres do roteiro que o lead já respondeu (ex.: formulário
+    // preenchido), para a IA não perguntar de novo.
+    free_answers: z
+      .array(
+        z
+          .object({
+            key: z.string().max(40),
+            answer: z.string().min(1).max(300),
+            evidence: z.string().min(1).max(500),
+          })
+          .strict(),
+      )
+      .max(16)
+      .default([]),
   })
   .strict();
 export type Extraction = z.infer<typeof extractionSchema>;
@@ -182,11 +196,15 @@ export type PolicyDecision = {
   askedKey: string | null;
   // Resposta a uma pergunta livre do roteiro (sem dado marcado).
   customAnswered: { key: string; question: string; answer: string } | null;
+  // Outras perguntas livres já respondidas pelo que o lead escreveu antes.
+  customFilled: { key: string; question: string; answer: string }[];
 };
 
 // Pergunta livre (sem dado marcado): a chave vem do texto, então mudar a
 // ordem não mistura respostas; mudar o texto faz a pergunta de novo.
 export const CUSTOM_KEY_PREFIX = "livre_";
+// "ok", "blz", "certo": confirmação curta, nunca uma pergunta sobre robô.
+const ACKNOWLEDGEMENT = /^(?:ok+|okay|blz|beleza|certo|ta|ta bom|ta certo|entendi|show|tranquilo|perfeito|joia|👍)[\s.!]*$/;
 export function customStepKey(text: string) {
   let hash = 5381;
   for (const char of fold(text).trim()) hash = ((hash * 33) ^ char.charCodeAt(0)) >>> 0;
@@ -227,6 +245,17 @@ export function readCustomAnswers(extra: Record<string, unknown> | null | undefi
  * dado na ordem padrão. Dado obrigatório que o roteiro não pergunta entra no
  * fim, com a pergunta individual.
  */
+/** Perguntas livres do roteiro ainda sem resposta (para o extrator). */
+export function openCustomQuestions(
+  script: AiScript,
+  answers: Record<string, string>,
+) {
+  return (script.steps ?? [])
+    .filter((step) => !step.fields.length)
+    .map((step) => ({ key: customStepKey(step.text), question: step.text }))
+    .filter((step) => answers[step.key] === undefined);
+}
+
 function scriptSteps(script: AiScript, required: Field[]): RuntimeStep[] {
   const questions = script.questions as Record<string, string>;
   const steps: RuntimeStep[] = script.steps
@@ -642,6 +671,8 @@ export function decidePolicy(input: {
   companyName?: string | null;
   // Respostas já dadas às perguntas livres, por chave.
   customAnswers?: Record<string, string>;
+  // Mensagens anteriores do lead: evidência das respostas livres extraídas.
+  leadHistory?: string[];
 }): PolicyDecision {
   const { extraction: e, incoming, knowledge: kb } = input;
   const script = kb.script;
@@ -787,7 +818,25 @@ export function decidePolicy(input: {
   const lastCustom = runtimeSteps.find(
     (step) => step.key && step.key === input.lastQuestion,
   );
-  const answerText = incoming.trim().slice(0, 300);
+  // Respostas livres que o extrator achou no que o lead já escreveu (um
+  // formulário, por exemplo). Só vale com citação literal de mensagem do lead.
+  const leadTexts = [incoming, ...(input.leadHistory ?? [])].map(fold);
+  const found = new Map<string, string>();
+  if (!injected && e.confidence >= 0.7)
+    for (const item of e.free_answers ?? []) {
+      const evidence = fold(item.evidence).trim();
+      if (
+        evidence.length >= 2 &&
+        leadTexts.some((text) => text.includes(evidence)) &&
+        !isInjection(item.answer)
+      )
+        found.set(item.key, item.answer.trim().slice(0, 300));
+    }
+  // "Dá uma olhada aí em cima": vale o dado que ele já tinha mandado.
+  const answerText = (
+    (lastCustom?.key && found.get(lastCustom.key)) ||
+    incoming
+  ).trim().slice(0, 300);
   if (
     lastCustom?.key &&
     customAnswers[lastCustom.key] === undefined &&
@@ -798,6 +847,13 @@ export function decidePolicy(input: {
   ) {
     customAnswers[lastCustom.key] = answerText;
     customAnswered = { key: lastCustom.key, question: lastCustom.text, answer: answerText };
+  }
+  const customFilled: PolicyDecision["customFilled"] = [];
+  for (const step of runtimeSteps) {
+    const answer = step.key ? found.get(step.key) : undefined;
+    if (!step.key || !answer || customAnswers[step.key] !== undefined) continue;
+    customAnswers[step.key] = answer;
+    customFilled.push({ key: step.key, question: step.text, answer });
   }
   let target: (RuntimeStep & { pend: Field[] }) | null = null;
   for (const step of runtimeSteps) {
@@ -886,9 +942,13 @@ export function decidePolicy(input: {
       reply = [says.media, followUp].filter(Boolean).join(" ");
     }
     reason = "media_ack";
-  } else if (e.intent === "bot") {
-    reply = says.bot;
-    nextField = null;
+  } else if (e.intent === "bot" && !ACKNOWLEDGEMENT.test(fold(incoming).trim())) {
+    // Responde e já retoma a pergunta pendente: sem ela o lead responde "ok"
+    // e a conversa trava.
+    if (target?.key && !nextField) askedCustom = true;
+    const followUp = (nextField || target?.key) && target ? questionText(target) : "";
+    reply = [says.bot, followUp].filter(Boolean).join(" ");
+    if (!followUp) nextField = null;
   } else if (e.intent === "price" || e.intent === "approval") {
     reply = e.intent === "price" ? says.price : says.approval;
     human = true;
@@ -961,7 +1021,7 @@ export function decidePolicy(input: {
         ? script.welcome
           ? ""
           : script.greeting
-        : changedFields.length || customAnswered
+        : changedFields.length || customAnswered || customFilled.length
           ? script.acknowledge
           : "";
       reply = [prefix, questionText(target)].filter(Boolean).join(" ");
@@ -1011,6 +1071,7 @@ export function decidePolicy(input: {
         ? askedFields(target).join("+")
         : null,
     customAnswered,
+    customFilled,
   };
 }
 

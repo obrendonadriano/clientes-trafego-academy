@@ -681,7 +681,7 @@ export async function restoreAiActivationAction(): Promise<AiAgentActionState> {
       knowledge: { ...current.knowledge, activation: DEFAULT_ACTIVATION },
     });
     refresh();
-    return { success: "Frase padrão restaurada." };
+    return { success: "Frases padrão restauradas." };
   } catch (error) {
     return toState(error);
   }
