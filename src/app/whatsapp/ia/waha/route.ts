@@ -139,9 +139,21 @@ export async function POST(request: Request) {
     if (result.acao === "aguardar") {
       startLoop(result, 0);
     } else if (result.acao === "ignorar") {
+      const payload = ((body as { payload?: Record<string, unknown> } | null)?.payload ??
+        {}) as Record<string, unknown>;
+      const message = ((payload._data as Record<string, unknown> | undefined)?.Message ??
+        {}) as Record<string, unknown>;
       console.info("[ia/waha] ignorado", {
         motivo: result.motivo,
         fromMe: event.fromMe,
+        fromAd: event.fromAd ?? false,
+        // Só nomes de campos (nunca conteúdo): confirma onde vem o anúncio.
+        ...(result.motivo === "sem_frase_de_ativacao"
+          ? {
+              camposData: Object.keys((payload._data ?? {}) as object).slice(0, 30),
+              camposMensagem: Object.keys(message).slice(0, 30),
+            }
+          : {}),
       });
     }
 

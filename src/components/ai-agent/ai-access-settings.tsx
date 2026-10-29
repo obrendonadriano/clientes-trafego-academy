@@ -217,7 +217,9 @@ export function AiActivationCard({ activation }: { activation: AiActivation }) {
                 Exigir frase de ativação
               </p>
               <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                Desligado, a IA responde qualquer número novo.
+                Desligado, a IA responde qualquer número novo. Ligado, quem
+                chega pelo anúncio sempre é atendido, e a mensagem pronta do
+                botão do anúncio vale em qualquer idioma do celular.
               </p>
             </div>
             <Switch

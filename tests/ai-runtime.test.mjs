@@ -393,6 +393,10 @@ test("Pipeline real com WAHA/DeepSeek simulados", async (t) => {
       try {
         r.settings.knowledge.activation.enabled = true;
         assert.deepEqual(await r.ingest("x1", "Oi, tudo bem?"), { acao: "ignorar", motivo: "sem_frase_de_ativacao" });
+        // Mesmo texto vindo de um clique no anúncio: abre a conversa.
+        const viaAd = await r.ingest("x0", "Oi, tudo bem?", { chatId: "5535997321516@c.us", fromAd: true });
+        assert.equal(viaAd.acao, "aguardar");
+        await r.db.query("delete from ai_conversations");
         assert.deepEqual(
           await r.ingest("x2", "", { fromMe: true, body: "mensagem pessoal" }),
           { acao: "ignorar", motivo: "enviada_pelo_proprio_whatsapp" },

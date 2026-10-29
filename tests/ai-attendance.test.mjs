@@ -1665,3 +1665,30 @@ test("financiado: 'não, mas tem fiduciário e faltam 3 mil' não é quitado", (
     assert.equal(turn({}, { incoming: devendo, lastQuestion: "financed" }).facts.financed, true, devendo);
   }
 });
+
+test("ativação: mensagem do anúncio em qualquer idioma e clique no anúncio", async () => {
+  const { matchesActivationPhrase } = await import("../src/lib/ai-agent/config.ts");
+  const phrases = ["Olá! Quero fazer uma avaliação do meu veículo."];
+  // Caso real (Berg): celular em português de Portugal.
+  for (const msg of [
+    "Olá! Posso saber mais informações sobre isto?",
+    "Olá! Posso ter mais informações sobre isso?",
+    "Hello! Can I get more info on this?",
+    "¡Hola! ¿Puedo obtener más información sobre esto?",
+  ])
+    assert.ok(matchesActivationPhrase(msg, phrases), msg);
+  assert.ok(!matchesActivationPhrase("Oi, tudo bem?", phrases));
+
+  // Cartão do anúncio anexado (GOWS): conta como vindo do anúncio.
+  const base = { event: "message.any", session: "s" };
+  const fromAd = parseIncomingEvent({
+    ...base,
+    payload: {
+      id: "false_5535997321516@c.us_AAA", from: "5535997321516@c.us", fromMe: false, body: "Oi",
+      _data: { Message: { extendedTextMessage: { contextInfo: { externalAdReply: { sourceURL: "https://fb.me/x", ctwaClid: "abc" } } } } },
+    },
+  });
+  assert.equal(fromAd.fromAd, true);
+  const plain = parseIncomingEvent({ ...base, payload: { id: "m1", from: "5535997321516@c.us", fromMe: false, body: "Oi" } });
+  assert.equal(plain.fromAd, false);
+});

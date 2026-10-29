@@ -407,12 +407,27 @@ export function normalizeActivationText(value: string) {
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 }
+// Mensagem pronta do botão do anúncio (Click-to-WhatsApp). O texto muda com
+// o idioma do celular do lead (Brasil, Portugal, inglês, espanhol), então
+// todas as variações abrem conversa junto com as frases do cliente.
+export const AD_DEFAULT_MESSAGES = [
+  "Olá! Posso ter mais informações sobre isso?",
+  "Olá! Posso saber mais informações sobre isto?",
+  "Olá! Posso obter mais informações sobre isto?",
+  "Olá! Gostaria de saber mais sobre isto.",
+  "Olá! Quero mais informações.",
+  "Hello! Can I get more info on this?",
+  "Hi! Can I get more info on this?",
+  "¡Hola! ¿Puedo obtener más información sobre esto?",
+  "¡Hola! Quiero más información.",
+];
+
 export function matchesActivationPhrase(
   message: string,
   phrases: string | string[],
 ) {
   const text = normalizeActivationText(message);
-  return (Array.isArray(phrases) ? phrases : [phrases]).some((phrase) => {
+  return [...(Array.isArray(phrases) ? phrases : [phrases]), ...AD_DEFAULT_MESSAGES].some((phrase) => {
     const expected = normalizeActivationText(phrase);
     return Boolean(expected) && text.includes(expected);
   });

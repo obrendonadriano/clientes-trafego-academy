@@ -8,7 +8,24 @@ export type IncomingEvent = {
   pushName: string | null;
   mediaKind: MediaKind;
   timestamp: string | null;
+  // Veio de um clique em anúncio (Click-to-WhatsApp): o WhatsApp anexa o
+  // cartão do anúncio (externalAdReply / ctwaClid) à mensagem.
+  fromAd?: boolean;
 };
+
+const AD_KEYS = /^(?:externalAdReply|ctwaClid|ctwaContext|ctwaPayload|ctwaSignals)$/i;
+
+/** Procura o cartão do anúncio em qualquer nível do payload (GOWS, WEBJS, NOWEB). */
+export function hasAdReferral(value: unknown, depth = 0): boolean {
+  if (!value || typeof value !== "object" || depth > 8) return false;
+  if (Array.isArray(value)) return value.some((item) => hasAdReferral(item, depth + 1));
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (AD_KEYS.test(key) && child !== null && child !== undefined && child !== "") return true;
+    if (key === "conversionSource" && /ad/i.test(text(child))) return true;
+    if (hasAdReferral(child, depth + 1)) return true;
+  }
+  return false;
+}
 const record = (v: unknown): Record<string, unknown> =>
   v && typeof v === "object" ? (v as Record<string, unknown>) : {};
 const text = (v: unknown) => (typeof v === "string" ? v : "");
@@ -92,6 +109,7 @@ export function parseIncomingEvent(input: unknown): IncomingEvent | null {
     fromMe,
     body,
     mediaKind,
+    fromAd: !fromMe && hasAdReferral(payload),
     pushName:
       (
         text(root.notifyName) ||

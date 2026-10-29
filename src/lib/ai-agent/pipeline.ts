@@ -231,7 +231,8 @@ export async function ingestInboundEvent(
     if (!existing) {
       if (event.fromMe) return ignore("enviada_pelo_proprio_whatsapp");
       if (event.mediaKind !== "text") return ignore("midia_sem_conversa");
-      if (!matchesActivationPhrase(event.body, activation.phrases))
+      // Clique no anúncio abre conversa mesmo com outro texto.
+      if (!event.fromAd && !matchesActivationPhrase(event.body, activation.phrases))
         return ignore("sem_frase_de_ativacao");
     }
   }
