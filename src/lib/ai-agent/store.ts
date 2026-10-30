@@ -158,18 +158,51 @@ export function mapConversation(row: ConversationRow): AiConversationSummary {
 // Cliente e plano
 // ---------------------------------------------------------------------------
 
-export async function getClientPlan(clientId: string): Promise<ClientPlanType> {
+/**
+ * Interruptor do admin (Configurações): ligado, a IA vale para todos os
+ * planos. Sem a migração aplicada, fica desligado (só Plano Completo).
+ */
+export async function getAiAllPlans(): Promise<boolean> {
   const { data, error } = await aiAdminClient()
-    .from("clients")
-    .select("plan_type")
-    .eq("id", clientId)
+    .from("platform_settings")
+    .select("ai_all_plans")
+    .eq("id", true)
     .maybeSingle();
+
+  if (error) return false;
+  return Boolean((data as { ai_all_plans?: unknown } | null)?.ai_all_plans);
+}
+
+/**
+ * Plano do cliente para o Atendimento IA: "complete" também quando o admin
+ * liberou a IA para todos os planos.
+ */
+export async function getClientPlan(clientId: string): Promise<ClientPlanType> {
+  const [{ data, error }, allPlans] = await Promise.all([
+    aiAdminClient().from("clients").select("plan_type").eq("id", clientId).maybeSingle(),
+    getAiAllPlans(),
+  ]);
 
   if (error) {
     throw new AiAgentError("Não foi possível verificar o plano do cliente.");
   }
 
+  if (allPlans) return "complete";
   return toClientPlanType((data as { plan_type?: unknown } | null)?.plan_type);
+}
+
+export async function setAiAllPlans(enabled: boolean) {
+  const { error } = await aiAdminClient().rpc("admin_set_ai_all_plans", {
+    p_enabled: enabled,
+  });
+
+  if (error) {
+    throw new AiAgentError(
+      /admin_set_ai_all_plans|platform_settings/i.test(error.message)
+        ? "Rode a migração 20261029130000_ai_all_plans.sql no Supabase antes de usar o interruptor."
+        : "Não foi possível salvar a liberação da IA.",
+    );
+  }
 }
 
 /**

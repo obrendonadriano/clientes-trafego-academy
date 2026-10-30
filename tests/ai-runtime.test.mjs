@@ -1323,3 +1323,47 @@ test("resposta do DeepSeek: JSON extraído de <think>, bloco de código e texto 
   })("src/lib/services/deepseek.ts");
   assert.equal(extractJsonText("sem json nenhum"), "sem json nenhum");
 });
+
+test("interruptor do admin libera a IA para todos os planos (trigger, RPC e desligar)", async () => {
+  const db = new PGlite();
+  const E = "00000000-0000-4000-8000-0000000000e1";
+  try {
+    await db.exec(`create role anon; create role authenticated; create role service_role bypassrls; create schema auth;
+      create function auth.uid() returns uuid language sql as $$ select null::uuid $$;
+      create table clients(id uuid primary key,nome_empresa text);
+      create table users(id uuid primary key,auth_user_id uuid,client_id uuid,role text,ativo boolean);
+      create table whatsapp_sessions(client_id uuid,session_name text,status text,phone_number text);
+      grant select on clients,users to service_role;`);
+    await db.exec(readMigration("20260916120000_ai_agent_whatsapp.sql"));
+    await db.exec(readMigration("20260924173314_ai_attendance_v2.sql"));
+    await db.exec(`insert into clients(id,plan_type) values('${E}','essential');
+      insert into ai_agent_settings(client_id,enabled) values('${E}',false);`);
+    // Antes: Essencial não liga a IA.
+    await assert.rejects(db.exec(`update ai_agent_settings set enabled=true`));
+    await db.exec(readMigration("20261029130000_ai_all_plans.sql"));
+    // Reaplicar não quebra (a troca na RPC é idempotente).
+    await db.exec(readMigration("20261029130000_ai_all_plans.sql"));
+    await assert.rejects(db.exec(`update ai_agent_settings set enabled=true`));
+    let n = 0;
+    const ingest = async () =>
+      (await db.query(
+        `select public.ai_v2_transition('${E}','ingest','{"number":"5531999990000","chatId":"5531999990000@c.us","messageId":"m${++n}","body":"oi"}'::jsonb) as r`,
+      )).rows[0].r;
+    // Como em produção: o servidor chama como service_role.
+    await db.exec(`set request.jwt.claims='{"role":"service_role"}';set role service_role`);
+    // Ligado: o Essencial ativa e a RPC agenda a resposta.
+    await db.exec(`select public.admin_set_ai_all_plans(true)`);
+    await db.exec(`update ai_agent_settings set enabled=true`);
+    assert.equal((await ingest()).schedule, true);
+    // Desligado: a IA do Essencial para na hora e novos leads não entram.
+    await db.exec(`select public.admin_set_ai_all_plans(false)`);
+    assert.equal((await db.query(`select enabled from ai_agent_settings`)).rows[0].enabled, false);
+    await db.exec(`reset role; delete from ai_conversations; set role service_role`);
+    assert.equal((await ingest()).ok, false);
+    // Só o servidor (service_role) mexe no interruptor.
+    await db.exec(`set request.jwt.claims='{"role":"authenticated"}'`);
+    await assert.rejects(db.exec(`select public.admin_set_ai_all_plans(true)`));
+  } finally {
+    await db.close();
+  }
+});
