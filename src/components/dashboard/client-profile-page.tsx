@@ -19,7 +19,7 @@ type ClientProfilePageProps = {
   user: User;
   allowedCampaignCount: number;
   totalCampaignCount: number;
-  planType: ClientPlanType;
+  planType: ClientPlanType | null;
 };
 
 const initialState: ProfileActionState = {};
@@ -178,7 +178,7 @@ export function ClientProfilePage({
           <CardContent className="space-y-4">
             <div className="overflow-hidden rounded-2xl border border-border/60">
               <InfoRow label="Usuário" value={user.username} />
-              <InfoRow label="Plano" value={CLIENT_PLAN_LABELS[planType]} />
+              <InfoRow label="Plano" value={planType ? CLIENT_PLAN_LABELS[planType] : "—"} />
               <InfoRow
                 label="Campanhas liberadas"
                 value={`${allowedCampaignCount} de ${totalCampaignCount}`}

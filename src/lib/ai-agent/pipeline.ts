@@ -26,7 +26,7 @@ import {
   AiAgentError,
   findSessionOwner,
   getAiAgentSettings,
-  getClientPlan,
+  getClientAiAccess,
   getClientSegment,
   listStalledConversations,
   setConversationExtra,
@@ -271,12 +271,19 @@ export async function advanceConversation(input: {
   const reconcile = await transition(owner.clientId, "reconcile", base);
   if (reconcile.stopTyping) await typing(sessionName, chatId, false);
   if (reconcile.busy) return wait(sessionName, chatId, 1000);
-  if (
-    !settings?.enabled ||
-    owner.status !== "WORKING" ||
-    (await getClientPlan(owner.clientId)) !== "complete" ||
-    !hasAiAttendanceSegment(await getClientSegment(owner.clientId))
-  ) {
+  if (!settings?.enabled || owner.status !== "WORKING") {
+    await typing(sessionName, chatId, false);
+    return end();
+  }
+  // Mesma regra da tela (plano + interruptor do admin + segmento). Se a
+  // consulta falhar, espera e tenta de novo — não abandona o lead.
+  let allowed: boolean;
+  try {
+    allowed = (await getClientAiAccess(owner.clientId)).decision.allowed;
+  } catch {
+    return wait(sessionName, chatId, 3000);
+  }
+  if (!allowed) {
     await typing(sessionName, chatId, false);
     return end();
   }

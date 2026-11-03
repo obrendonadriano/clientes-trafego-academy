@@ -11,7 +11,8 @@ export default async function AdminSettingsRoute() {
   const [integrations, metaAccounts, aiAllPlans] = await Promise.all([
     getIntegrationSettings(),
     listMetaAdAccounts(),
-    getAiAllPlans().catch(() => false),
+    // null: leitura falhou — o card avisa em vez de mostrar "desligado".
+    getAiAllPlans().catch(() => null),
   ]);
 
   return (

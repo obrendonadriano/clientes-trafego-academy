@@ -129,7 +129,10 @@ function StatusCard({
   data: AiAgentPageData;
   interactive: boolean;
 }) {
-  const [state, formAction] = useActionState(toggleAiAgentAction, initialState);
+  const [state, formAction, toggling] = useActionState(
+    toggleAiAgentAction,
+    initialState,
+  );
   useActionToast(state);
 
   const { settings, whatsappConnected, whatsappPhone, totals } = data;
@@ -169,7 +172,9 @@ function StatusCard({
           />
           <button
             type="submit"
-            disabled={!canEnable && !settings.enabled}
+            // Enquanto salva fica travado: clique repetido não reenvia.
+            disabled={toggling || (!canEnable && !settings.enabled)}
+            aria-busy={toggling}
             aria-label={
               settings.enabled
                 ? "Desativar atendimento por IA"
@@ -177,7 +182,15 @@ function StatusCard({
             }
             className="flex items-center gap-3 rounded-2xl border border-border/60 bg-background/60 px-4 py-2.5 text-sm font-medium transition enabled:hover:border-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <span>{settings.enabled ? "ATIVADO" : "DESATIVADO"}</span>
+            <span>
+              {toggling
+                ? settings.enabled
+                  ? "DESATIVANDO..."
+                  : "ATIVANDO..."
+                : settings.enabled
+                  ? "ATIVADO"
+                  : "DESATIVADO"}
+            </span>
             <span
               className={cn(
                 "relative h-7 w-12 rounded-full transition-colors",

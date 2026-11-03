@@ -10,10 +10,14 @@ import {
   type AiKnowledge,
   type AiSchedule,
 } from "./config";
+import { withTransientRetry } from "./retry";
+import { hasAiAttendanceSegment } from "@/lib/segments";
 import {
   AI_AGENT_DEFAULTS,
+  decideAiAccess,
   isAiLeadStatus,
   toClientPlanType,
+  type AiAccessDecision,
   type AiAgentSettings,
   type AiConversationMessage,
   type AiConversationSummary,
@@ -158,37 +162,185 @@ export function mapConversation(row: ConversationRow): AiConversationSummary {
 // Cliente e plano
 // ---------------------------------------------------------------------------
 
-/**
- * Interruptor do admin (Configurações): ligado, a IA vale para todos os
- * planos. Sem a migração aplicada, fica desligado (só Plano Completo).
- */
-export async function getAiAllPlans(): Promise<boolean> {
-  const { data, error } = await aiAdminClient()
-    .from("platform_settings")
-    .select("ai_all_plans")
-    .eq("id", true)
-    .maybeSingle();
+type DbError = { code?: string | null; message?: string | null };
 
-  if (error) return false;
-  return Boolean((data as { ai_all_plans?: unknown } | null)?.ai_all_plans);
+/**
+ * Falha passageira (rede, timeout, banco reiniciando, limite de conexões):
+ * vale tentar de novo. Erro de regra/SQL não é passageiro.
+ */
+export function isTransientDbError(error: DbError, status?: number) {
+  if (status !== undefined && (status === 0 || status === 408 || status === 429 || status >= 500)) {
+    return true;
+  }
+  const code = error.code ?? "";
+  if (!code) return true; // fetch failed / resposta sem corpo do PostgREST
+  return /^(08|53|57P|57014|40001|40P01)/.test(code) ||
+    /fetch failed|network|timeout|ECONN|socket|terminated/i.test(error.message ?? "");
+}
+
+class AiTransientError extends AiAgentError {
+  retryable = true;
+  constructor(message: string) {
+    super(message, 503);
+  }
 }
 
 /**
- * Plano do cliente para o Atendimento IA: "complete" também quando o admin
- * liberou a IA para todos os planos.
+ * Lê do banco com até 3 tentativas em falha passageira. Erro que sobra vira
+ * AiAgentError (503) — quem chama decide; NUNCA vira "sem acesso" em silêncio.
  */
-export async function getClientPlan(clientId: string): Promise<ClientPlanType> {
-  const [{ data, error }, allPlans] = await Promise.all([
-    aiAdminClient().from("clients").select("plan_type").eq("id", clientId).maybeSingle(),
+async function readWithRetry<T>(
+  message: string,
+  run: () => PromiseLike<{ data: T; error: DbError | null; status?: number }>,
+  onError?: (error: DbError) => T | undefined,
+): Promise<T> {
+  return withTransientRetry(async () => {
+    const { data, error, status } = await run();
+    if (!error) return data;
+    const handled = onError?.(error);
+    if (handled !== undefined) return handled;
+    if (isTransientDbError(error, status)) throw new AiTransientError(message);
+    throw new AiAgentError(message, 503);
+  });
+}
+
+// Tabela ainda não criada (migração 20261029130000 pendente).
+const isMissingTable = (error: DbError) =>
+  error.code === "42P01" || error.code === "PGRST205";
+
+/**
+ * Interruptor do admin (Configurações): ligado, a IA vale para todos os
+ * planos. Sem a migração aplicada, fica desligado (só Plano Completo).
+ *
+ * Falha na consulta LANÇA erro. Antes devolvia `false`, e qualquer oscilação
+ * de rede bloqueava o cliente Essencial até ele atualizar a página.
+ */
+export async function getAiAllPlans(): Promise<boolean> {
+  const data = await readWithRetry<{ ai_all_plans?: unknown } | null>(
+    "Não foi possível consultar a liberação da IA.",
+    () =>
+      aiAdminClient()
+        .from("platform_settings")
+        .select("ai_all_plans")
+        .eq("id", true)
+        .maybeSingle(),
+    (error) => (isMissingTable(error) ? null : undefined),
+  );
+  return Boolean(data?.ai_all_plans);
+}
+
+export type ClientAiAccess = {
+  // Plano contratado de verdade (não o "efetivo" para a IA).
+  plan: ClientPlanType;
+  segment: string | null;
+  allPlans: boolean;
+  decision: AiAccessDecision;
+};
+
+/**
+ * Ponto único de verificação do acesso à IA no servidor. Lê plano, segmento
+ * e o interruptor no mesmo instante e aplica `decideAiAccess`.
+ * Lança AiAgentError se não conseguir consultar (nunca "nega" por falha).
+ */
+export async function getClientAiAccess(clientId: string): Promise<ClientAiAccess> {
+  const [client, allPlans] = await Promise.all([
+    readWithRetry<{ plan_type?: unknown; segmento?: unknown } | null>(
+      "Não foi possível verificar o plano do cliente.",
+      () =>
+        aiAdminClient()
+          .from("clients")
+          .select("plan_type, segmento")
+          .eq("id", clientId)
+          .maybeSingle(),
+    ),
     getAiAllPlans(),
   ]);
 
-  if (error) {
-    throw new AiAgentError("Não foi possível verificar o plano do cliente.");
+  if (!client) {
+    throw new AiAgentError("Cadastro do cliente não encontrado.", 404);
   }
 
-  if (allPlans) return "complete";
-  return toClientPlanType((data as { plan_type?: unknown } | null)?.plan_type);
+  const plan = toClientPlanType(client.plan_type);
+  const segment = typeof client.segmento === "string" ? client.segmento : null;
+
+  return {
+    plan,
+    segment,
+    allPlans,
+    decision: decideAiAccess({
+      plan,
+      segmentEligible: hasAiAttendanceSegment(segment),
+      allPlans,
+    }),
+  };
+}
+
+/** Plano contratado (para exibir no perfil). */
+export async function getClientPlanType(clientId: string): Promise<ClientPlanType> {
+  const data = await readWithRetry<{ plan_type?: unknown } | null>(
+    "Não foi possível verificar o plano do cliente.",
+    () => aiAdminClient().from("clients").select("plan_type").eq("id", clientId).maybeSingle(),
+  );
+  return toClientPlanType(data?.plan_type);
+}
+
+/**
+ * "Impressão digital" do que a tela da IA mostra: muda quando chega lead,
+ * quando um lead muda de etapa, quando a IA liga/desliga ou o WhatsApp cai.
+ * A tela consulta isto a cada poucos segundos e só recarrega se mudou.
+ */
+export async function getAiLiveFingerprint(clientId: string): Promise<string> {
+  const admin = aiAdminClient();
+  const [latest, total, settings, session] = await Promise.all([
+    readWithRetry<{ atualizado_em: string }[] | null>(
+      "Não foi possível consultar os leads da IA.",
+      () =>
+        admin
+          .from("ai_conversations")
+          .select("atualizado_em")
+          .eq("client_id", clientId)
+          .order("atualizado_em", { ascending: false })
+          .limit(1),
+    ),
+    withTransientRetry(async () => {
+      const { count, error, status } = await admin
+        .from("ai_conversations")
+        .select("id", { count: "exact", head: true })
+        .eq("client_id", clientId);
+      if (error) {
+        throw isTransientDbError(error, status)
+          ? new AiTransientError("Não foi possível contar os leads da IA.")
+          : new AiAgentError("Não foi possível contar os leads da IA.", 503);
+      }
+      return count ?? 0;
+    }),
+    readWithRetry<{ enabled: boolean; disabled_by_plan_at: string | null } | null>(
+      "Não foi possível carregar a configuração da IA.",
+      () =>
+        admin
+          .from("ai_agent_settings")
+          .select("enabled, disabled_by_plan_at")
+          .eq("client_id", clientId)
+          .maybeSingle(),
+    ),
+    readWithRetry<{ status: string | null } | null>(
+      "Não foi possível consultar a conexão do WhatsApp.",
+      () =>
+        admin
+          .from("whatsapp_sessions")
+          .select("status")
+          .eq("client_id", clientId)
+          .maybeSingle(),
+    ),
+  ]);
+
+  return [
+    latest?.[0]?.atualizado_em ?? "-",
+    total,
+    settings?.enabled ? 1 : 0,
+    settings?.disabled_by_plan_at ?? "-",
+    session?.status ?? "-",
+  ].join("|");
 }
 
 export async function setAiAllPlans(enabled: boolean) {
@@ -417,7 +569,7 @@ export async function updateAiAgentSettings(
     // A trava de plano no banco chega aqui como erro de permissão.
     if (error.code === "42501") {
       throw new AiAgentError(
-        "O atendimento por IA é exclusivo do Plano Completo.",
+        "O atendimento por IA não está liberado para o plano desta conta.",
         403,
       );
     }
@@ -705,6 +857,11 @@ export async function countConversations(clientId: string) {
       .eq("client_id", clientId)
       .eq("status", "qualified"),
   ]);
+
+  // Sem isto um erro aparecia como "0 leads" — indicador errado em silêncio.
+  if (total.error || qualified.error) {
+    throw new AiAgentError("Não foi possível contar os leads da IA.", 503);
+  }
 
   return {
     total: total.count ?? 0,

@@ -21,6 +21,52 @@ export function toClientPlanType(value: unknown): ClientPlanType {
   return isClientPlanType(value) ? value : "essential";
 }
 
+// ---------------------------------------------------------------------------
+// Regra de acesso ao Atendimento IA — ÚNICA fonte da regra no app.
+// Página, server actions, rota de estado e o robô de atendimento passam por
+// aqui. No banco, a mesma regra vive em private.ai_plan_allowed().
+// ---------------------------------------------------------------------------
+
+/**
+ * Planos com IA. O Completo sempre tem; o interruptor do admin
+ * (platform_settings.ai_all_plans) libera os demais.
+ */
+export function aiAllowedPlans(allPlans: boolean): ClientPlanType[] {
+  return allPlans ? [...CLIENT_PLAN_TYPES] : ["complete"];
+}
+
+export type AiAccessDecision =
+  | { allowed: true }
+  | { allowed: false; reason: "segment" | "plan" };
+
+export function decideAiAccess(input: {
+  plan: ClientPlanType;
+  segmentEligible: boolean;
+  allPlans: boolean;
+}): AiAccessDecision {
+  if (!input.segmentEligible) return { allowed: false, reason: "segment" };
+  if (!aiAllowedPlans(input.allPlans).includes(input.plan)) {
+    return { allowed: false, reason: "plan" };
+  }
+  return { allowed: true };
+}
+
+/**
+ * Estado de acesso que a tela mostra. "error" (não deu para consultar) é
+ * diferente de "denied_*": falha de conexão nunca vira bloqueio de plano.
+ */
+export type AiAccessState =
+  | "allowed"
+  | "denied_plan"
+  | "denied_segment"
+  | "not_configured"
+  | "error";
+
+export function toAiAccessState(decision: AiAccessDecision): AiAccessState {
+  if (decision.allowed) return "allowed";
+  return decision.reason === "segment" ? "denied_segment" : "denied_plan";
+}
+
 export const AI_LEAD_STATUSES = [
   "new",
   "qualifying",

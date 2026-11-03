@@ -6,6 +6,8 @@ import { createRequire } from "node:module";
 import ts from "typescript";
 import { PGlite } from "@electric-sql/pglite";
 import { withTransientRetry } from "../src/lib/ai-agent/retry.ts";
+import { decideAiAccess } from "../src/lib/ai-agent/shared.ts";
+import { hasAiAttendanceSegment } from "../src/lib/segments.ts";
 import {
   EMPTY_KNOWLEDGE,
   DEFAULT_SCHEDULE,
@@ -209,7 +211,19 @@ async function runtime() {
       phoneNumber: "5511900000000",
     }),
     getAiAgentSettings: async () => settings,
-    getClientPlan: async () => "complete",
+    getClientAiAccess: async () => {
+      const segment = state.segment ?? "veiculo_atrasado";
+      return {
+        plan: "complete",
+        segment,
+        allPlans: false,
+        decision: decideAiAccess({
+          plan: "complete",
+          segmentEligible: hasAiAttendanceSegment(segment),
+          allPlans: false,
+        }),
+      };
+    },
     getClientSegment: async () => state.segment ?? "veiculo_atrasado",
     getClientCompanyName: async () => state.company ?? null,
     // Mesmo filtro da store: parada há mais de 1 min com mensagem pendente.

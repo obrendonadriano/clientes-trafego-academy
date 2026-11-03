@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   CLIENT_PLAN_LABELS,
+  aiAllowedPlans,
   type ClientPlanType,
 } from "@/lib/ai-agent/shared";
 
@@ -33,15 +34,29 @@ function WhatsappCell({ status }: { status: string | null }) {
   );
 }
 
-export function AdminAiAgentOverview({ rows }: { rows: AdminAiAgentRow[] }) {
-  const complete = rows.filter((row) => row.planType === "complete");
+export function AdminAiAgentOverview({
+  rows,
+  allPlans,
+}: {
+  rows: AdminAiAgentRow[];
+  // Interruptor "liberar para todos os planos"; null = não foi possível ler.
+  allPlans: boolean | null;
+}) {
+  // Mesma regra do resto do app (aiAllowedPlans).
+  const withAccess =
+    allPlans === null
+      ? null
+      : rows.filter((row) => aiAllowedPlans(allPlans).includes(row.planType));
   const active = rows.filter((row) => row.aiEnabled);
 
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-3">
         <SummaryTile label="Clientes" value={rows.length} />
-        <SummaryTile label="No Plano Completo" value={complete.length} />
+        <SummaryTile
+          label="Com acesso à IA"
+          value={withAccess === null ? "—" : withAccess.length}
+        />
         <SummaryTile label="Com IA ativa" value={active.length} />
       </div>
 
@@ -134,7 +149,7 @@ export function AdminAiAgentOverview({ rows }: { rows: AdminAiAgentRow[] }) {
   );
 }
 
-function SummaryTile({ label, value }: { label: string; value: number }) {
+function SummaryTile({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="dashboard-card rounded-[1.5rem] border px-5 py-4">
       <p className="text-xs text-muted-foreground">{label}</p>

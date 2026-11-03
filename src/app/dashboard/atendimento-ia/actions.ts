@@ -14,8 +14,7 @@ import {
   deleteConversation,
   ensureAiAgentSettings,
   findConversationById,
-  getClientPlan,
-  getClientSegment,
+  getClientAiAccess,
   getSessionForClient,
   listConversationMessages,
   updateAiAgentSettings,
@@ -49,7 +48,6 @@ import {
   scheduleSchema,
   type AiScript,
 } from "@/lib/ai-agent/config";
-import { hasAiAttendanceSegment } from "@/lib/segments";
 
 export type AiAgentActionState = {
   success?: string;
@@ -61,11 +59,11 @@ export type AiAgentActionState = {
  * Porteiro de TODA ação desta área.
  *
  * Confirma, no servidor: sessão válida, papel de cliente ativo, vínculo com um
- * cliente e Plano Completo. Alterar o HTML, a requisição ou chamar a action
+ * cliente e plano com IA liberada. Alterar o HTML, a requisição ou chamar a action
  * direto não contorna nada disso — e o banco ainda tem a própria trava por
  * trigger como última linha de defesa.
  */
-async function requireCompletePlanClient() {
+async function requireAiAccessClient() {
   const user = await getOptionalCurrentUser();
 
   if (!user || user.role !== "client" || !user.active || !user.clientId) {
@@ -75,18 +73,25 @@ async function requireCompletePlanClient() {
     );
   }
 
-  const plan = await getClientPlan(user.clientId);
-
-  if (plan !== "complete") {
+  // Mesma regra da página e do robô (decideAiAccess). Falha de consulta vira
+  // "tente de novo", nunca "seu plano não tem IA".
+  let access;
+  try {
+    access = await getClientAiAccess(user.clientId);
+  } catch {
     throw new AiAgentError(
-      "O atendimento por IA é exclusivo do Plano Completo.",
-      403,
+      "Não foi possível confirmar seu acesso agora. Verifique a conexão e tente novamente.",
+      503,
     );
   }
 
-  if (!hasAiAttendanceSegment(await getClientSegment(user.clientId))) {
+  if (!access.decision.allowed) {
+    // Acesso retirado com a tela aberta: a resposta já leva a tela nova.
+    refresh();
     throw new AiAgentError(
-      "O atendimento por IA está disponível apenas para compra e aquisição de veículos.",
+      access.decision.reason === "segment"
+        ? "O atendimento por IA está disponível apenas para compra e aquisição de veículos."
+        : "O atendimento por IA não está liberado para o plano desta conta.",
       403,
     );
   }
@@ -119,7 +124,7 @@ export async function toggleAiAgentAction(
   formData: FormData,
 ): Promise<AiAgentActionState> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId } = await requireAiAccessClient();
     const enabled = formData.get("enabled") === "true";
 
     if (enabled) {
@@ -160,7 +165,7 @@ export async function saveNotificationNumberAction(
   formData: FormData,
 ): Promise<AiAgentActionState> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId } = await requireAiAccessClient();
     const raw = String(formData.get("notificationWhatsapp") ?? "").trim();
 
     if (!raw) {
@@ -197,7 +202,7 @@ export async function testNotificationNumberAction(
   formData: FormData,
 ): Promise<AiAgentActionState> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId } = await requireAiAccessClient();
 
     // Usa o número do formulário quando informado, para testar antes de salvar.
     const raw = String(formData.get("notificationWhatsapp") ?? "").trim();
@@ -319,7 +324,7 @@ export async function saveAiAdvancedSettingsAction(
   formData: FormData,
 ): Promise<AiAgentActionState> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId } = await requireAiAccessClient();
 
     const parsed = advancedSchema.safeParse({
       delayMinMs: secondsToMs(formData.get("delayMin")),
@@ -375,7 +380,7 @@ export async function setHumanTakeoverAction(
   formData: FormData,
 ): Promise<AiAgentActionState> {
   try {
-    const { clientId, user } = await requireCompletePlanClient();
+    const { clientId, user } = await requireAiAccessClient();
 
     const parsed = conversationSchema.safeParse({
       conversationId: formData.get("conversationId"),
@@ -438,7 +443,7 @@ export async function loadConversationMessagesAction(
   conversationId: string,
 ): Promise<ConversationDetailResult> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId } = await requireAiAccessClient();
     const conversation = await findConversationById(clientId, conversationId);
 
     if (!conversation) {
@@ -457,7 +462,7 @@ export async function saveAiKnowledgeAction(
   formData: FormData,
 ): Promise<AiAgentActionState> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId } = await requireAiAccessClient();
     // O roteiro de mensagens é salvo em outro formulário: preserva o atual.
     const current = await ensureAiAgentSettings(clientId);
     const getLines = (key: string) =>
@@ -508,7 +513,7 @@ export async function saveAiScheduleAction(
   formData: FormData,
 ): Promise<AiAgentActionState> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId } = await requireAiAccessClient();
     const parsed = scheduleSchema.safeParse({
       weekdays: formData.getAll("weekdays").map(Number),
       start: formData.get("start"),
@@ -566,7 +571,7 @@ export async function saveAiScriptAction(
   formData: FormData,
 ): Promise<AiAgentActionState> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId } = await requireAiAccessClient();
     const read = (key: string) => String(formData.get(key) ?? "").trim();
     const script: AiScript = {
       greeting: read("greeting"),
@@ -599,7 +604,7 @@ export async function saveAiScriptAction(
 
 export async function restoreAiScriptAction(): Promise<AiAgentActionState> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId } = await requireAiAccessClient();
     const current = await ensureAiAgentSettings(clientId);
     await updateAiAgentSettings(clientId, {
       knowledge: { ...current.knowledge, script: DEFAULT_SCRIPT },
@@ -620,7 +625,7 @@ export async function saveAiActivationAction(
   formData: FormData,
 ): Promise<AiAgentActionState> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId } = await requireAiAccessClient();
     const enabled = formData.get("activationEnabled") === "on";
     const phrases = readActivationPhrases(formData);
     if (!phrases.ok) return phrases.state;
@@ -675,7 +680,7 @@ function readActivationPhrases(
 
 export async function restoreAiActivationAction(): Promise<AiAgentActionState> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId } = await requireAiAccessClient();
     const current = await ensureAiAgentSettings(clientId);
     await updateAiAgentSettings(clientId, {
       knowledge: { ...current.knowledge, activation: DEFAULT_ACTIVATION },
@@ -723,7 +728,7 @@ export async function addBlockedNumberAction(
   formData: FormData,
 ): Promise<AiAgentActionState> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId } = await requireAiAccessClient();
     const parsed = readBlockedForm(formData);
     if (!parsed.ok) return parsed.state;
     await addBlockedNumber(clientId, parsed);
@@ -739,7 +744,7 @@ export async function updateBlockedNumberAction(
   formData: FormData,
 ): Promise<AiAgentActionState> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId } = await requireAiAccessClient();
     const id = blockedIdSchema.safeParse(formData.get("id"));
     if (!id.success) return { error: "Número inválido." };
     const parsed = readBlockedForm(formData);
@@ -760,7 +765,7 @@ export async function toggleBlockedNumberAction(
   formData: FormData,
 ): Promise<AiAgentActionState> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId } = await requireAiAccessClient();
     const id = blockedIdSchema.safeParse(formData.get("id"));
     if (!id.success) return { error: "Número inválido." };
     const blocked = formData.get("blocked") === "true";
@@ -781,7 +786,7 @@ export async function deleteBlockedNumberAction(
   formData: FormData,
 ): Promise<AiAgentActionState> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId } = await requireAiAccessClient();
     const id = blockedIdSchema.safeParse(formData.get("id"));
     if (!id.success) return { error: "Número inválido." };
     await deleteBlockedNumber(clientId, id.data);
@@ -812,7 +817,7 @@ export async function saveAiProfileAction(
   formData: FormData,
 ): Promise<AiAgentActionState> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId } = await requireAiAccessClient();
     const phrases = readActivationPhrases(formData);
     if (!phrases.ok) return phrases.state;
 
@@ -907,7 +912,7 @@ export async function deleteAiConversationAction(
   formData: FormData,
 ): Promise<AiAgentActionState> {
   try {
-    const { clientId } = await requireCompletePlanClient();
+    const { clientId } = await requireAiAccessClient();
     const id = z.string().uuid().safeParse(formData.get("conversationId"));
     if (!id.success) return { error: "Lead inválido." };
     await deleteConversation(clientId, id.data);

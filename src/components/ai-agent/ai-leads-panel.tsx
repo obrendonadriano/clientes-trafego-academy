@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useEffect, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import {
   Bot,
   CircleUser,
@@ -167,14 +166,7 @@ export function AiLeadsPanel({
   const selected = conversations.find((item) => item.id === selectedId);
   const [deletingId, setDeleting] = useState<string | null>(null);
   const deleting = conversations.find((item) => item.id === deletingId);
-  const router = useRouter();
-  useEffect(() => {
-    if (!interactive) return;
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") router.refresh();
-    }, 15000);
-    return () => clearInterval(timer);
-  }, [interactive, router]);
+  // Atualização dos leads: AiLiveSync (página) só recarrega quando muda algo.
 
   const visible = conversations.filter(
     (item) =>

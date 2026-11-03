@@ -8,7 +8,7 @@ import { ListSkeleton } from "@/components/dashboard/skeletons";
 import { PageHeader } from "@/components/shell/page-header";
 import { getCurrentUser } from "@/lib/auth/session";
 import { toClientPlanType } from "@/lib/ai-agent/shared";
-import { aiAdminClient } from "@/lib/ai-agent/store";
+import { aiAdminClient, getAiAllPlans } from "@/lib/ai-agent/store";
 import { isSupabaseAdminConfigured } from "@/lib/env";
 
 type OverviewRow = {
@@ -60,7 +60,11 @@ async function AdminAiAgentSection() {
     redirect("/dashboard");
   }
 
-  const rows = await loadRows();
+  const [rows, allPlans] = await Promise.all([
+    loadRows(),
+    // null: não deu para ler o interruptor (o card avisa em vez de chutar).
+    isSupabaseAdminConfigured() ? getAiAllPlans().catch(() => null) : Promise.resolve(false),
+  ]);
 
   if (!rows) {
     return (
@@ -72,7 +76,7 @@ async function AdminAiAgentSection() {
     );
   }
 
-  return <AdminAiAgentOverview rows={rows} />;
+  return <AdminAiAgentOverview rows={rows} allPlans={allPlans} />;
 }
 
 export default function AdminAiAgentRoute() {

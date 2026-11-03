@@ -8,14 +8,17 @@ import {
   type AiAgentSettings,
   type AiConversationMessage,
   type AiConversationSummary,
+  toAiAccessState,
+  type AiAccessState,
   type ClientPlanType,
 } from "@/lib/ai-agent/shared";
 import {
   countConversations,
   ensureAiAgentSettings,
   getAiAgentSettings,
-  getClientPlan,
-  getClientSegment,
+  getAiLiveFingerprint,
+  getClientAiAccess,
+  type ClientAiAccess,
   getSessionForClient,
   listConversationMessages,
   listConversations,
@@ -24,10 +27,12 @@ import {
 } from "@/lib/ai-agent/store";
 import { isSupabaseAdminConfigured } from "@/lib/env";
 import { listBlockedNumbers, type AiBlockedNumber } from "@/lib/ai-agent/blocked";
-import { hasAiAttendanceSegment } from "@/lib/segments";
 import type { User } from "@/lib/types";
 
 export type AiAgentPageData = {
+  // Estado de acesso: a página decide o que mostrar só por aqui.
+  access: AiAccessState;
+  // Plano contratado de verdade (o acesso pode vir do interruptor do admin).
   plan: ClientPlanType;
   settings: AiAgentSettings;
   whatsappConnected: boolean;
@@ -35,11 +40,9 @@ export type AiAgentPageData = {
   whatsappPhone: string | null;
   conversations: AiConversationSummary[];
   totals: { total: number; qualified: number };
-  // Quando true, o banco ainda não tem a estrutura da IA (migração pendente).
-  unavailable?: boolean;
-  // Atendimento nichado: false para clientes fora de compra de veículos.
-  segmentEligible?: boolean;
   blockedNumbers: AiBlockedNumber[];
+  // Mesma impressão digital da rota /api/ia/estado (null fora de "allowed").
+  fingerprint: string | null;
 };
 
 function fallbackSettings(clientId: string): AiAgentSettings {
@@ -63,65 +66,77 @@ function fallbackSettings(clientId: string): AiAgentSettings {
   };
 }
 
+function emptyData(
+  access: AiAccessState,
+  clientId: string,
+  plan: ClientPlanType = "essential",
+): AiAgentPageData {
+  return {
+    access,
+    plan,
+    settings: fallbackSettings(clientId),
+    whatsappConnected: false,
+    whatsappStatus: null,
+    whatsappPhone: null,
+    conversations: [],
+    totals: { total: 0, qualified: 0 },
+    blockedNumbers: [],
+    fingerprint: null,
+  };
+}
+
 export async function getAiAgentPageData(user: User): Promise<AiAgentPageData> {
   const clientId = user.clientId;
 
-  if (!clientId || !isSupabaseAdminConfigured()) {
-    return {
-      plan: "essential",
-      settings: fallbackSettings(clientId ?? ""),
-      whatsappConnected: false,
-      whatsappStatus: null,
-      whatsappPhone: null,
-      conversations: [],
-      totals: { total: 0, qualified: 0 },
-      blockedNumbers: [],
-      unavailable: !isSupabaseAdminConfigured(),
-    };
+  if (!isSupabaseAdminConfigured()) {
+    return emptyData("not_configured", clientId ?? "");
   }
 
-  try {
-    const [plan, segment] = await Promise.all([
-      getClientPlan(clientId),
-      getClientSegment(clientId),
-    ]);
+  // Usuário de cliente sem empresa vinculada: problema de cadastro, não de
+  // plano. Mostra como indisponível, nunca como "faça upgrade".
+  if (!clientId) {
+    return emptyData("not_configured", "");
+  }
 
-    if (!hasAiAttendanceSegment(segment)) {
-      return {
-        plan,
-        settings: fallbackSettings(clientId),
-        whatsappConnected: false,
-        whatsappStatus: null,
-        whatsappPhone: null,
-        conversations: [],
-        totals: { total: 0, qualified: 0 },
-        blockedNumbers: [],
-        segmentEligible: false,
-      };
+  let access: ClientAiAccess;
+  try {
+    access = await getClientAiAccess(clientId);
+  } catch (error) {
+    console.error("[ia/pagina] falha ao verificar acesso", {
+      message: error instanceof Error ? error.message : "erro desconhecido",
+    });
+    return emptyData("error", clientId);
+  }
+
+  const state = toAiAccessState(access.decision);
+
+  try {
+    if (state === "denied_segment") {
+      return emptyData(state, clientId, access.plan);
     }
 
-    // O prompt padrão nasce junto com o acesso ao Plano Completo. Cliente
-    // Essencial não ganha linha de configuração até fazer o upgrade.
-    const settings =
-      plan === "complete"
-        ? await ensureAiAgentSettings(clientId)
-        : ((await getAiAgentSettings(clientId)) ?? fallbackSettings(clientId));
+    if (state === "denied_plan") {
+      // Prévia desfocada com a configuração salva (se já existir).
+      const settings =
+        (await getAiAgentSettings(clientId)) ?? fallbackSettings(clientId);
+      return { ...emptyData(state, clientId, access.plan), settings };
+    }
 
-    const [session, conversations, totals, blockedNumbers] = await Promise.all([
-      getSessionForClient(clientId),
-      plan === "complete"
-        ? listConversations({ clientId, limit: 50 })
-        : Promise.resolve([] as AiConversationSummary[]),
-      plan === "complete"
-        ? countConversations(clientId)
-        : Promise.resolve({ total: 0, qualified: 0 }),
-      plan === "complete"
-        ? listBlockedNumbers(clientId)
-        : Promise.resolve([] as AiBlockedNumber[]),
-    ]);
+    // A linha de configuração nasce junto com o acesso. Nunca liga a IA.
+    const settings = await ensureAiAgentSettings(clientId);
+
+    const [session, conversations, totals, blockedNumbers, fingerprint] =
+      await Promise.all([
+        getSessionForClient(clientId),
+        listConversations({ clientId, limit: 50 }),
+        countConversations(clientId),
+        listBlockedNumbers(clientId),
+        getAiLiveFingerprint(clientId),
+      ]);
 
     return {
-      plan,
+      access: state,
+      plan: access.plan,
       settings,
       whatsappConnected: session?.status === "WORKING",
       whatsappStatus: session?.status ?? null,
@@ -129,23 +144,14 @@ export async function getAiAgentPageData(user: User): Promise<AiAgentPageData> {
       conversations,
       totals,
       blockedNumbers,
+      fingerprint,
     };
   } catch (error) {
     console.error("[ia/pagina] falha ao carregar", {
       message: error instanceof Error ? error.message : "erro desconhecido",
     });
-
-    return {
-      plan: "essential",
-      settings: fallbackSettings(clientId),
-      whatsappConnected: false,
-      whatsappStatus: null,
-      whatsappPhone: null,
-      conversations: [],
-      totals: { total: 0, qualified: 0 },
-      blockedNumbers: [],
-      unavailable: true,
-    };
+    // Acesso confirmado, mas os dados não vieram: é erro, não bloqueio.
+    return emptyData("error", clientId, access.plan);
   }
 }
 
@@ -168,9 +174,9 @@ export async function getAiConversationDetail(
     return null;
   }
 
-  const plan = await getClientPlan(clientId);
+  const access = await getClientAiAccess(clientId);
 
-  if (plan !== "complete") {
+  if (!access.decision.allowed) {
     return null;
   }
 
