@@ -1773,3 +1773,30 @@ test("ativação: mensagem do anúncio em qualquer idioma e clique no anúncio",
   const plain = parseIncomingEvent({ ...base, payload: { id: "m1", from: "5535997321516@c.us", fromMe: false, body: "Oi" } });
   assert.equal(plain.fromAd, false);
 });
+
+test("parcelas: \"60x\" e \"60 vezes\" são lidos como quantidade", () => {
+  for (const incoming of ["60x", "60 vezes", "60X", "60"]) {
+    const d = policy(
+      { intent: "qualification" },
+      {
+        firstTurn: false,
+        incoming,
+        lastQuestion: "overdue_installments_count",
+        facts: { ...complete, has_overdue_installments: null, overdue_installments_count: null },
+      },
+    );
+    assert.equal(d.facts.overdue_installments_count, 60, incoming);
+  }
+});
+
+test("não repete \"não consegui entender\" duas vezes seguidas", () => {
+  const facts = { ...complete, has_overdue_installments: null, overdue_installments_count: null };
+  const more = { firstTurn: false, incoming: "60", lastQuestion: "has_overdue_installments", facts };
+  const first = policy({ intent: "qualification" }, more);
+  assert.match(text(first), /não consegui entender/);
+  const second = policy(
+    { intent: "qualification" },
+    { ...more, previousReply: text(first) },
+  );
+  assert.doesNotMatch(text(second), /não consegui entender/);
+});

@@ -396,10 +396,11 @@ function wordNumbers(source: string) {
   return { found, tokens };
 }
 
-/** Quantidade de parcelas: "3", "umas 3", "duas", "uma só". */
+/** Quantidade de parcelas: "3", "umas 3", "60x", "60 vezes", "duas", "uma só". */
 function readCount(text: string): number | null {
   const source = plain(text);
-  const digits = /\b(\d{1,3})\b/.exec(source);
+  // Sem \b no fim: "60x" não tem fronteira entre o 0 e o x. "2.030" não vale.
+  const digits = /(?<![\d.,])(\d{1,3})(?!\d|[.,]\d)/.exec(source);
   if (digits) return Number(digits[1]);
   const { found } = wordNumbers(source);
   return found.length ? found[0].value : null;
@@ -515,6 +516,15 @@ function combinedAnswer(field: Field, text: string): Facts[Field] | null {
       return readAmount(text);
     case "has_overdue_installments":
       return readOverdue(text);
+    case "remaining_installments": {
+      // Só com marca de parcela ("60x", "faltam 30", "30 parcelas"), para não
+      // confundir com o valor ou com a quantidade em atraso.
+      const source = plain(text);
+      const marked =
+        /(\d{1,3})\s*(?:x|vezes|parcelas?|prestacoes?)\b(?!\s*(?:em )?atras)/.exec(source) ??
+        /falta(?:m|ndo)?\s+(?:so\s+|umas?\s+|mais\s+)*(\d{1,3})\b(?!\s*(?:mil|k|reais))/.exec(source);
+      return marked ? Number(marked[1]) : null;
+    }
     default:
       return null;
   }
@@ -673,6 +683,8 @@ export function decidePolicy(input: {
   customAnswers?: Record<string, string>;
   // Mensagens anteriores do lead: evidência das respostas livres extraídas.
   leadHistory?: string[];
+  // Última resposta enviada pela IA (balões juntos), para não repetir em loop.
+  previousReply?: string;
 }): PolicyDecision {
   const { extraction: e, incoming, knowledge: kb } = input;
   const script = kb.script;
@@ -807,6 +819,20 @@ export function decidePolicy(input: {
       !changedFields.includes(field)
     )
       unknown.add(field);
+  // Já disse "não consegui entender" e o lead respondeu de novo sem o dado:
+  // não repete a mesma pergunta outra vez. Opcional segue o roteiro;
+  // financiamento e modelo passam para a equipe (required_unknown).
+  const waitingText = fold(says.waiting).trim();
+  if (
+    !injected &&
+    !e.human_requested &&
+    waitingText &&
+    fold(input.previousReply ?? "").includes(waitingText) &&
+    askedLast.length > 0 &&
+    !askedLast.some((field) => changedFields.includes(field)) &&
+    ["qualification", "off_topic", "greeting"].includes(e.intent)
+  )
+    for (const field of askedLast) if (facts[field] === null) unknown.add(field);
   const pendingField = (field: Field) =>
     facts[field] === null &&
     (!unknown.has(field) || field === "financed" || field === "vehicle");

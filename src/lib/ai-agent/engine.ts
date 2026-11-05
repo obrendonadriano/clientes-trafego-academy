@@ -133,6 +133,7 @@ free_questions = perguntas abertas do roteiro ainda sem resposta. Se o LEAD já 
     lastQuestion: conversation.last_question,
     customAnswers,
     leadHistory,
+    previousReply: lastAiTurn(history),
     media,
     mediaOnly: media !== "text" && !hasText,
     // "{empresa}": nome nas informações da IA ou, sem ele, o do cadastro.
@@ -153,6 +154,17 @@ free_questions = perguntas abertas do roteiro ainda sem resposta. Se o LEAD já 
     decision.reason = "reply_validation_failed";
   }
   return { decision, messages, model: config?.model ?? "deterministic" };
+}
+
+/** Balões da última resposta da IA, juntos (o histórico vem do mais antigo). */
+function lastAiTurn(history: { sender_type: string; body: string | null }[]) {
+  const parts: string[] = [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    const message = history[i];
+    if (message.sender_type === "ai") parts.unshift(message.body ?? "");
+    else if (parts.length || message.sender_type !== "lead") break;
+  }
+  return parts.join(" ");
 }
 
 function orNotInformed(value: unknown) {
