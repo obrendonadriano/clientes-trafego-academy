@@ -1800,3 +1800,43 @@ test("não repete \"não consegui entender\" duas vezes seguidas", () => {
   );
   assert.doesNotMatch(text(second), /não consegui entender/);
 });
+
+test("pergunta do cliente marcada com outro dado: guarda a resposta e segue", () => {
+  const facts = { ...complete, has_overdue_installments: null, overdue_installments_count: null };
+  const d = policy(
+    {
+      intent: "qualification",
+      last_answer: { answer: "60 parcelas de R$ 2.380,00", evidence: "60 vezes de 2.380,00" },
+    },
+    { firstTurn: false, incoming: "60 vezes de 2.380,00", lastQuestion: "has_overdue_installments", facts },
+  );
+  assert.doesNotMatch(text(d), /não consegui entender|necessário para avaliar/);
+  assert.equal(d.customAnswered?.answer, "60 parcelas de R$ 2.380,00");
+  assert.equal(d.human, false);
+});
+
+test("valor com vírgula de milhar: \"2,380,00\" e \"2.380,00\" = 2380", () => {
+  for (const incoming of ["2,380,00", "2.380,00", "R$ 2380"]) {
+    const d = policy(
+      { intent: "qualification" },
+      { firstTurn: false, incoming, lastQuestion: "debt_amount", facts: { ...complete, debt_amount: null } },
+    );
+    assert.equal(d.facts.debt_amount, 2380, incoming);
+  }
+});
+
+test("dívida: número solto abaixo de mil é em milhares (\"30\" = R$ 30 mil)", () => {
+  for (const [incoming, value] of [["30", 30000], ["uns 30", 30000], ["trinta", 30000], ["45,5", 45500], ["30 reais", 30], ["2.380,00", 2380]]) {
+    const d = policy(
+      { intent: "qualification" },
+      { firstTurn: false, incoming, lastQuestion: "debt_amount", facts: { ...complete, debt_amount: null } },
+    );
+    assert.equal(d.facts.debt_amount, value, incoming);
+  }
+  // O modelo devolvendo 30 para "30" também vira 30 mil.
+  const m = policy(
+    { facts: [fact("debt_amount", 30, "30")] },
+    { firstTurn: false, incoming: "30", lastQuestion: "debt_amount", facts: { ...complete, debt_amount: null } },
+  );
+  assert.equal(m.facts.debt_amount, 30000);
+});

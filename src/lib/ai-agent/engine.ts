@@ -35,6 +35,7 @@ const EMPTY_EXTRACTION: Extraction = {
   confidence: 1,
   faq_index: null,
   free_answers: [],
+  last_answer: null,
 };
 
 export async function runConversationTurn(input: {
@@ -70,6 +71,8 @@ export async function runConversationTurn(input: {
   const leadHistory = history
     .filter((m) => m.direction === "inbound" && m.body)
     .map((m) => m.body as string);
+  // Texto exato que a IA mandou por último: a pergunta do roteiro do cliente.
+  const previousReply = lastAiTurn(history);
   const config = await getDeepseekRuntimeConfig();
   let extraction: Extraction = { ...EMPTY_EXTRACTION };
   if (hasText && !isInjection(incoming)) {
@@ -87,7 +90,7 @@ Se um dado corrigir outro, correction=true. Normalize números brasileiros. Se d
 O lead escreve em português informal do Brasil, com gíria, abreviação (vc, tb, q, ss, n, blz), erro de digitação e sem acento. Exemplos:
 - financed=true: "sim", "ss", "tô pagando", "ainda devo", "tá alienado", "pago boleto/carnê". financed=false: "tá pago", "quitei", "já paguei tudo", "comprei à vista". Ainda devendo com o carro de garantia é financed=true, mesmo que comece com "não": "não, tem um fiduciário (empréstimo), faltam 3 mil", "alienado", "já paguei a maior parte".
 - vehicle_year: "22" = 2022, "2019/2020" ou "19/20" = 2020 (ano modelo).
-- debt_amount: "100k", "100 mil", "100 pau", "cem mil" = 100000; "1,2 mi" = 1200000.
+- debt_amount: "100k", "100 mil", "100 pau", "cem mil" = 100000; "1,2 mi" = 1200000. Valor grande (dívida, quanto falta pagar, quanto já pagou, FIPE, valor do veículo) dito com número abaixo de mil e sem "reais" é em MIL: "30" = 30000, "45,5" = 45500. Isso vale também para answer de free_answers e last_answer ("30" -> "R$ 30 mil"). Valor da PARCELA é em reais como veio: "890" = R$ 890, "2.380,00" = R$ 2.380.
 - has_overdue_installments=false: "tudo em dia", "certinho", "nenhuma atrasada". true: "2 atrasadas", "tô devendo 3", "atrasei uma" (e overdue_installments_count quando houver número).
 Nunca produza resposta nem status de lead. Formato JSON exato:
 {"facts":[{"field":"vehicle","value":"Corolla","evidence":"Corolla","correction":false}],"unknown_fields":[{"field":"bank","evidence":"não sei o banco"}],"intent":"qualification","human_requested":false,"confidence":0.95,"faq_index":null}
@@ -95,7 +98,8 @@ Campos: ${FIELDS.join(", ")}. city = cidade onde o veículo está. remaining_ins
 Intents: qualification,greeting,documents,price,approval,company,hours,regions,bot,human,off_topic,buys,does_not_buy,rules,facts,no_vehicle.
 no_vehicle: a pessoa diz explicitamente que não tem veículo (ex.: "não tenho carro", "ainda vou comprar"). Veículo quitado não é no_vehicle: use o fato financed=false.
 buys/does_not_buy indicam perguntas sobre o que a empresa compra; rules são condições comerciais gerais; facts são outras informações cadastradas. Nunca extraia fatos do lead a partir da base da empresa.
-free_questions = perguntas abertas do roteiro ainda sem resposta. Se o LEAD já respondeu alguma delas na mensagem nova OU em mensagens anteriores dele no history (ex.: um formulário preenchido com "Valor da parcela: 1500", "Quantas estão em atraso: 1"), devolva em free_answers {"key","answer","evidence"}: answer curto com o dado, evidence = trecho literal da mensagem do lead. Também extraia os fatos dos campos acima que o formulário trouxer. Se o lead disser "olha aí em cima", procure a resposta nas mensagens anteriores dele. Só o que estiver explícito; na dúvida, não inclua. Inclua "free_answers":[] no JSON.`,
+free_questions = perguntas abertas do roteiro ainda sem resposta. Se o LEAD já respondeu alguma delas na mensagem nova OU em mensagens anteriores dele no history (ex.: um formulário preenchido com "Valor da parcela: 1500", "Quantas estão em atraso: 1"), devolva em free_answers {"key","answer","evidence"}: answer curto com o dado, evidence = trecho literal da mensagem do lead. Também extraia os fatos dos campos acima que o formulário trouxer. Se o lead disser "olha aí em cima", procure a resposta nas mensagens anteriores dele. Só o que estiver explícito; na dúvida, não inclua. Inclua "free_answers":[] no JSON.
+last_question_text = texto EXATO da última mensagem enviada ao lead (a pergunta que ele está respondendo, escrita pelo cliente). Leia a mensagem nova como resposta a ESSA pergunta. Só coloque o dado num campo se ele for de fato aquele campo (ex.: "total de parcelas do financiamento" não é overdue_installments_count nem has_overdue_installments). Se a mensagem nova responde à pergunta de last_question_text, mesmo que a resposta não caiba em nenhum campo, devolva last_answer {"answer","evidence"}: answer = a resposta curta e clara (ex.: pergunta "Qual o total de parcelas que o veículo foi financiado?", lead "60 vezes de 2.380,00" -> answer "60 parcelas de R$ 2.380,00"), evidence = trecho literal da mensagem nova. Se a mensagem nova não responde (pergunta, cumprimento, "não sei", outro assunto), "last_answer":null. Inclua sempre "last_answer" no JSON.`,
         },
         {
           role: "user",
@@ -108,6 +112,7 @@ free_questions = perguntas abertas do roteiro ainda sem resposta. Se o LEAD já 
                 : conversation.last_question?.startsWith(CUSTOM_KEY_PREFIX)
                   ? "pergunta_livre"
                   : conversation.last_question,
+            last_question_text: previousReply || null,
             history: history.map((m) => ({
               sender: m.sender_type,
               text: m.body,
@@ -133,7 +138,7 @@ free_questions = perguntas abertas do roteiro ainda sem resposta. Se o LEAD já 
     lastQuestion: conversation.last_question,
     customAnswers,
     leadHistory,
-    previousReply: lastAiTurn(history),
+    previousReply,
     media,
     mediaOnly: media !== "text" && !hasText,
     // "{empresa}": nome nas informações da IA ou, sem ele, o do cadastro.

@@ -75,6 +75,16 @@ export const extractionSchema = z
       )
       .max(16)
       .default([]),
+    // Resposta do lead à pergunta que a IA enviou por último (texto exato em
+    // last_question_text), mesmo quando não cabe em nenhum campo.
+    last_answer: z
+      .object({
+        answer: z.string().min(1).max(300),
+        evidence: z.string().min(1).max(500),
+      })
+      .strict()
+      .nullable()
+      .default(null),
   })
   .strict();
 export type Extraction = z.infer<typeof extractionSchema>;
@@ -433,33 +443,58 @@ function readYear(text: string): number | null {
 }
 
 /**
+ * Número escrito à brasileira (ou misturado): "100.000", "2.380,00",
+ * "2,380,00", "1.234.567", "85,5". Com dois ou mais separadores, o último
+ * com 1-2 dígitos é a vírgula decimal e os outros são milhar.
+ */
+function brNumber(raw: string) {
+  const value = raw.replace(/[.,]+$/, "");
+  const parts = value.split(/[.,]/);
+  if (parts.length > 2) {
+    const last = parts[parts.length - 1];
+    return Number(
+      last.length <= 2 ? `${parts.slice(0, -1).join("")}.${last}` : parts.join(""),
+    );
+  }
+  return Number(value.replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", "."));
+}
+
+/**
  * Valores em reais do jeito que o lead escreve: "100k", "100 mil", "100 pau",
  * "R$ 100.000", "85,5 mil", "1,2 milhão", "cem mil", "oitenta e cinco mil".
  * Cada número vale como está e com o multiplicador que veio junto.
+ * Número solto abaixo de mil ("30", "trinta") também vale em milhares: dívida
+ * de veículo não é R$ 30, é R$ 30 mil. Só "30 reais" fica literal.
  */
+function inThousands(value: number, text: string) {
+  return value > 0 && value < 1000 && !/\breais\b/.test(fold(text))
+    ? Math.round(value * 1000)
+    : value;
+}
 function amountsIn(text: string) {
   const source = fold(text);
+  const bare = (n: number) => (inThousands(n, text) !== n ? [n, inThousands(n, text)] : [n]);
   const scale = (unit: string | undefined) =>
     !unit ? 1 : /^(?:mi|milhao|milhoes)$/.test(unit) ? 1_000_000 : 1000;
   const amounts = [
     ...source.matchAll(/(\d[\d.,]*)\s*(k|mil|paus?|mi|milhao|milhoes)?\b/g),
   ].flatMap((m) => {
-    const n = Number(m[1].replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", "."));
+    const n = brNumber(m[1]);
     if (!Number.isFinite(n)) return [];
     const factor = scale(m[2]) || 1;
     return factor > 1 || /\bmil\b/.test(source)
       ? [n, Math.round(n * (factor > 1 ? factor : 1000))]
-      : [n];
+      : bare(n);
   });
   const { found, tokens } = wordNumbers(plain(text));
   for (const { value, end } of found) {
     const unit = tokens[end];
     amounts.push(
-      unit === "mil" || unit === "pau" || unit === "paus"
-        ? value * 1000
+      ...(unit === "mil" || unit === "pau" || unit === "paus"
+        ? [value * 1000]
         : unit === "milhao" || unit === "milhoes"
-          ? value * 1_000_000
-          : value,
+          ? [value * 1_000_000]
+          : bare(value)),
     );
   }
   return amounts;
@@ -513,7 +548,10 @@ function combinedAnswer(field: Field, text: string): Facts[Field] | null {
     case "vehicle_year":
       return readYear(text);
     case "debt_amount":
-      return readAmount(text);
+      // "18 parcelas", "60x", "2 atrasadas" não são o valor da dívida.
+      return readAmount(
+        fold(text).replace(/\d{1,3}\s*(?:x|vezes|parcelas?|prestacoes?|atrasad\w*|em atraso)\b/g, " "),
+      );
     case "has_overdue_installments":
       return readOverdue(text);
     case "remaining_installments": {
@@ -578,9 +616,7 @@ function coerceValue(field: Field, value: Facts[Field]): Facts[Field] {
     return value;
   }
   if (NUMBER_FIELDS.includes(field) && /^[\d.,\s]+$/.test(value.trim())) {
-    const number = Number(
-      value.trim().replace(/\s/g, "").replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", "."),
-    );
+    const number = brNumber(value.trim().replace(/\s/g, ""));
     return Number.isFinite(number) ? number : value;
   }
   return value;
@@ -699,6 +735,9 @@ export function decidePolicy(input: {
   if (!injected && e.confidence >= 0.7) {
     for (const raw of e.facts) {
       const fact = { ...raw, value: coerceValue(raw.field, raw.value) };
+      // O modelo às vezes devolve 30 para "30": dívida é em milhares.
+      if (fact.field === "debt_amount" && typeof fact.value === "number")
+        fact.value = inThousands(fact.value, fact.evidence);
       if (
         // Citação literal, sem depender de maiúscula/acento do modelo.
         !fold(incoming).includes(fold(fact.evidence)) ||
@@ -833,6 +872,31 @@ export function decidePolicy(input: {
     ["qualification", "off_topic", "greeting"].includes(e.intent)
   )
     for (const field of askedLast) if (facts[field] === null) unknown.add(field);
+  // O lead respondeu à pergunta enviada, mas a resposta não cabe no dado
+  // marcado (ex.: "Qual o total de parcelas?" marcada como outro dado ->
+  // "60 vezes"). Guarda a resposta como veio e segue o roteiro, em vez de
+  // dizer que não entendeu. Financiamento e modelo continuam exigindo o dado.
+  const looseFields = askedLast.filter(
+    (field) => field !== "financed" && field !== "vehicle" && facts[field] === null,
+  );
+  const looseEvidence = fold(e.last_answer?.evidence ?? "").trim();
+  let looseAnswer: string | null = null;
+  if (
+    !injected &&
+    !e.human_requested &&
+    e.confidence >= 0.7 &&
+    e.last_answer &&
+    looseFields.length > 0 &&
+    !askedLast.some((field) => changedFields.includes(field)) &&
+    ["qualification", "off_topic", "greeting"].includes(e.intent) &&
+    looseEvidence.length > 0 &&
+    fold(incoming).includes(looseEvidence) &&
+    !saysUnknown(incoming) &&
+    !isInjection(e.last_answer.answer)
+  ) {
+    for (const field of looseFields) unknown.add(field);
+    looseAnswer = e.last_answer.answer.trim().slice(0, 300);
+  }
   const pendingField = (field: Field) =>
     facts[field] === null &&
     (!unknown.has(field) || field === "financed" || field === "vehicle");
@@ -873,6 +937,14 @@ export function decidePolicy(input: {
   ) {
     customAnswers[lastCustom.key] = answerText;
     customAnswered = { key: lastCustom.key, question: lastCustom.text, answer: answerText };
+  }
+  if (looseAnswer && !customAnswered) {
+    const question =
+      runtimeSteps.find((step) => step.fields.some((field) => askedLast.includes(field)))
+        ?.text || (script.questions as Record<string, string>)[askedLast[0]] || askedLast.join("+");
+    const key = customStepKey(question);
+    customAnswers[key] = looseAnswer;
+    customAnswered = { key, question, answer: looseAnswer };
   }
   const customFilled: PolicyDecision["customFilled"] = [];
   for (const step of runtimeSteps) {
