@@ -229,6 +229,9 @@ export async function sendWahaText(
   credentials: WahaCredentials,
   input: { session: string; chatId: string; text: string },
 ) {
+  // Trava final: nunca envia para Status, grupo, canal ou lista de transmissão.
+  if (!/^\d{10,15}@(?:c\.us|s\.whatsapp\.net|lid)$/.test(input.chatId))
+    throw new WahaRequestError("Destino de mensagem inválido.", 400);
   return wahaFetchJson<WahaSentMessage>(credentials, "/api/sendText", {
     method: "POST",
     body: JSON.stringify({

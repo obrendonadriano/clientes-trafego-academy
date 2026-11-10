@@ -30,6 +30,32 @@ const record = (v: unknown): Record<string, unknown> =>
   v && typeof v === "object" ? (v as Record<string, unknown>) : {};
 const text = (v: unknown) => (typeof v === "string" ? v : "");
 
+/**
+ * Texto da mensagem citada (resposta a uma mensagem). WEBJS/NOWEB mandam em
+ * replyTo.body; GOWS dentro de contextInfo.quotedMessage.
+ */
+export function quotedText(payload: Record<string, unknown>): string {
+  const direct = text(record(payload.replyTo).body).trim();
+  if (direct) return direct;
+  const find = (value: unknown, depth: number): string => {
+    if (!value || typeof value !== "object" || depth > 8) return "";
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      if (key === "quotedMessage") {
+        const quoted = record(child);
+        const found =
+          text(quoted.conversation) ||
+          text(record(quoted.extendedTextMessage).text) ||
+          text(record(quoted.imageMessage).caption);
+        if (found.trim()) return found.trim();
+      }
+      const nested = find(child, depth + 1);
+      if (nested) return nested;
+    }
+    return "";
+  };
+  return find(payload._data, 0);
+}
+
 /** "5511...@s.whatsapp.net" (GOWS interno) vira "5511...@c.us". */
 const asChat = (v: unknown) =>
   text(v).replace(/^(\d{10,15})@s\.whatsapp\.net$/, "$1@c.us");
@@ -91,9 +117,12 @@ export function parseIncomingEvent(input: unknown): IncomingEvent | null {
             type === "document"
           ? "document"
           : "text";
-  const body = (text(payload.body) || text(payload.caption))
-    .trim()
-    .slice(0, 8000);
+  const written = (text(payload.body) || text(payload.caption)).trim();
+  // Resposta citando uma mensagem só com "...", "?" ou emoji: vale o texto
+  // citado ("Gol g 6" citado com "..." = "é esse aqui").
+  const body = (
+    written && !/[\p{L}\p{N}]/u.test(written) && quotedText(payload) ? quotedText(payload) : written
+  ).slice(0, 8000);
   if (!body && mediaKind === "text") return null;
   const stamp = payload.timestamp ?? root.timestamp;
   const date =

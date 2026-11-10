@@ -1840,3 +1840,48 @@ test("dívida: número solto abaixo de mil é em milhares (\"30\" = R$ 30 mil)",
   );
   assert.equal(m.facts.debt_amount, 30000);
 });
+
+test("etapa de financiamento respondida com o número de parcelas (\"60\", \"60 x\")", () => {
+  for (const incoming of ["60", "60 x", "60x", "em 60", "Foi financiado em 60 vezes"]) {
+    const d = policy(
+      { intent: "qualification" },
+      { firstTurn: false, incoming, lastQuestion: "financed", facts: { ...EMPTY_FACTS, name: "Ana" } },
+    );
+    assert.equal(d.facts.financed, true, incoming);
+    assert.doesNotMatch(text(d), /não consegui entender|necessário para avaliar/, incoming);
+  }
+});
+
+test("modelo: \"Gol G6\" do modelo bate com \"Gol g 6\" do lead", () => {
+  const incoming = "Gol g 6\n2014/2015\nEstá em busca";
+  const d = policy(
+    {
+      intent: "qualification",
+      facts: [fact("vehicle", "Gol G6", "Gol g 6"), fact("vehicle_year", 2015, "2014/2015")],
+    },
+    { firstTurn: false, incoming, lastQuestion: "vehicle+vehicle_year", facts: { ...EMPTY_FACTS, name: "Thaís", financed: true } },
+  );
+  assert.equal(d.facts.vehicle, "Gol G6");
+  assert.equal(d.facts.vehicle_year, 2015);
+});
+
+test("\"...\" sozinho não é outro assunto: repete a pergunta pendente", () => {
+  const d = policy(
+    { intent: "off_topic" },
+    { firstTurn: false, incoming: "...", lastQuestion: "vehicle", facts: { ...EMPTY_FACTS, financed: true } },
+  );
+  assert.doesNotMatch(text(d), /Por aqui, posso ajudar/);
+});
+
+test("resposta citando mensagem só com \"...\" usa o texto citado", () => {
+  const base = { event: "message", session: "s", payload: { id: "m1", from: "5561993668671@c.us", fromMe: false, body: "..." } };
+  assert.equal(parseIncomingEvent({ ...base, payload: { ...base.payload, replyTo: { body: "Gol g 6" } } }).body, "Gol g 6");
+  assert.equal(
+    parseIncomingEvent({
+      ...base,
+      payload: { ...base.payload, _data: { Message: { extendedTextMessage: { text: "...", contextInfo: { quotedMessage: { conversation: "Gol g 6" } } } } } },
+    }).body,
+    "Gol g 6",
+  );
+  assert.equal(parseIncomingEvent({ ...base, payload: { ...base.payload, body: "oi" , replyTo: { body: "Gol g 6" } } }).body, "oi");
+});

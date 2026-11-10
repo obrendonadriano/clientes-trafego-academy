@@ -351,7 +351,7 @@ const STILL_OWES =
 const PAID_OFF =
   /quit(?:ad|ei|ou|amos)|(?:ta|esta|ja|tudo) pago|ja paguei(?! (?:a maior parte|metade|quase|parte|\d))|paguei tudo|terminei de pagar|acabei de pagar|nao devo|nao to devendo|sem divida|a vista|sem financ|nao (?:e|esta|ta|tem|tenho|eh)? ?(?:mais )?(?:financ|alienad)/;
 const STILL_PAYING =
-  /financ|alienad|prestac|parcel|(?:to|tou|estou) pagando|pagando ainda|ainda (?:pago|devo|to pagando|estou pagando)|devo ainda|carne|boleto/;
+  /financ|alienad|prestac|parcel|(?:to|tou|estou) pagando|pagando ainda|ainda (?:pago|devo|to pagando|estou pagando)|devo ainda|carne|boleto|\d{1,3} ?(?:x|vezes)\b/;
 
 /** Financiado? "tô pagando" = sim; "tá pago", "quitei" = não. */
 function readFinanced(text: string, allowYesNo: boolean): boolean | null {
@@ -361,6 +361,24 @@ function readFinanced(text: string, allowYesNo: boolean): boolean | null {
   if (STILL_PAYING.test(source)) return true;
   return allowYesNo ? yesNo(text) : null;
 }
+
+/**
+ * Resposta direta à pergunta de financiamento. O cliente às vezes pergunta
+ * "Qual o total de parcelas do financiamento?" nessa etapa: "60", "60x" ou
+ * "em 60" responde que é financiado.
+ */
+function readFinancedReply(text: string): boolean | null {
+  const answer = readFinanced(text, true);
+  if (answer !== null) return answer;
+  const source = plain(text);
+  const count = readCount(text);
+  return count !== null && count > 0 && source.split(" ").length <= 4 && /\d/.test(source)
+    ? true
+    : null;
+}
+
+/** Sem espaço nem pontuação: "Gol G6" bate com "gol g 6". */
+const compact = (value: string) => value.replace(/[^\p{L}\p{N}]+/gu, "");
 
 const ON_TIME =
   /em dia|tudo (?:certo|certinho|pago|ok|em ordem)|certinho|nenhum|sem atraso|nao (?:tem|tenho|ha|estou|to|ta|esta|tem nenhuma)(?: nenhuma)?(?: parcela)?(?: em)? atras|nao atrasei|nunca atrasei|pago (?:certo|certinho)|tudo em dia/;
@@ -576,7 +594,7 @@ function directAnswer(
   if (saysUnknown(text)) return "unknown";
   switch (field) {
     case "financed":
-      return readFinanced(text, true);
+      return readFinancedReply(text);
     case "has_overdue_installments":
       return readOverdue(text);
     case "overdue_installments_count":
@@ -633,9 +651,9 @@ function validValue(
     field === "financed" &&
     lastQuestion === field &&
     typeof value === "boolean" &&
-    yesNo(evidence) !== null
+    readFinancedReply(evidence) !== null
   )
-    return value === readFinanced(evidence, true);
+    return value === readFinancedReply(evidence);
   if (
     field === "has_overdue_installments" &&
     lastQuestion === field &&
@@ -648,7 +666,7 @@ function validValue(
       typeof value === "string" &&
       value.trim().length >= 2 &&
       !/^(nao sei|desconhecido|null|unknown)$/i.test(fold(value)) &&
-      source.includes(fold(value))
+      compact(source).includes(compact(fold(value)))
     );
   if (field === "financed")
     return typeof value === "boolean" && readFinanced(evidence, false) === value;
@@ -897,6 +915,18 @@ export function decidePolicy(input: {
     for (const field of looseFields) unknown.add(field);
     looseAnswer = e.last_answer.answer.trim().slice(0, 300);
   }
+  // Etapa de financiamento respondida com número ("60", "60x"): o dado vira
+  // "financiado" e o número fica guardado como resposta para a equipe.
+  if (
+    !looseAnswer &&
+    askedLast.length === 1 &&
+    askedLast[0] === "financed" &&
+    changedFields.includes("financed") &&
+    facts.financed === true &&
+    yesNo(incoming) === null &&
+    readCount(incoming) !== null
+  )
+    looseAnswer = (e.last_answer?.answer ?? incoming).trim().slice(0, 300);
   const pendingField = (field: Field) =>
     facts[field] === null &&
     (!unknown.has(field) || field === "financed" || field === "vehicle");
@@ -1097,7 +1127,8 @@ export function decidePolicy(input: {
   } else if (status === "qualified") {
     reply = says.qualified;
     reason = "policy_qualified";
-  } else if (e.intent === "off_topic" && !customAnswered) {
+  } else if (e.intent === "off_topic" && !customAnswered && !/^[^\p{L}\p{N}]+$/u.test(incoming.trim())) {
+    // Só "...", "?" ou emoji não é outro assunto: cai abaixo e repete a pergunta.
     reply = says.offTopic;
     nextField = null;
   } else if (nextField && unknown.has(nextField)) {
