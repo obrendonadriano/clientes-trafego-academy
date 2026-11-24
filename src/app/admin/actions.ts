@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath, updateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
+import { expireTag } from "@/lib/cache/expire-tag";
 import { z } from "zod";
 import { isSupabaseConfigured } from "@/lib/env";
 import { CACHE_TAGS } from "@/lib/data/queries";
@@ -17,7 +18,7 @@ type CacheTag = (typeof CACHE_TAGS)[keyof typeof CACHE_TAGS];
 // próxima renderização (revalidateTag "max" serviria dado velho uma vez).
 function revalidateData(...tags: CacheTag[]) {
   for (const tag of tags) {
-    updateTag(tag);
+    expireTag(tag);
   }
 }
 

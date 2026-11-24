@@ -1,7 +1,8 @@
 "use server";
 
 import { randomBytes } from "node:crypto";
-import { revalidatePath, updateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
+import { expireTag } from "@/lib/cache/expire-tag";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { getOptionalCurrentUser } from "@/lib/auth/session";
@@ -87,7 +88,7 @@ export async function addMetaAccountAction(
     return { error: message };
   }
 
-  updateTag("campaigns");
+  expireTag("campaigns");
   revalidatePath("/admin/configuracoes");
   return { success: `Conta "${parsed.data.label.trim()}" adicionada com sucesso.` };
 }
@@ -139,7 +140,7 @@ export async function removeMetaAccountAction(
     return { error: error instanceof Error ? error.message : "Falha ao remover a conta." };
   }
 
-  updateTag("campaigns");
+  expireTag("campaigns");
   revalidatePath("/admin/configuracoes");
   return { success: "Conta removida." };
 }

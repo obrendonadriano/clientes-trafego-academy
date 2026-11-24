@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath, updateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
+import { expireTag } from "@/lib/cache/expire-tag";
 import { getOptionalCurrentUser } from "@/lib/auth/session";
 import {
   MetaPermissionError,
@@ -105,7 +106,7 @@ export async function renameCampaignAction(
     return { error: error.message };
   }
 
-  updateTag("campaigns");
+  expireTag("campaigns");
   revalidatePath("/admin/campanhas");
   return { success: "Nome atualizado." };
 }
@@ -145,7 +146,7 @@ export async function toggleCampaignStatusAction(
     return { error: error.message };
   }
 
-  updateTag("campaigns");
+  expireTag("campaigns");
   revalidatePath("/admin/campanhas");
   revalidatePath("/dashboard");
   return { success: active ? "Campanha ativada." : "Campanha pausada." };
@@ -205,7 +206,7 @@ export async function toggleAdLevelStatusAction(
     return { error: update.error.message };
   }
 
-  updateTag("campaigns");
+  expireTag("campaigns");
   revalidatePath("/admin/campanhas");
   revalidatePath("/dashboard/campanhas");
   return { success: active ? "Item ativado." : "Item pausado." };
@@ -229,7 +230,7 @@ export async function syncMetaAction(
 
     const result = await runMetaSync();
 
-    updateTag("campaigns");
+    expireTag("campaigns");
     revalidatePath("/admin");
     revalidatePath("/admin/campanhas");
     revalidatePath("/admin/clientes");
@@ -264,7 +265,7 @@ export async function importMetaCampaignsAction(
     }
 
     const count = await importAllMetaCampaigns();
-    updateTag("campaigns");
+    expireTag("campaigns");
     revalidatePath("/admin/campanhas");
     revalidatePath("/admin/clientes");
     return { success: `${count} campanha(s) importada(s) da Meta Ads.` };

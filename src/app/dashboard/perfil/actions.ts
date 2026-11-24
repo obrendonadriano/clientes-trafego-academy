@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath, updateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
+import { expireTag } from "@/lib/cache/expire-tag";
 import { z } from "zod";
 import { applyOwnProfileUpdate } from "@/lib/auth/own-profile";
 import { getOptionalCurrentUser } from "@/lib/auth/session";
@@ -44,7 +45,7 @@ export async function updateOwnProfileAction(
     return { error: result.error };
   }
 
-  updateTag("users");
+  expireTag("users");
   revalidatePath("/dashboard/perfil");
   return { success: "Dados atualizados." };
 }
