@@ -2,6 +2,7 @@
 
 import { revalidatePath, updateTag } from "next/cache";
 import { z } from "zod";
+import { applyOwnProfileUpdate } from "@/lib/auth/own-profile";
 import { getOptionalCurrentUser } from "@/lib/auth/session";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -9,11 +10,6 @@ export type ProfileActionState = {
   success?: string;
   error?: string;
 };
-
-const profileSchema = z.object({
-  name: z.string().trim().min(2, "Informe seu nome completo."),
-  email: z.string().email("Informe um e-mail válido."),
-});
 
 const passwordSchema = z
   .object({
@@ -39,57 +35,13 @@ export async function updateOwnProfileAction(
     return { error: "Sessão expirada. Faça login novamente." };
   }
 
-  const parsed = profileSchema.safeParse({
+  const result = await applyOwnProfileUpdate(user, {
     name: formData.get("name"),
     email: formData.get("email"),
   });
 
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message };
-  }
-
-  const adminClient = createSupabaseAdminClient();
-
-  if (!adminClient) {
-    return { error: "Supabase não configurado." };
-  }
-
-  // E-mail duplicado em outra conta bloqueia a troca.
-  const { data: duplicate } = await adminClient
-    .from("users")
-    .select("id")
-    .eq("email", parsed.data.email)
-    .neq("id", user.id)
-    .maybeSingle<{ id: string }>();
-
-  if (duplicate) {
-    return { error: "Este e-mail já está em uso por outra conta." };
-  }
-
-  if (user.authUserId) {
-    const authUpdate = await adminClient.auth.admin.updateUserById(
-      user.authUserId,
-      {
-        email: parsed.data.email,
-        user_metadata: { nome: parsed.data.name },
-      },
-    );
-
-    if (authUpdate.error) {
-      return { error: authUpdate.error.message };
-    }
-  }
-
-  const { error } = await adminClient
-    .from("users")
-    .update({
-      nome: parsed.data.name,
-      email: parsed.data.email,
-    })
-    .eq("id", user.id);
-
-  if (error) {
-    return { error: error.message };
+  if (result.error) {
+    return { error: result.error };
   }
 
   updateTag("users");

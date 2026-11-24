@@ -51,3 +51,8 @@ next-env.d.ts
 
 # configuração pessoal do Claude Code
 .claude/settings.local.json
+
+# app mobile do cliente (Expo/IPA): vive fora deste repositório
+/mobile-cliente/
+*.ipa
+/Tráfego Academy client app.zip
