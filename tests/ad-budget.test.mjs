@@ -128,3 +128,38 @@ test('cliente gastando sem pagamento no controle aparece à parte', () => {
   assert.equal(r.withoutControl.length, 1);
   assert.equal(r.withoutControl[0].spendLast7, 56.08);
 });
+
+test('gastando bem menos do que pode por dia vira "abaixo" (ritmo)', () => {
+  const r = report({
+    installments: weekly([500], '2026-11-20'),
+    spend: spendDays('k1', '2026-11-20', '2026-11-24', 20),
+  });
+  const row = r.rows[0];
+  assert.equal(row.status, 'abaixo');
+  assert.equal(row.underReason, 'ritmo');
+  assert.equal(row.pacePercent, 32);
+  assert.equal(r.totals.abaixo, 1);
+});
+
+test('saldo guardado maior que uma verba inteira vira "abaixo" (sobra)', () => {
+  // 3 verbas de 500 pagas, gastou só no ritmo certo na última semana.
+  const r = report({
+    installments: weekly([500, 500, 500], '2026-11-04'),
+    spend: spendDays('k1', '2026-11-18', '2026-11-24', 62.75),
+  });
+  const row = r.rows[0];
+  assert.equal(row.status, 'abaixo');
+  assert.equal(row.underReason, 'sobra');
+  assert.ok(row.balance > 500);
+  assert.equal(r.totals.unspent, row.balance);
+});
+
+test('ritmo dentro do combinado continua "ok" com uso perto de 100%', () => {
+  const r = report({
+    installments: weekly([500], '2026-11-17'),
+    spend: spendDays('k1', '2026-11-17', '2026-11-23', 62.75),
+  });
+  assert.equal(r.rows[0].status, 'ok');
+  assert.equal(r.rows[0].pacePercent, 100);
+  assert.equal(r.rows[0].underReason, null);
+});

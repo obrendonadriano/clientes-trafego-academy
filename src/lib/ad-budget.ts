@@ -12,12 +12,16 @@
 //     do cliente no controle (antes disso o controle não existia).
 //   • Orçamento diário recomendado = última verba × (1 − 12,15%) ÷ dias do
 //     ciclo (normalmente 7). É a conta que o gestor já faz à mão.
+//   • "Gastando menos" = ritmo abaixo de 70% do combinado, ou saldo guardado
+//     maior que uma verba inteira (pagou e não virou anúncio).
 //   • A conta antiga em dólar usa a cotação média real do cartão (5,15), não
 //     a PTAX do dia, para o saldo bater com o dinheiro de verdade.
 
 export const LEGACY_USD_RATE = 5.15;
 // Margem antes de acusar ritmo acima do combinado (arredondamentos da Meta).
 const PACE_TOLERANCE = 1.1;
+// Abaixo disto do combinado o cliente está gastando bem menos do que pagou.
+export const UNDER_PACE_RATIO = 0.7;
 // Diferença mínima, em reais, para considerar o saldo negativo.
 const BALANCE_TOLERANCE = 1;
 // Dias completos usados para medir o ritmo atual de gasto.
@@ -65,8 +69,13 @@ export type BudgetStatus =
   | "estourado"
   | "acima"
   | "sem_pagamento"
+  | "abaixo"
   | "ok"
   | "parado";
+
+// Por que o cliente caiu em "abaixo": ritmo baixo agora, ou saldo acumulado
+// maior que uma verba inteira (dinheiro pago que não virou anúncio).
+export type UnderReason = "ritmo" | "sobra";
 
 export type BudgetRow = {
   code: string;
@@ -84,6 +93,9 @@ export type BudgetRow = {
   cycleDays: number;
   recommendedDaily: number;
   paceDaily: number;
+  // Ritmo atual em % do que a última verba permite por dia (null sem verba).
+  pacePercent: number | null;
+  underReason: UnderReason | null;
   todayNet: number;
   daysLeft: number | null;
   nextDue: { date: string; amount: number } | null;
@@ -122,6 +134,9 @@ export type BudgetReport = {
     estourados: number;
     acima: number;
     semPagamento: number;
+    abaixo: number;
+    // Soma só dos saldos positivos: verba paga que ainda não foi gasta.
+    unspent: number;
   };
 };
 
@@ -129,8 +144,9 @@ const STATUS_ORDER: Record<BudgetStatus, number> = {
   estourado: 0,
   acima: 1,
   sem_pagamento: 2,
-  ok: 3,
-  parado: 4,
+  abaixo: 3,
+  ok: 4,
+  parado: 5,
 };
 
 // "1234 - Nome", "1234-Nome", "1234 Nome" → "1234". Só o prefixo conta.
@@ -376,6 +392,16 @@ export function computeBudgetReport(input: {
     const paymentIsRecent =
       lastPaidDay !== null && daysBetween(lastPaidDay, today) <= cycleDays + 3;
 
+    const pacePercent =
+      recommendedDaily > 0 ? (paceDaily / recommendedDaily) * 100 : null;
+    const isSpending = paceDaily > 0 || todayNet > 0;
+    let underReason: UnderReason | null = null;
+    if (isSpending && recommendedDaily > 0 && paceDaily < recommendedDaily * UNDER_PACE_RATIO) {
+      underReason = "ritmo";
+    } else if (isSpending && lastPaidItem && balance > lastPaidItem.amount) {
+      underReason = "sobra";
+    }
+
     let status: BudgetStatus;
     if (balance < -BALANCE_TOLERANCE) {
       status = "estourado";
@@ -386,8 +412,10 @@ export function computeBudgetReport(input: {
       status = "acima";
     } else if (spendLast7 > 0 && !paymentIsRecent) {
       status = "sem_pagamento";
-    } else if (paceDaily === 0 && todayNet === 0) {
+    } else if (!isSpending) {
       status = "parado";
+    } else if (underReason) {
+      status = "abaixo";
     } else {
       status = "ok";
     }
@@ -408,6 +436,8 @@ export function computeBudgetReport(input: {
       cycleDays,
       recommendedDaily: round2(recommendedDaily),
       paceDaily: round2(paceDaily),
+      pacePercent: pacePercent === null ? null : Math.round(pacePercent),
+      underReason: status === "abaixo" ? underReason : null,
       todayNet: round2(todayNet),
       daysLeft: daysLeft === null ? null : Math.floor(daysLeft * 10) / 10,
       nextDue: nextDueItem
@@ -463,6 +493,10 @@ export function computeBudgetReport(input: {
       estourados: rows.filter((row) => row.status === "estourado").length,
       acima: rows.filter((row) => row.status === "acima").length,
       semPagamento: rows.filter((row) => row.status === "sem_pagamento").length,
+      abaixo: rows.filter((row) => row.status === "abaixo").length,
+      unspent: round2(
+        rows.reduce((sum, row) => sum + Math.max(0, row.balance), 0),
+      ),
     },
   };
 }

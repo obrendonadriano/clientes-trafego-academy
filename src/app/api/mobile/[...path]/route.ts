@@ -505,12 +505,28 @@ async function handleAdminAi() {
 }
 
 // Verba x gasto: mesmo relatório da página /admin/verba do site.
-async function handleAdminBudget() {
+async function handleAdminBudget(params: URLSearchParams) {
   if (!isControlConfigured()) {
     return json({ configured: false });
   }
 
-  return json({ configured: true, report: await getAdBudgetReport() });
+  const report = await getAdBudgetReport();
+
+  // O app v4 não conhece o status "abaixo" e quebraria ao abrir o cartão.
+  // Só o app novo pede `v=2`; para os antigos ele vira "ok".
+  if (params.get("v") !== "2") {
+    return json({
+      configured: true,
+      report: {
+        ...report,
+        rows: report.rows.map((row) =>
+          row.status === "abaixo" ? { ...row, status: "ok" } : row,
+        ),
+      },
+    });
+  }
+
+  return json({ configured: true, report });
 }
 
 function closingRequest(user: User, params: URLSearchParams) {
@@ -587,7 +603,7 @@ async function routeGet(
     case "admin/ia":
       return user.role === "admin" ? handleAdminAi() : forbidden();
     case "admin/verba":
-      return user.role === "admin" ? handleAdminBudget() : forbidden();
+      return user.role === "admin" ? handleAdminBudget(params) : forbidden();
     case "fechamento/pdf":
       return handleClosingPdf(user, params);
     case "ia": {

@@ -24,6 +24,7 @@ export const BUDGET_STATUS_LABEL: Record<BudgetStatus, string> = {
   estourado: "Gastou mais que pagou",
   acima: "Ritmo acima do pago",
   sem_pagamento: "Sem pagamento recente",
+  abaixo: "Gastando menos",
   ok: "Em dia",
   parado: "Parado",
 };
@@ -32,18 +33,35 @@ const STATUS_CLASS: Record<BudgetStatus, string> = {
   estourado: "bg-red-500/10 text-red-600 dark:text-red-400",
   acima: "bg-amber-500/12 text-amber-700 dark:text-amber-400",
   sem_pagamento: "bg-orange-500/12 text-orange-700 dark:text-orange-400",
+  abaixo: "bg-sky-500/12 text-sky-700 dark:text-sky-400",
   ok: "bg-[#ecfdf3] text-[#067647] dark:bg-emerald-500/10 dark:text-emerald-400",
   parado: "bg-secondary text-text-3",
 };
 
 const ATTENTION: BudgetStatus[] = ["estourado", "acima", "sem_pagamento"];
 
-type Filter = "atencao" | "todos";
+type Filter = "atencao" | "abaixo" | "todos";
+
+function matchesFilter(row: BudgetRow, filter: Filter) {
+  if (filter === "todos") return true;
+  if (filter === "abaixo") return row.status === "abaixo";
+  return ATTENTION.includes(row.status);
+}
+
+function underText(row: BudgetRow) {
+  if (row.underReason === "sobra") {
+    return `${money(row.balance)} guardado, mais que uma verba inteira`;
+  }
+  return row.pacePercent !== null
+    ? `Usando só ${row.pacePercent}% do que pode por dia`
+    : "Ritmo abaixo do combinado";
+}
 
 export function AdBudgetPanel({ report }: { report: BudgetReport }) {
   const attentionCount = report.rows.filter((row) =>
     ATTENTION.includes(row.status),
   ).length;
+  const underCount = report.rows.filter((row) => row.status === "abaixo").length;
   const [filter, setFilter] = useState<Filter>(
     attentionCount > 0 ? "atencao" : "todos",
   );
@@ -53,7 +71,7 @@ export function AdBudgetPanel({ report }: { report: BudgetReport }) {
     const term = query.trim().toLowerCase();
     return report.rows.filter(
       (row) =>
-        (filter === "todos" || ATTENTION.includes(row.status)) &&
+        matchesFilter(row, filter) &&
         (!term ||
           row.clientName.toLowerCase().includes(term) ||
           row.code.includes(term) ||
@@ -65,19 +83,26 @@ export function AdBudgetPanel({ report }: { report: BudgetReport }) {
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <SummaryTile label="Verba paga (desde o início)" value={money(report.totals.verbaPaid)} />
         <SummaryTile label={`Gasto real na Meta (+${taxLabel})`} value={money(report.totals.spendGross)} />
         <SummaryTile
           label="Saldo dos clientes em caixa"
           value={money(report.totals.balance)}
+          hint={`${money(report.totals.unspent)} pago e ainda não gasto`}
           tone={report.totals.balance < 0 ? "bad" : undefined}
         />
         <SummaryTile
-          label="Precisam de atenção"
+          label="Gastando mais"
           value={String(attentionCount)}
           hint={`${report.totals.estourados} estourado(s) · ${report.totals.acima} acima do ritmo · ${report.totals.semPagamento} sem pagamento`}
           tone={attentionCount > 0 ? "warn" : undefined}
+        />
+        <SummaryTile
+          label="Gastando menos"
+          value={String(underCount)}
+          hint="Abaixo de 70% do combinado ou com mais de uma verba guardada"
+          tone={underCount > 0 ? "info" : undefined}
         />
       </div>
 
@@ -99,7 +124,8 @@ export function AdBudgetPanel({ report }: { report: BudgetReport }) {
             <div className="flex rounded-xl border border-border/70 p-0.5 text-sm">
               {(
                 [
-                  ["atencao", `Atenção (${attentionCount})`],
+                  ["atencao", `Gastando mais (${attentionCount})`],
+                  ["abaixo", `Gastando menos (${underCount})`],
                   ["todos", `Todos (${report.rows.length})`],
                 ] as const
               ).map(([value, label]) => (
@@ -138,14 +164,18 @@ export function AdBudgetPanel({ report }: { report: BudgetReport }) {
             </p>
           ) : rows.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
-              {filter === "atencao" && !query
-                ? "Nenhum cliente precisa de atenção agora."
-                : "Nenhum cliente encontrado."}
+              {query
+                ? "Nenhum cliente encontrado."
+                : filter === "atencao"
+                  ? "Nenhum cliente gastando além do que pagou."
+                  : filter === "abaixo"
+                    ? "Nenhum cliente gastando bem menos do que pagou."
+                    : "Nenhum cliente encontrado."}
             </p>
           ) : (
             <>
               <div className="hidden overflow-x-auto lg:block">
-                <table className="w-full min-w-[64rem] border-separate border-spacing-y-1.5 text-sm">
+                <table className="w-full min-w-[70rem] border-separate border-spacing-y-1.5 text-sm">
                   <thead>
                     <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                       <th className="px-3 pb-1 font-medium">Cliente</th>
@@ -155,6 +185,7 @@ export function AdBudgetPanel({ report }: { report: BudgetReport }) {
                       <th className="px-3 pb-1 text-right font-medium">Saldo</th>
                       <th className="px-3 pb-1 text-right font-medium">Gasto/dia</th>
                       <th className="px-3 pb-1 text-right font-medium">Pode/dia</th>
+                      <th className="px-3 pb-1 text-right font-medium">Uso</th>
                       <th className="px-3 pb-1 font-medium">Última verba</th>
                       <th className="px-3 pb-1 font-medium" />
                     </tr>
@@ -173,6 +204,11 @@ export function AdBudgetPanel({ report }: { report: BudgetReport }) {
                         </td>
                         <td>
                           <StatusBadge status={row.status} />
+                          {row.status === "abaixo" ? (
+                            <p className="mt-1 max-w-[12rem] text-xs text-muted-foreground">
+                              {underText(row)}
+                            </p>
+                          ) : null}
                         </td>
                         <td className="text-right tabular-nums">{money(row.verbaPaid)}</td>
                         <td className="text-right tabular-nums">{money(row.spendGross)}</td>
@@ -188,12 +224,16 @@ export function AdBudgetPanel({ report }: { report: BudgetReport }) {
                           className={cn(
                             "text-right tabular-nums",
                             row.status === "acima" && "font-semibold text-amber-700 dark:text-amber-400",
+                            row.status === "abaixo" && row.underReason === "ritmo" && "font-semibold text-sky-700 dark:text-sky-400",
                           )}
                         >
                           {money(row.paceDaily)}
                         </td>
                         <td className="text-right tabular-nums text-muted-foreground">
                           {row.recommendedDaily > 0 ? money(row.recommendedDaily) : "—"}
+                        </td>
+                        <td className="text-right">
+                          <PaceBar percent={row.pacePercent} />
                         </td>
                         <td className="text-muted-foreground">
                           {row.lastPaid ? (
@@ -333,6 +373,9 @@ function MobileRow({ row }: { row: BudgetRow }) {
         </div>
         <StatusBadge status={row.status} />
       </div>
+      {row.status === "abaixo" ? (
+        <p className="mt-2 text-xs text-sky-700 dark:text-sky-400">{underText(row)}</p>
+      ) : null}
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
         <Stat label="Verba paga" value={money(row.verbaPaid)} />
         <Stat label="Gasto real" value={money(row.spendGross)} />
@@ -342,6 +385,12 @@ function MobileRow({ row }: { row: BudgetRow }) {
           value={`${money(row.paceDaily)} · ${row.recommendedDaily > 0 ? money(row.recommendedDaily) : "—"}`}
         />
       </dl>
+      {row.pacePercent !== null ? (
+        <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+          <span>Uso do que pode gastar por dia</span>
+          <PaceBar percent={row.pacePercent} />
+        </div>
+      ) : null}
       <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
         <span>
           {row.lastPaid ? `Última verba ${money(row.lastPaid.amount)} em ${day(row.lastPaid.date)}` : "Sem verba paga"}
@@ -349,6 +398,30 @@ function MobileRow({ row }: { row: BudgetRow }) {
         <CampaignsLink clientId={row.clientId} />
       </div>
     </div>
+  );
+}
+
+// Barra do ritmo atual em % do combinado: 100% é exatamente o que a verba
+// permite. Azul abaixo de 70%, verde no meio, âmbar acima de 110%.
+function PaceBar({ percent }: { percent: number | null }) {
+  if (percent === null) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+
+  const color =
+    percent > 110 ? "bg-amber-500" : percent < 70 ? "bg-sky-500" : "bg-emerald-500";
+
+  return (
+    <span className="inline-flex items-center justify-end gap-2" title={`${percent}% do combinado`}>
+      <span className="relative h-1.5 w-16 overflow-hidden rounded-full bg-secondary">
+        <span
+          className={cn("absolute inset-y-0 left-0 rounded-full", color)}
+          style={{ width: `${Math.min(100, percent / 1.5)}%` }}
+        />
+        <span className="absolute inset-y-0 left-2/3 w-px bg-foreground/40" />
+      </span>
+      <span className="w-10 text-right tabular-nums text-foreground">{percent}%</span>
+    </span>
   );
 }
 
@@ -372,7 +445,7 @@ function SummaryTile({
   label: string;
   value: string;
   hint?: string;
-  tone?: "bad" | "warn";
+  tone?: "bad" | "warn" | "info";
 }) {
   return (
     <div className="dashboard-card rounded-[1.5rem] border px-5 py-4">
@@ -384,7 +457,9 @@ function SummaryTile({
             ? "text-red-600 dark:text-red-400"
             : tone === "warn"
               ? "text-amber-700 dark:text-amber-400"
-              : "text-foreground",
+              : tone === "info"
+                ? "text-sky-700 dark:text-sky-400"
+                : "text-foreground",
         )}
       >
         {value}
