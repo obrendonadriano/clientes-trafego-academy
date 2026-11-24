@@ -4,6 +4,7 @@ import {
   computeBudgetReport,
   cycleDaysOf,
   parseControlCode,
+  planClientStatusSync,
   spendInBrl,
 } from '../src/lib/ad-budget.ts';
 
@@ -173,4 +174,27 @@ test('gasto antes da 1ª verba registrada aparece separado (não some)', () => {
   assert.equal(row.firstSpendDate, '2026-11-01');
   assert.equal(row.spendBeforeStart, Math.round(220 * 1.1215 * 100) / 100);
   assert.equal(row.spendNet, 20);
+});
+
+test('status do controle: inativa, reativa e não toca em quem não tem cadastro', () => {
+  const changes = planClientStatusSync(
+    [
+      { id: 'a', company: '1111 - Saiu', status: 'Inativo' },
+      { id: 'b', company: '2222 - Voltou', status: 'Ativo' },
+      { id: 'c1', company: '3333 - Renovou', status: 'Inativo' },
+      { id: 'c2', company: '3333 - Renovou', status: 'Ativo' },
+      { id: 'd', company: 'Sem código', status: 'Inativo' },
+    ],
+    [
+      { id: 'd1', name: 'Saiu', code: '1111', active: true },
+      { id: 'd2', name: 'Voltou', code: '2222', active: false },
+      { id: 'd3', name: 'Renovou', code: '3333', active: true },
+      { id: 'd4', name: 'Interno', code: '4444', active: true },
+      { id: 'd5', name: 'Sem código', active: true },
+    ],
+  );
+  assert.deepEqual(
+    changes.map((c) => [c.clientId, c.active]),
+    [['d1', false], ['d2', true]],
+  );
 });

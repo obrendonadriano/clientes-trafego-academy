@@ -1,17 +1,20 @@
 import "server-only";
 
 import { cache } from "react";
+import { revalidateTag } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import {
   addDays,
   computeBudgetReport,
   LEGACY_USD_RATE,
+  planClientStatusSync,
+  type ClientStatusChange,
   type BudgetCampaign,
   type BudgetReport,
   type BudgetSpendRow,
   type ControlClient,
 } from "@/lib/ad-budget";
-import { getAdminClientsListData } from "@/lib/data/queries";
+import { CACHE_TAGS, getAdminClientsListData } from "@/lib/data/queries";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { META_TAX_RATE } from "@/lib/taxes";
 
@@ -115,6 +118,57 @@ function saoPauloToday() {
 function legacyUsdRate() {
   const value = Number(process.env.CONTROLE_USD_RATE);
   return Number.isFinite(value) && value > 0 ? value : LEGACY_USD_RATE;
+}
+
+// Espelha Ativo/Inativo do controle nos clientes do dashboard. Roda junto com
+// a sincronização da Meta (rota /api/sync-meta e botão "Atualizar métricas").
+// Lê direto do banco, sem cache, para não decidir em cima de dado velho.
+export async function syncClientStatusFromControl(): Promise<ClientStatusChange[]> {
+  if (!isControlConfigured()) {
+    return [];
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return [];
+  }
+
+  const [controlClients, clientsResult, codesResult] = await Promise.all([
+    fetchControlClients(),
+    admin.from("clients").select("id, nome_empresa, ativo"),
+    admin.from("client_campaign_codes").select("client_id, code").eq("status", "active"),
+  ]);
+
+  if (clientsResult.error) throw new Error(clientsResult.error.message);
+  if (codesResult.error) throw new Error(codesResult.error.message);
+
+  const codeByClient = new Map(
+    (codesResult.data ?? []).map((row) => [row.client_id as string, row.code as string]),
+  );
+  const changes = planClientStatusSync(
+    controlClients,
+    (clientsResult.data ?? []).map((row) => ({
+      id: row.id as string,
+      name: row.nome_empresa as string,
+      code: codeByClient.get(row.id as string),
+      active: Boolean(row.ativo),
+    })),
+  );
+
+  for (const active of [true, false]) {
+    const ids = changes.filter((change) => change.active === active).map((change) => change.clientId);
+    if (!ids.length) continue;
+
+    const { error } = await admin.from("clients").update({ ativo: active }).in("id", ids);
+    if (error) throw new Error(error.message);
+  }
+
+  if (changes.length) {
+    // revalidateTag com expire 0 vale em Server Action e em Route Handler.
+    revalidateTag(CACHE_TAGS.clients, { expire: 0 });
+  }
+
+  return changes;
 }
 
 export const getAdBudgetReport = cache(async (): Promise<BudgetReport> => {

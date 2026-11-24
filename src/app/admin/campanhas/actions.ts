@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { expireTag } from "@/lib/cache/expire-tag";
+import type { ClientStatusChange } from "@/lib/ad-budget";
+import { syncClientStatusFromControl } from "@/lib/data/ad-budget";
 import { getOptionalCurrentUser } from "@/lib/auth/session";
 import {
   MetaPermissionError,
@@ -212,6 +214,16 @@ export async function toggleAdLevelStatusAction(
   return { success: active ? "Item ativado." : "Item pausado." };
 }
 
+function describeStatusChanges(changes: ClientStatusChange[]) {
+  if (!changes.length) return "";
+  const off = changes.filter((change) => !change.active).map((change) => change.clientName);
+  const on = changes.filter((change) => change.active).map((change) => change.clientName);
+  return [
+    off.length ? ` Inativado(s) pelo controle: ${off.join(", ")}.` : "",
+    on.length ? ` Reativado(s) pelo controle: ${on.join(", ")}.` : "",
+  ].join("");
+}
+
 // Botao unico "Atualizar dados da Meta": importa campanhas e, na sequencia,
 // as metricas. Conjuntos de anuncios e anuncios sao lidos ao vivo na API na
 // hora em que as telas abrem, entao nao precisam de importacao separada.
@@ -229,6 +241,10 @@ export async function syncMetaAction(
     }
 
     const result = await runMetaSync();
+    const statusChanges = await syncClientStatusFromControl().catch((error) => {
+      console.error("[syncMetaAction] status do controle:", error);
+      return [];
+    });
 
     expireTag("campaigns");
     revalidatePath("/admin");
@@ -239,7 +255,7 @@ export async function syncMetaAction(
     revalidatePath("/dashboard");
 
     return {
-      success: `${result.campaignCount} campanha(s), ${result.metricCount} métricas de campanha e ${result.adLevelMetricCount} métricas de anúncios atualizadas.`,
+      success: `${result.campaignCount} campanha(s), ${result.metricCount} métricas de campanha e ${result.adLevelMetricCount} métricas de anúncios atualizadas.${describeStatusChanges(statusChanges)}`,
     };
   } catch (error) {
     return {

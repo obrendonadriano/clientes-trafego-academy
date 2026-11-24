@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { syncClientStatusFromControl } from "@/lib/data/ad-budget";
 import { runMetaSync } from "@/lib/sync/meta-sync";
 
 // Rota "botão apertável por API": executa exatamente o mesmo código dos botões
@@ -20,7 +21,20 @@ export async function POST(request: NextRequest) {
     // runMetaSync já importa campanhas antes das métricas.
     await runMetaSync();
 
-    return NextResponse.json({ ok: true });
+    // Status Ativo/Inativo vem do sistema de controle. Falha aqui não
+    // derruba a sincronização da Meta.
+    const statusChanges = await syncClientStatusFromControl().catch((error) => {
+      console.error("[sync-meta] status do controle:", error);
+      return null;
+    });
+
+    return NextResponse.json({
+      ok: true,
+      clientStatusChanges: statusChanges?.map((change) => ({
+        client: change.clientName,
+        active: change.active,
+      })),
+    });
   } catch (error) {
     return NextResponse.json(
       {

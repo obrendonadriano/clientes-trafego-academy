@@ -510,3 +510,38 @@ export function computeBudgetReport(input: {
     },
   };
 }
+
+// Status do cliente espelhado do controle (o controle é a fonte da verdade).
+// Só mexe em quem está ligado pelo código; cliente sem cadastro no controle
+// (ex.: contas internas) nunca é tocado. Com mais de um cadastro para o mesmo
+// código (contrato renovado), basta um "Ativo" para o cliente ficar ativo.
+export type ClientStatusChange = {
+  clientId: string;
+  clientName: string;
+  code: string;
+  active: boolean;
+};
+
+export function planClientStatusSync(
+  controlClients: ControlClient[],
+  dashboardClients: BudgetDashboardClient[],
+): ClientStatusChange[] {
+  const activeByCode = new Map<string, boolean>();
+
+  for (const client of controlClients) {
+    const code = parseControlCode(client.company);
+    const status = (client.status ?? "").trim().toLowerCase();
+    if (!code || (status !== "ativo" && status !== "inativo")) continue;
+    activeByCode.set(code, (activeByCode.get(code) ?? false) || status === "ativo");
+  }
+
+  return dashboardClients
+    .filter((client) => client.code && activeByCode.has(client.code))
+    .filter((client) => activeByCode.get(client.code as string) !== client.active)
+    .map((client) => ({
+      clientId: client.id,
+      clientName: client.name,
+      code: client.code as string,
+      active: activeByCode.get(client.code as string) as boolean,
+    }));
+}
