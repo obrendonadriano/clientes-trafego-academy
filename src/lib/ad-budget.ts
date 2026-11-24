@@ -85,6 +85,10 @@ export type BudgetRow = {
   controlNames: string[];
   status: BudgetStatus;
   startDate: string;
+  // Gasto (já com impostos) ANTES da primeira verba registrada no controle.
+  // Fica fora do saldo, mas aparece para não esconder pagamento faltando.
+  spendBeforeStart: number;
+  firstSpendDate: string | null;
   verbaPaid: number;
   spendNet: number;
   spendGross: number;
@@ -352,7 +356,11 @@ export function computeBudgetReport(input: {
     let spendNet = 0;
     let paceTotal = 0;
     let spendLast7 = 0;
+    let beforeNet = 0;
+    let firstSpendDate: string | null = null;
     for (const [day, value] of days) {
+      if (value > 0 && (!firstSpendDate || day < firstSpendDate)) firstSpendDate = day;
+      if (day < startDate) beforeNet += value;
       if (day >= startDate && day <= today) spendNet += value;
       if (day >= paceFrom && day <= yesterday) paceTotal += value;
       if (day > addDays(today, -7) && day <= today) spendLast7 += value;
@@ -428,6 +436,8 @@ export function computeBudgetReport(input: {
       controlNames: controls.map((item) => item.name || item.company || ""),
       status,
       startDate,
+      spendBeforeStart: round2(beforeNet * grossFactor),
+      firstSpendDate,
       verbaPaid: round2(verbaPaid),
       spendNet: round2(spendNet),
       spendGross: round2(spendGross),

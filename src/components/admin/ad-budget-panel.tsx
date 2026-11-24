@@ -201,6 +201,7 @@ export function AdBudgetPanel({ report }: { report: BudgetReport }) {
                           <p className="text-xs text-muted-foreground">
                             {row.code} · desde {day(row.startDate)} · {row.activeCampaigns} campanha(s) ativa(s)
                           </p>
+                          <BeforeStartNote row={row} />
                         </td>
                         <td>
                           <StatusBadge status={row.status} />
@@ -376,6 +377,7 @@ function MobileRow({ row }: { row: BudgetRow }) {
       {row.status === "abaixo" ? (
         <p className="mt-2 text-xs text-sky-700 dark:text-sky-400">{underText(row)}</p>
       ) : null}
+      <BeforeStartNote row={row} />
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
         <Stat label="Verba paga" value={money(row.verbaPaid)} />
         <Stat label="Gasto real" value={money(row.spendGross)} />
@@ -398,6 +400,19 @@ function MobileRow({ row }: { row: BudgetRow }) {
         <CampaignsLink clientId={row.clientId} />
       </div>
     </div>
+  );
+}
+
+// Gasto anterior ao primeiro pagamento registrado: fica fora do saldo, então
+// avisa para conferir se falta lançar verba antiga no controle.
+function BeforeStartNote({ row }: { row: BudgetRow }) {
+  if (row.spendBeforeStart < 1) return null;
+
+  return (
+    <p className="mt-1 max-w-[22rem] text-xs font-medium text-orange-700 dark:text-orange-400">
+      {money(row.spendBeforeStart)} gasto desde {day(row.firstSpendDate)}, antes da 1ª verba
+      no controle ({day(row.startDate)}). Fora do saldo. Falta lançar pagamento antigo?
+    </p>
   );
 }
 

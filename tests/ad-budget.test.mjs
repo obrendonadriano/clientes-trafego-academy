@@ -163,3 +163,14 @@ test('ritmo dentro do combinado continua "ok" com uso perto de 100%', () => {
   assert.equal(r.rows[0].pacePercent, 100);
   assert.equal(r.rows[0].underReason, null);
 });
+
+test('gasto antes da 1ª verba registrada aparece separado (não some)', () => {
+  const r = report({
+    installments: weekly([500], '2026-11-23'),
+    spend: spendDays('k1', '2026-11-01', '2026-11-24', 10),
+  });
+  const row = r.rows[0];
+  assert.equal(row.firstSpendDate, '2026-11-01');
+  assert.equal(row.spendBeforeStart, Math.round(220 * 1.1215 * 100) / 100);
+  assert.equal(row.spendNet, 20);
+});
