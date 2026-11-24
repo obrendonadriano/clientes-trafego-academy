@@ -11,7 +11,8 @@
     "test:conversions": "node --test tests/conversion-events.test.mjs tests/conversion-payload.test.mjs tests/conversions-decoupling.test.mjs tests/onboarding-selection.test.mjs tests/legacy-n8n-payload.test.mjs tests/embedded-signup.test.mjs tests/leads-export.test.mjs",
     "test:ai": "node --test tests/ai-attendance.test.mjs tests/ai-runtime.test.mjs tests/ai-access.test.mjs",
     "test:sync": "node --test tests/meta-sync-scope.test.mjs tests/business-timezone.test.mjs",
-    "test:meta-review": "node --test tests/meta-review.test.mjs"
+    "test:budget": "node --test tests/ad-budget.test.mjs",
+    "test:meta-review":"node --test tests/meta-review.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

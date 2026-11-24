@@ -10,7 +10,8 @@ export type NavIconKey =
   | "perfil"
   | "fechamento"
   | "conversoes"
-  | "atendimento-ia";
+  | "atendimento-ia"
+  | "verba";
 
 export type NavSubTab = {
   label: string;
@@ -104,6 +105,15 @@ const ADMIN_SECTIONS: NavSection[] = [
     icon: "fechamento",
     group: "Operação",
     subTabs: [{ label: "Do período", href: "/admin/fechamento", exact: true }],
+  },
+  {
+    key: "verba",
+    label: "Verba x gasto",
+    title: "Verba x gasto",
+    href: "/admin/verba",
+    icon: "verba",
+    group: "Operação",
+    subTabs: [{ label: "Por cliente", href: "/admin/verba", exact: true }],
   },
   {
     key: "atendimento-ia",

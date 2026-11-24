@@ -5,6 +5,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { ClosingDocument } from "@/components/pdf/closing-document";
 import * as aiActions from "@/app/dashboard/atendimento-ia/actions";
 import { refreshClientMetricsAction } from "@/app/dashboard/actions";
+import {
+  syncMetaAction,
+  toggleCampaignStatusAction,
+} from "@/app/admin/campanhas/actions";
+import { setAiAllPlansAction } from "@/app/admin/configuracoes/ai-plan-actions";
 import { changeOwnPasswordAction } from "@/app/dashboard/perfil/actions";
 import {
   moveLeadsAction,
@@ -14,12 +19,18 @@ import {
 import { runWithMobileToken } from "@/lib/auth/mobile-context";
 import { applyOwnProfileUpdate } from "@/lib/auth/own-profile";
 import { getSupabaseCurrentUser } from "@/lib/auth/supabase-auth";
-import { getAiLiveFingerprint, getClientAiAccess } from "@/lib/ai-agent/store";
+import {
+  aiAdminClient,
+  getAiAllPlans,
+  getAiLiveFingerprint,
+  getClientAiAccess,
+} from "@/lib/ai-agent/store";
 import { manualReviewYear } from "@/lib/ai-agent/policy";
-import { toAiAccessState } from "@/lib/ai-agent/shared";
+import { toAiAccessState, toClientPlanType } from "@/lib/ai-agent/shared";
 import {
   goalCopy,
   isFunnelStage,
+  MIXED_GOAL_COPY,
   type PeriodOption,
   type QualificationTab,
 } from "@/lib/conversions/shared";
@@ -34,6 +45,7 @@ import {
   sumResults,
   type DashboardPeriodValue,
 } from "@/lib/dashboard-metrics";
+import { getAdBudgetReport, isControlConfigured } from "@/lib/data/ad-budget";
 import { getAdLevelData } from "@/lib/data/ad-levels";
 import { getAiAgentPageData, getAiConversationDetail } from "@/lib/data/ai-agent";
 import { getClosingData, parseClosingCampaignIds } from "@/lib/data/closing";
@@ -45,6 +57,9 @@ import {
 import { resolveMetricsWindow } from "@/lib/data/date-range";
 import {
   CACHE_TAGS,
+  getAdminCampaignsData,
+  getAdminClientsListData,
+  getAppShellData,
   getCampaignIdsForUser,
   getClientPortalData,
 } from "@/lib/data/queries";
@@ -216,11 +231,11 @@ async function handleLogin(request: NextRequest) {
   }
 
   // Só depois da senha certa o motivo do bloqueio pode ser revelado.
-  if (profile.role !== "client") {
-    return json({ error: "O app é exclusivo para contas de cliente." }, 403);
+  if (profile.role !== "client" && profile.role !== "admin") {
+    return json({ error: "Este usuário não tem acesso ao app." }, 403);
   }
 
-  if (firstEmbedded(profile.clients)?.ativo === false) {
+  if (profile.role === "client" && firstEmbedded(profile.clients)?.ativo === false) {
     return json(
       { error: "Sua conta está inativa. Fale com a equipe Tráfego Academy." },
       403,
@@ -233,7 +248,42 @@ async function handleLogin(request: NextRequest) {
   });
 }
 
+// Cliente nunca escolhe o escopo: o filtro de cliente só vale para o admin.
+function scopeClientId(user: User, params: URLSearchParams) {
+  if (user.role !== "admin") return null;
+  const value = params.get("cliente");
+  return value && UUID_PATTERN.test(value) ? value : null;
+}
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function handleMe(user: User) {
+  if (user.role === "admin") {
+    const shell = await getAppShellData(user);
+    return json({
+      role: "admin",
+      user: {
+        name: user.name,
+        username: user.username,
+        email: user.email,
+        whatsapp: user.whatsapp,
+        active: user.active,
+        clientName: "Tráfego Academy",
+      },
+      clients: shell.clients,
+      plan: "complete",
+      aiAccess: "not_configured",
+      campaignCount: shell.campaigns.length,
+      goalType: "mixed",
+      goal: { ...goalCopy("vehicle_acquisition"), ...MIXED_GOAL_COPY },
+      goals: {
+        vehicle_acquisition: goalCopy("vehicle_acquisition"),
+        sale: goalCopy("sale"),
+      },
+    });
+  }
+
   const [campaignIds, goalType, access] = await Promise.all([
     getCampaignIdsForUser(user),
     resolveBoardGoalType(user),
@@ -241,6 +291,7 @@ async function handleMe(user: User) {
   ]);
 
   return json({
+    role: "client",
     user: {
       name: user.name,
       username: user.username,
@@ -248,6 +299,11 @@ async function handleMe(user: User) {
       whatsapp: user.whatsapp,
       active: user.active,
       clientName: user.clientName ?? user.name,
+    },
+    clients: [],
+    goals: {
+      vehicle_acquisition: goalCopy("vehicle_acquisition"),
+      sale: goalCopy("sale"),
     },
     plan: access?.plan ?? "essential",
     aiAccess: access ? toAiAccessState(access.decision) : "error",
@@ -262,10 +318,14 @@ async function handlePanel(user: User, params: URLSearchParams) {
     params,
     user.role,
   );
-  const { campaigns, metricRows, syncStatus } = await getClientPortalData(
-    user,
-    window,
-  );
+  const clientId = scopeClientId(user, params);
+  const { campaigns, metricRows, syncStatus } =
+    user.role === "admin"
+      ? {
+          ...(await getAdminCampaignsData(window, clientId)),
+          syncStatus: (await getAppShellData(user)).syncStatus,
+        }
+      : await getClientPortalData(user, window);
   const reference = getReferenceNowForPeriod(
     metricRows,
     period.label,
@@ -330,16 +390,17 @@ async function handlePanel(user: User, params: URLSearchParams) {
 async function handleLevels(user: User, params: URLSearchParams) {
   const level = params.get("nivel") === "ad" ? "ad" : "adset";
   const { window } = metricsWindowFrom(params, user.role);
-  const allowed = await getCampaignIdsForUser(user);
+  const isAdmin = user.role === "admin";
+  const allowed = isAdmin ? null : [...(await getCampaignIdsForUser(user))];
   const data = await getAdLevelData(
     level,
     { ...window, includeHourly: false },
-    user.clientId,
+    isAdmin ? scopeClientId(user, params) : user.clientId,
     {
       campaignId: params.get("campanha"),
       adSetId: params.get("conjunto"),
     },
-    [...allowed],
+    allowed,
   );
 
   return json(data);
@@ -352,13 +413,104 @@ async function handleLeads(user: User, params: URLSearchParams) {
   const period: PeriodOption =
     rawPeriod === "7" || rawPeriod === "tudo" ? rawPeriod : "30";
 
-  return json(
-    await getConversionLeads(user, {
+  const clientId = scopeClientId(user, params);
+  const [result, goalType] = await Promise.all([
+    getConversionLeads(user, {
       tab,
       period,
+      clientId,
       page: Number(params.get("pagina") ?? 1),
     }),
-  );
+    resolveBoardGoalType(user, clientId),
+  ]);
+
+  return json({
+    ...result,
+    goalType,
+    goal:
+      goalType === "mixed"
+        ? { ...goalCopy("vehicle_acquisition"), ...MIXED_GOAL_COPY }
+        : goalCopy(goalType),
+  });
+}
+
+type AdminAiRow = {
+  client_id: string;
+  nome_empresa: string;
+  plan_type: string | null;
+  ai_enabled: boolean;
+  whatsapp_status: string | null;
+  whatsapp_phone: string | null;
+  total_conversations: number | string;
+  qualified_conversations: number | string;
+};
+
+async function handleAdminClients() {
+  const data = await getAdminClientsListData();
+
+  return json({
+    clients: data.clients.map((client) => {
+      const users = data.clientUsers.filter((item) => item.clientId === client.id);
+      const userIds = new Set(users.map((item) => item.id));
+      const campaignIds = new Set([
+        ...data.permissions
+          .filter((permission) => userIds.has(permission.userId))
+          .map((permission) => permission.campaignId),
+        ...data.campaigns
+          .filter((campaign) => campaign.clientId === client.id)
+          .map((campaign) => campaign.id),
+      ]);
+
+      return {
+        id: client.id,
+        companyName: client.companyName,
+        contactName: client.contactName,
+        whatsapp: client.whatsapp,
+        active: client.active,
+        planType: client.planType,
+        segment: client.segment ?? null,
+        conversionGoalType: client.conversionGoalType,
+        campaignCode: client.campaignCode ?? null,
+        username: users[0]?.username ?? null,
+        userActive: users[0]?.active ?? null,
+        campaignCount: campaignIds.size,
+      };
+    }),
+  });
+}
+
+async function handleAdminAi() {
+  const [overview, allPlans] = await Promise.all([
+    aiAdminClient().rpc("admin_ai_agent_overview"),
+    getAiAllPlans().catch(() => null),
+  ]);
+
+  if (overview.error) {
+    throw new Error(overview.error.message);
+  }
+
+  return json({
+    allPlans,
+    rows: ((overview.data as AdminAiRow[] | null) ?? []).map((row) => ({
+      clientId: row.client_id,
+      companyName: row.nome_empresa,
+      planType: toClientPlanType(row.plan_type),
+      aiEnabled: row.ai_enabled,
+      whatsappStatus: row.whatsapp_status,
+      whatsappPhone: row.whatsapp_phone,
+      total: Number(row.total_conversations) || 0,
+      qualified: Number(row.qualified_conversations) || 0,
+    })),
+  });
+}
+
+// Verba x gasto: mesmo relatório da página /admin/verba do site.
+async function handleAdminBudget() {
+  if (!isControlConfigured()) {
+    return json({ configured: false });
+  }
+
+  return json({ configured: true, report: await getAdBudgetReport() });
 }
 
 function closingRequest(user: User, params: URLSearchParams) {
@@ -374,7 +526,12 @@ function closingRequest(user: User, params: URLSearchParams) {
 
 async function handleClosingPdf(user: User, params: URLSearchParams) {
   const { window, campaignIds } = closingRequest(user, params);
-  const data = await getClosingData(user, window, null, campaignIds);
+  const data = await getClosingData(
+    user,
+    window,
+    scopeClientId(user, params),
+    campaignIds,
+  );
   const buffer = await renderToBuffer(ClosingDocument({ data }));
 
   return new NextResponse(new Uint8Array(buffer), {
@@ -416,8 +573,21 @@ async function routeGet(
       return handleLeads(user, params);
     case "fechamento": {
       const { window, campaignIds } = closingRequest(user, params);
-      return json(await getClosingData(user, window, null, campaignIds));
+      return json(
+        await getClosingData(
+          user,
+          window,
+          scopeClientId(user, params),
+          campaignIds,
+        ),
+      );
     }
+    case "admin/clientes":
+      return user.role === "admin" ? handleAdminClients() : forbidden();
+    case "admin/ia":
+      return user.role === "admin" ? handleAdminAi() : forbidden();
+    case "admin/verba":
+      return user.role === "admin" ? handleAdminBudget() : forbidden();
     case "fechamento/pdf":
       return handleClosingPdf(user, params);
     case "ia": {
@@ -458,8 +628,19 @@ async function routePost(
   switch (route) {
     case "metricas/atualizar":
       return actionResponse(
-        await refreshClientMetricsAction({}, new FormData()),
+        user.role === "admin"
+          ? await syncMetaAction({}, new FormData())
+          : await refreshClientMetricsAction({}, new FormData()),
       );
+    case "admin/campanha/status":
+      return actionResponse(
+        await toggleCampaignStatusAction(
+          String(body.campaignId ?? ""),
+          body.active === true,
+        ),
+      );
+    case "admin/ia/todos-planos":
+      return actionResponse(await setAiAllPlansAction(body.enabled === true));
     case "leads/mover":
       return actionResponse(
         await moveLeadsAction(
@@ -520,7 +701,11 @@ async function routePost(
   }
 }
 
-async function withClient(
+function forbidden() {
+  return json({ error: "Sem permissão para esta área." }, 403);
+}
+
+async function withUser(
   request: NextRequest,
   run: (user: User) => Promise<NextResponse>,
 ) {
@@ -532,9 +717,10 @@ async function withClient(
 
   return runWithMobileToken(token, async () => {
     try {
+      // Mesmas regras de acesso do site (usuário ativo e empresa ativa).
       const user = await getSupabaseCurrentUser();
 
-      if (!user || user.role !== "client" || !user.active) {
+      if (!user || !user.active) {
         return json({ error: "unauthorized" }, 401);
       }
 
@@ -552,7 +738,7 @@ async function withClient(
 
 export async function GET(request: NextRequest, context: RouteContext) {
   const route = (await context.params).path.join("/");
-  return withClient(request, (user) =>
+  return withUser(request, (user) =>
     routeGet(user, route, request.nextUrl.searchParams),
   );
 }
@@ -564,7 +750,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return handleLogin(request);
   }
 
-  return withClient(request, async (user) =>
+  return withUser(request, async (user) =>
     routePost(user, route, await readBody(request)),
   );
 }

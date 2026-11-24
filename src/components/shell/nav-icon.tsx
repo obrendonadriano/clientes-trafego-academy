@@ -9,6 +9,7 @@ import {
   Sparkles,
   User,
   Users,
+  Wallet,
 } from "lucide-react";
 import type { NavIconKey } from "@/lib/navigation";
 
@@ -21,6 +22,7 @@ const ICONS = {
   fechamento: Receipt,
   conversoes: Sparkles,
   "atendimento-ia": Bot,
+  verba: Wallet,
 } as const satisfies Record<NavIconKey, unknown>;
 
 export function NavIcon({
