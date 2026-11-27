@@ -1,0 +1,16 @@
+# Nada de segredo ou lixo local dentro da imagem.
+.env*
+!.env.example
+.git
+.next
+node_modules
+mobile-cliente
+n8n
+docs
+deploy
+tests
+*.zip
+*.tsbuildinfo
+npm-debug.log*
+.vercel
+.claude
